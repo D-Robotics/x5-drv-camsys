@@ -655,7 +655,7 @@ static s32 vpf_video_get_init_attr(struct vio_video_ctx *vctx, unsigned long arg
 			return ret;
 	}
 
-	vio_info("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
+	vio_dbg("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
 
 	return ret;
 }
@@ -854,7 +854,7 @@ static s32 vpf_video_get_ichn_attr(struct vio_video_ctx *vctx, unsigned long arg
 		if (ret < 0)
 			return ret;
 	}
-	vio_info("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
+	vio_dbg("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
 
 	return ret;
 }
@@ -1078,7 +1078,7 @@ static s32 vpf_video_get_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 			return ret;
 	}
 
-	vio_info("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
+	vio_dbg("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
 
 	return ret;
 }
@@ -1987,7 +1987,7 @@ static s32 vpf_video_s_ctrl(struct vio_video_ctx *vctx, unsigned long arg)
 		if (ret < 0)
 			return ret;
 	}
-	vio_info("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
+	vio_dbg("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
 
 	return ret;
 }
@@ -2027,7 +2027,7 @@ static s32 vpf_video_g_ctrl(struct vio_video_ctx *vctx, unsigned long arg)
 		if (ret < 0)
 			return ret;
 	}
-	vio_info("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
+	vio_dbg("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
 
 	return ret;
 }

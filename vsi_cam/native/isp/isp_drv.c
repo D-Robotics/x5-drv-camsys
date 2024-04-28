@@ -187,7 +187,7 @@ static s32 isp_video_s_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 		return -EINVAL;
 
 	inst = container_of(vctx->vdev, struct isp_nat_instance, vdev);
-	pr_info("%s: vctx->ctx_id=%d, inst->id=%d\n", __func__, vctx->ctx_id, inst->id);
+	pr_debug("%s: vctx->ctx_id=%d, inst->id=%d\n", __func__, vctx->ctx_id, inst->id);
 
 	if (vctx->vdev->id == VNODE_ID_SRC) {
 		switch (cmd) {
@@ -232,7 +232,7 @@ static s32 isp_video_g_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 		return -EINVAL;
 
 	inst = container_of(vctx->vdev, struct isp_nat_instance, vdev);
-	pr_info("%s: vctx->ctx_id=%d, inst->id=%d\n", __func__, vctx->ctx_id, inst->id);
+	pr_debug("%s: vctx->ctx_id=%d, inst->id=%d\n", __func__, vctx->ctx_id, inst->id);
 
 	if (vctx->vdev->id == VNODE_ID_SRC) {
 		switch (cmd) {
