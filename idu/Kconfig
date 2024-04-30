@@ -1,0 +1,16 @@
+# HOBOT videoIDU configuration
+
+config HOBOT_IDU_VNODE
+       tristate "HOBOT videoIDU driver support"
+       help
+         If you have an videostitich devices
+         say Y or M here, otherwise say N.
+
+config VIDEOIDU_STL_J5
+	tristate "Horizon J5 VIDEOIDU STL support"
+	depends on HOBOT_J5_STL
+	default n
+	help
+		If you say yes here, you get support for the J5 SoC
+		videoIDU selftest.
+

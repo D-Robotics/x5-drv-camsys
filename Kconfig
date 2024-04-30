@@ -1,0 +1,97 @@
+#
+# VIO configuration
+#
+
+menu "VIO Configuratio"
+config HOBOT_VIO
+	tristate "HOBOT VIO Drivers"
+	default n
+	help
+	   Drivers for the HOBOT VIO
+
+config HOBOT_VIO_JPLUS
+	 tristate "HOBOT VIO JPLUS Drivers"
+	default n
+	help
+	   Drivers for the HOBOT VIO
+
+config HOBOT_VIO_COMMON
+         tristate "HOBOT VIO COMMON Drivers"
+        default n
+        help
+           Drivers for the HOBOT VIO
+
+config HOBOT_VIN_NODE
+	 tristate "HOBOT VIN_NODE Drivers"
+	default n
+	help
+	   Drivers for the HOBOT VIO
+
+config HOBOT_VCON
+	 tristate "HOBOT VCON Drivers"
+	default n
+	depends on HOBOT_VIN_NODE
+	help
+	   Drivers for the HOBOT VIO
+
+config HOBOT_CAMSYS
+         tristate "HOBOT CAMSYS Drivers"
+        default n
+        help
+           Drivers for the HOBOT VIO
+
+config HOBOT_GDC_JPLUS
+	 tristate "HOBOT GDC JPLUS Drivers"
+	default n
+	help
+	   Drivers for the HOBOT VIO
+
+config HOBOT_SENSOR
+	 tristate "HOBOT SENSOR Drivers"
+	default n
+	help
+	   Drivers for the HOBOT Sensor Driver
+
+config HOBOT_DESERIAL
+	 tristate "HOBOT DESERIAL Drivers"
+	default n
+	help
+	   Drivers for the HOBOT Deserial Driver
+
+config HOBOT_LPWM
+	tristate "HOBOT LPWM Drivers"
+	default n
+	depends on HOBOT_VIN_NODE
+	help
+	   Drivers for the HOBOT VIO
+
+config HOBOT_VTRACE
+	tristate "HOBOT VTRACE Drivers"
+	default n
+	help
+	   Drivers for the HOBOT Vtrace Driver
+
+config HOBOT_VSI_CAM
+	tristate "VSI CAM Drivers"
+	default n
+	help
+	   Drivers for the Vsi Cam Driver
+
+endmenu
+
+config HOBOT_MIPI_CSI
+	bool "Hobot MIPI CSI Drivers"
+	depends on HOBOT_VIN_NODE
+	help
+	  Drivers for the Hobot MIPI CSI
+
+config HOBOT_CODEC_NODE
+	 tristate "HOBOT CODEC_NODE Drivers"
+	default n
+	help
+	   Drivers for the HOBOT VIO
+
+source "drivers/media/platform/horizon/camsys/mipi/Kconfig"
+source "drivers/media/platform/horizon/camsys/idu/Kconfig"
+source "drivers/media/platform/horizon/camsys/vsi_cam/Kconfig"
+

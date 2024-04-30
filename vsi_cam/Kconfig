@@ -1,0 +1,161 @@
+# SPDX-License-Identifier: GPL-2.0-only
+if MEDIA_CAMERA_SUPPORT
+
+config VIDEO_VS_ISP_NAT
+	tristate "VeriSilicon ISP (NAT) support"
+	depends on OF && HAS_DMA
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with customers' native framework
+	  for VeriSilicon's ISP series integrated processor. Basically, it
+	  provides interfaces to configure hardware IP for VeriSilicon's camera
+	  service and handles requests from the native framework.
+
+config VIDEO_VS_VSE_NAT
+	tristate "VeriSilicon VSE (NAT) support"
+	depends on OF && HAS_DMA
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with customers' native framework
+	  for VeriSilicon's video scaling series integrated processor. Basically,
+	  it provides interfaces to configure hardware IP for VeriSilicon's
+	  camera service and handles requests from the native framework.
+
+config VIDEO_VS_SIF_NAT
+	tristate "VeriSilicon SIF (NAT) support"
+	depends on OF && HAS_DMA && HOBOT_VIN_NODE
+	select VIDEO_VS_CSI2_SNPS_NAT
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with customers' native framework
+	  for VeriSilicon's camera sensor interface integrated processor. It
+	  contains the key configuration and executing logic for SIF hardware
+	  IP.
+
+config VIDEO_VS_CSI2_SNPS_NAT
+	tristate "Synopsys CSI v2 (NAT) support"
+	depends on OF && HAS_DMA
+	select VIDEO_VS_CSI_WRAPPER
+	select VIDEO_VS_CSI2_SNPS_NAT_HBN_ADPT
+	default n
+	help
+	  This is a driver that is complying with customers' native framework
+	  for Synopsys's MIPI CSI v2 integrated processor. It contains the key
+	  configuration and executing logic for MIPI CSI v2 controller and
+	  dphy in the hardware.
+
+config VIDEO_VS_CSI2_SNPS_NAT_HBN_ADPT
+	bool "Synopsys CSI v2 (NAT) HBN mipi host adapter"
+	depends on VIDEO_VS_CSI2_SNPS_NAT
+	default n
+	help
+	  This is a driver that is complying with customers' native framework
+	  for Synopsys's MIPI CSI v2 integrated processor. It redirects the key
+	  configuration and executing logic from customers' mipi host driver
+	  to vs csi2 snps native driver.
+
+config VIDEO_VS_CSI_WRAPPER
+	tristate "VeriSilicon CSI Wrapper support"
+	help
+	  This is a driver that for VeriSilicon's CSI Rx system register control.
+
+config VIDEO_VS_CAM_CTRL
+	tristate "VeriSilicon Camera SYS Control support"
+	help
+	  This is a driver that for VeriSilicon's camera subsystem register control.
+
+config VIDEO_VS_SW_ISC
+	bool "VeriSilicon Software Communication Support"
+	default y
+	depends on VIDEO_VS_ISP_NAT || VIDEO_VS_VSE_NAT || VIDEO_VS_SIF_NAT || \
+	  VIDEO_VS_ISP_V4L || VIDEO_VS_VSE_V4L || VIDEO_VS_SIF_V4L
+	help
+	  This is a software driver that implements a general way for the
+	  communication requirement between VeriSilicon's camera service
+	  in the user space and camera related IP (or module) drivers in
+	  the kernel space.
+
+if V4L_PLATFORM_DRIVERS
+
+config VIDEO_VS_ISP_V4L
+	tristate "VeriSilicon ISP (V4L) support"
+	depends on VIDEO_DEV && OF && HAS_DMA
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_FWNODE
+	select VIDEO_V4L2_SUBDEV_API
+	select VIDEO_VS_VID_V4L
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with Video for Linux 2 framework
+	  for VeriSilicon's ISP series integrated processor. Basically, it
+	  provides interfaces to configure hardware IP for VeriSilicon's camera
+	  service and handles requests from user applications.
+
+config VIDEO_VS_VSE_V4L
+	tristate "VeriSilicon VSE (V4L) support"
+	depends on VIDEO_DEV && OF && HAS_DMA
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_FWNODE
+	select VIDEO_V4L2_SUBDEV_API
+	select VIDEO_VS_VID_V4L
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with Video for Linux 2 framework
+	  for VeriSilicon's VSE series integrated processor. Basically, it
+	  provides interfaces to configure hardware IP for VeriSilicon's camera
+	  service and handles requests from user applications.
+
+config VIDEO_VS_SIF_V4L
+	tristate "VeriSilicon SIF (V4L) support"
+	depends on VIDEO_DEV && OF && HAS_DMA
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_FWNODE
+	select VIDEO_V4L2_SUBDEV_API
+	select VIDEO_VS_CSI2_SNPS_V4L
+	select VIDEO_VS_VID_V4L
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with Video for Linux 2 framework
+	  for VeriSilicon's SIF series integrated processor. Basically, it
+	  provides interfaces to configure hardware IP for VeriSilicon's camera
+	  service and handles requests from user applications.
+
+config VIDEO_VS_CSI2_SNPS_V4L
+	tristate "Synopsys CSI v2 (V4L) support"
+	depends on VIDEO_DEV && OF
+	select V4L2_FWNODE
+	select VIDEO_V4L2_SUBDEV_API
+	select VIDEO_VS_CSI_WRAPPER
+	help
+	  This is a driver that is complying with Video for Linux 2 framework
+	  for Synopsys's MIPI CSI v2 integrated processor. It contains the key
+	  configuration and executing logic for MIPI CSI v2 controller and
+	  dphy in the hardware.
+
+config VIDEO_VS_GDC_ARM_V4L
+	tristate "ARM GDC (V4L) support"
+	depends on VIDEO_DEV && OF && HAS_DMA
+	select VIDEOBUF2_DMA_CONTIG
+	select V4L2_FWNODE
+	select VIDEO_V4L2_SUBDEV_API
+	select VIDEO_VS_VID_V4L
+	select VIDEO_VS_CAM_CTRL
+	select VIDEO_VS_SW_ISC
+	help
+	  This is a driver that is complying with Video for Linux 2 framework
+	  for ARM's GDC integrated processor. Basically, it provides interfaces
+	  to configure hardware IP for VeriSilicon's camera service and handles
+	  requests from user applications.
+
+config VIDEO_VS_VID_V4L
+	tristate "VeriSilicon Software Video (V4L) Support"
+	depends on VIDEO_VS_ISP_V4L || VIDEO_VS_VSE_V4L || VIDEO_VS_SIF_V4L
+	help
+	  This is a software driver that is complying with Video for Linux 2
+	  framework to create all required video devices and construct media
+	  pipelines based on user requirements. It implements interfaces to
+	  receive control commands and parameters from user applications and
+	  deliver them to each camera IP module.
+
+endif
+endif

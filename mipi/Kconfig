@@ -1,0 +1,95 @@
+#
+# hobot mipi configuration
+#
+
+config HOBOT_MIPI_CSI_DRV
+    tristate "Hobot MIPI CSI Driver"
+	depends on HOBOT_MIPI_CSI
+	help
+      Driver for the HOBOT VIN MIPI CSI
+
+
+config HOBOT_MIPI_HOST
+    bool "Hobot MIPI CSI Host Support"
+	depends on HOBOT_MIPI_CSI_DRV
+        default y
+	help
+      support for the HOBOT MIPI CSI Host
+
+config HOBOT_MIPI_HOST_MAX_NUM
+    int "Hobot MIPI host max port num"
+	depends on HOBOT_MIPI_HOST
+	default 4 if HOBOT_XJ3 || HOBOT_J5 || HOBOT_FPGA_J5 || ARCH_ZYNQMP
+	default 3 if HOBOT_J6E || HOBOT_FPGA_J6E
+	default 6 if HOBOT_J6P || HOBOT_FPGA_J6P
+	default 1 if HOBOT_XJ2
+	help
+      Max num of mipi host devices
+
+config HOBOT_MIPI_HOST_SNRCLK
+    bool "Hobot MIPI host sensor mclk support"
+	depends on HOBOT_MIPI_HOST
+	default n
+	help
+      Enable mipi host support mclk output for sensor
+
+
+config HOBOT_MIPI_DEV
+    bool "Hobot MIPI CSI Device Support"
+	depends on HOBOT_MIPI_CSI_DRV
+        default y
+	help
+      support for the HOBOT MIPI CSI Device
+
+config HOBOT_MIPI_DEV_MAX_NUM
+    int "Hobot MIPI dev max port num"
+	depends on HOBOT_MIPI_DEV
+	default 2 if HOBOT_J5 || HOBOT_FPGA_J5 || ARCH_ZYNQMP
+	default 2 if HOBOT_J6P || HOBOT_FPGA_J6P || HOBOT_J6E || HOBOT_FPGA_J6E
+	default 1 if HOBOT_XJ2 || HOBOT_XJ3
+	help
+      Max num of mipi dev devices
+
+config HOBOT_MIPI_PHY
+    tristate "Hobot MIPI DPHY Driver"
+	depends on HOBOT_MIPI_CSI || (HOBOT_XJ3 && HOBOT_IAR)
+	help
+      Driver for the HOBOT MIPI DPHY
+
+config HOBOT_MIPI_REG_OPERATE
+    bool "ENABLE REG IOCTL OPERATE"
+    depends on HOBOT_MIPI_CSI
+    default n
+	help
+      enable mipi devices' reg ioctl opreate
+
+config HOBOT_MIPI_CSI_STL
+	tristate "Hobot MIPI CSI STL Driver"
+	depends on HOBOT_MIPI_CSI && HOBOT_FUSA_DIAG
+	depends on HOBOT_J5_STL
+	default n
+	help
+      Driver for the HOBOT MIPI CSI selftest
+
+config HOBOT_MIPI_CSI_HOST_STL
+	bool "Hobot MIPI CSI HOST STL support"
+	depends on HOBOT_MIPI_CSI_STL
+	default n
+	help
+      support for mipi csi host selftest
+
+config HOBOT_MIPI_CSI_ERM_STL
+	bool "Hobot MIPI CSI ERM STL support"
+	depends on HOBOT_MIPI_CSI_STL
+	default n
+	help
+      support for mipi csi erm selftest
+
+config HOBOT_MIPI_DEBUG
+	tristate "Hobot MIPI CSI DEBUG Driver"
+	depends on HOBOT_MIPI_CSI
+	default n
+	help
+      Driver for the HOBOT MIPI CSI debug
+
+
