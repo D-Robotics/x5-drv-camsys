@@ -11,41 +11,41 @@
 
 #define OSD_POLYGON_MAX_SIDE 10
 
-typedef struct osd_point_s {
+struct osd_point {
 	uint32_t x;
 	uint32_t y;
-} osd_point_t;
+};
 
-typedef struct osd_size_s {
+struct osd_size {
 	uint32_t w;
 	uint32_t h;
-} osd_size_t;
+};
 
-typedef struct osd_line_s {
-	osd_point_t p1;
-	osd_point_t p2;
+struct osd_line {
+	struct osd_point p1;
+	struct osd_point p2;
 	double k;/*PRQA S ALL*/
 	double b;/*PRQA S ALL*/
 	uint8_t k_flag;     // 1:parallel with x;  2:parallel with y
-} osd_line_t;
+};
 
-typedef struct osd_rect_s {
-	osd_point_t point;
-	osd_size_t size;
-} osd_rect_t;
+struct osd_rect {
+	struct osd_point point;
+	struct osd_size size;
+};
 
-typedef struct osd_polygon_s {
+struct osd_polygon {
 	// uint8_t show_en;
 	// uint8_t invert_en;
 	// uint32_t color;
 	uint32_t side_num;
-	osd_point_t point[OSD_POLYGON_MAX_SIDE];  // point of vertex
-	osd_line_t line[OSD_POLYGON_MAX_SIDE];
+	struct osd_point point[OSD_POLYGON_MAX_SIDE];  // point of vertex
+	struct osd_line line[OSD_POLYGON_MAX_SIDE];
 
-	// osd_point_t start_point;
-	// osd_size_t range;
-	osd_point_t *start;  // start and end of every line
-	osd_point_t *end;
-} osd_polygon_t;
+	// struct osd_point start_point;
+	// struct osd_size range;
+	struct osd_point *start;  // start and end of every line
+	struct osd_point *end;
+};
 
 #endif //

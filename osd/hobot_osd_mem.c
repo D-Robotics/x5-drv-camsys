@@ -4,6 +4,8 @@
  *                     All rights reserved.
  ***************************************************************************/
 
+#define pr_fmt(fmt) "[hobot_osd](%s): " fmt, __func__
+
 #include <linux/dma-mapping.h>
 #include <asm/cacheflush.h>
 #include <linux/delay.h>
@@ -11,40 +13,37 @@
 
 #include "hobot_osd_mem.h"
 #include "vio_config.h"
-#include "hobot_dev_osd.h"
-
-#define OSD_ION_TYPE 20
+#include "hobot_osd_dev.h"
 
 struct list_head s_osd_buf_list = LIST_HEAD_INIT(s_osd_buf_list);
 spinlock_t s_osd_buf_slock = __SPIN_LOCK_UNLOCKED(s_osd_buf_slock);
 
-int32_t osd_ion_alloc(struct ion_client *client, osd_one_buffer_t *buf)
+int32_t osd_ion_alloc(struct ion_client *client, struct osd_single_buffer *buf)
 {
 	int32_t ret = 0;
 
-	buf->ion_handle = ion_alloc(client, buf->length, PAGE_SIZE,
-		ION_HEAP_CARVEOUT_MASK,
+	buf->ion_handle = ion_alloc(client, buf->length, PAGE_SIZE, ION_HEAP_CARVEOUT_MASK,
 		(OSD_ION_TYPE << 16) | ION_FLAG_CACHED | ION_FLAG_CACHED_NEEDS_SYNC);
 	if (IS_ERR(buf->ion_handle)) {
-		vio_err("osd ion alloc failed\n");
+		pr_err("osd ion alloc failed\n");
 		return -ENOMEM;
 	}
 	ret = ion_phys(client, buf->ion_handle->id, &buf->paddr, &buf->length);
 	if (ret) {
-		vio_err("osd ion get phys addr failed\n");
-		goto EXIT;
+		pr_err("osd ion get phys addr failed\n");
+		goto _exit;
 	}
 	buf->vaddr = ion_map_kernel(client, buf->ion_handle);
 	if (IS_ERR(buf->vaddr)) {
-		vio_err("osd ion map failed\n");
-		goto EXIT;
+		pr_err("osd ion map failed\n");
+		goto _exit;
 	}
 
-	vio_dbg("osd alloc buffer paddr:0x%llx vaddr:%p length:%ld\n",
+	pr_debug("osd alloc buffer paddr:0x%llx vaddr:%p length:%ld\n",
 		buf->paddr, buf->vaddr, buf->length);
 
 	return 0;
-EXIT:
+_exit:
 	ion_free(client, buf->ion_handle);
 	buf->ion_handle = NULL;
 	buf->paddr = 0;
@@ -53,14 +52,14 @@ EXIT:
 	return -ENOMEM;
 }
 
-void osd_one_buffer_inc(osd_one_buffer_t *buf)
+void osd_single_buffer_inc(struct osd_single_buffer *buf)
 {
 	atomic_inc(&buf->ref_count);
 }
 
-void osd_one_buffer_inc_by_addr(uint8_t *vaddr)
+void osd_single_buffer_inc_by_addr(uint8_t *vaddr)
 {
-	osd_one_buffer_t *buf, *temp;
+	struct osd_single_buffer *buf, *temp;
 
 	spin_lock(&s_osd_buf_slock);
 	list_for_each_entry_safe(buf, temp, &s_osd_buf_list, node) {
@@ -71,9 +70,9 @@ void osd_one_buffer_inc_by_addr(uint8_t *vaddr)
 	spin_unlock(&s_osd_buf_slock);
 }
 
-void osd_one_buffer_inc_by_paddr(uint64_t paddr)
+void osd_single_buffer_inc_by_paddr(uint64_t paddr)
 {
-	osd_one_buffer_t *buf, *temp;
+	struct osd_single_buffer *buf, *temp;
 
 	spin_lock(&s_osd_buf_slock);
 	list_for_each_entry_safe(buf, temp, &s_osd_buf_list, node) {
@@ -85,14 +84,14 @@ void osd_one_buffer_inc_by_paddr(uint64_t paddr)
 	spin_unlock(&s_osd_buf_slock);
 }
 
-void osd_one_buffer_dec(osd_one_buffer_t *buf)
+void osd_single_buffer_dec(struct osd_single_buffer *buf)
 {
 	atomic_dec(&buf->ref_count);
 }
 
-void osd_one_buffer_dec_by_addr(uint8_t *vaddr)
+void osd_single_buffer_dec_by_addr(uint8_t *vaddr)
 {
-	osd_one_buffer_t *buf, *temp;
+	struct osd_single_buffer *buf, *temp;
 
 	spin_lock(&s_osd_buf_slock);
 	list_for_each_entry_safe(buf, temp, &s_osd_buf_list, node) {
@@ -103,9 +102,9 @@ void osd_one_buffer_dec_by_addr(uint8_t *vaddr)
 	spin_unlock(&s_osd_buf_slock);
 }
 
-void osd_one_buffer_dec_by_paddr(uint64_t paddr)
+void osd_single_buffer_dec_by_paddr(uint64_t paddr)
 {
-	osd_one_buffer_t *buf, *temp;
+	struct osd_single_buffer *buf, *temp;
 
 	spin_lock(&s_osd_buf_slock);
 	list_for_each_entry_safe(buf, temp, &s_osd_buf_list, node) {
@@ -117,7 +116,7 @@ void osd_one_buffer_dec_by_paddr(uint64_t paddr)
 	spin_unlock(&s_osd_buf_slock);
 }
 
-int32_t osd_one_buffer_create(struct ion_client *client, osd_one_buffer_t *buf)
+int32_t osd_single_buffer_create(struct ion_client *client, struct osd_single_buffer *buf)
 {
 	if (osd_ion_alloc(client, buf) < 0) {
 		return -ENOMEM;
@@ -130,24 +129,24 @@ int32_t osd_one_buffer_create(struct ion_client *client, osd_one_buffer_t *buf)
 	list_add_tail(&buf->node, &s_osd_buf_list);
 	spin_unlock(&s_osd_buf_slock);
 
-	vio_dbg("osd create buffer format:%d, paddr:0x%llx addr:%p length:%ld\n",
+	pr_debug("osd create buffer format:%d, paddr:0x%llx addr:%p length:%ld\n",
 		buf->pixel_fmt, buf->paddr, buf->vaddr, buf->length);
 
 	return 0;
 }
 
-void osd_one_buffer_destroy(struct ion_client *client, osd_one_buffer_t *buf)
+void osd_single_buffer_destroy(struct ion_client *client, struct osd_single_buffer *buf)
 {
-	int i = 0;
+	int32_t i;
 
-	for (i = 0; i < 30; i++) {
+	for (i = OSD_WAIT_CNT; i > 0; i--) {
 		// wait for no thread use this buffer
 		if (atomic_read(&buf->ref_count) == 0) {
 			break;
 		}
 		msleep(10);
-		if (i == 30 - 1) {
-			vio_err("osd one buffer paddr:0x%llx desroyed, but ref count is %d\n",
+		if (!i) {
+			pr_err("osd one buffer paddr:0x%llx desroyed, but ref count is %d\n",
 			buf->paddr, atomic_read(&buf->ref_count));
 		}
 	}
@@ -156,7 +155,7 @@ void osd_one_buffer_destroy(struct ion_client *client, osd_one_buffer_t *buf)
 	spin_unlock(&s_osd_buf_slock);
 
 	if (buf->ion_handle != NULL) {
-		vio_dbg("osd destroy buffer format:%d, paddr:0x%llx addr:%p length:%ld\n",
+		pr_debug("osd destroy buffer format:%d, paddr:0x%llx addr:%p length:%ld\n",
 			buf->pixel_fmt, buf->paddr, buf->vaddr, buf->length);
 		ion_free(client, buf->ion_handle);
 		buf->ion_handle = NULL;
@@ -168,28 +167,40 @@ void osd_one_buffer_destroy(struct ion_client *client, osd_one_buffer_t *buf)
 	buf->state = OSD_BUF_NULL;
 }
 
-void osd_one_buffer_flush(osd_one_buffer_t *one_buffer)
+void ion_dcache_invalid(phys_addr_t paddr, size_t size)
 {
-	ion_dcache_invalid(one_buffer->paddr, one_buffer->length);
-	ion_dcache_flush(one_buffer->paddr, one_buffer->length);
+	// dma_sync_single_for_cpu(NULL, paddr, size, DMA_FROM_DEVICE);
+	// __inval_dcache_area(phys_to_virt(paddr), size);
 }
 
-void osd_one_buffer_fill(osd_one_buffer_t *one_buffer, uint32_t color)
+void ion_dcache_flush(phys_addr_t paddr, size_t size)
 {
-	int size = 0;
+	// dma_sync_single_for_device(NULL, paddr, size, DMA_TO_DEVICE);
+	// __flush_dcache_area(phys_to_virt(paddr), size);
+}
+
+void osd_single_buffer_flush(struct osd_single_buffer *single_buffer)
+{
+	ion_dcache_invalid(single_buffer->paddr, single_buffer->length);
+	ion_dcache_flush(single_buffer->paddr, single_buffer->length);
+}
+
+void osd_single_buffer_fill(struct osd_single_buffer *single_buffer, uint32_t color)
+{
+	uint32_t size = 0;
 	uint8_t y_color = 0, u_color = 0, v_color = 0;
 	uint8_t *addr = NULL;
-	int i = 0;
+	int32_t i = 0;
 
-	if (one_buffer->pixel_fmt == OSD_PIXEL_FORMAT_VGA4) {
-		memset(one_buffer->vaddr, (color << 4) | color, one_buffer->length);
-	} else if (one_buffer->pixel_fmt == OSD_PIXEL_FORMAT_NV12) {
+	if (single_buffer->pixel_fmt == OSD_PIXEL_FORMAT_VGA4) {
+		memset(single_buffer->vaddr, (color << 4) | color, single_buffer->length);
+	} else if (single_buffer->pixel_fmt == OSD_PIXEL_FORMAT_NV12) {
 		y_color = (color >> 16) & 0xff;
 		u_color = (color >> 8) & 0xff;
 		v_color = color & 0xff;
-		size = one_buffer->length * 2 / 3; // get (w * h) size
-		addr = one_buffer->vaddr + size;
-		memset(one_buffer->vaddr, y_color, size);
+		size = single_buffer->length * 2 / 3; // get (w * h) size
+		addr = single_buffer->vaddr + size;
+		memset(single_buffer->vaddr, y_color, size);
 		for (i = 0; i < size / 2; i += 2) {
 			addr[0] = u_color;
 			addr[1] = v_color;
@@ -198,8 +209,8 @@ void osd_one_buffer_fill(osd_one_buffer_t *one_buffer, uint32_t color)
 	}
 }
 
-static size_t osd_calculate_buffer_length(uint32_t width, uint32_t height,
-					osd_pixel_format_t pixel_fmt)
+static uint32_t osd_get_buffer_length(uint32_t width, uint32_t height,
+					enum osd_pixel_format pixel_fmt)
 {
 	if (pixel_fmt == OSD_PIXEL_FORMAT_VGA4) {
 		return (width * height / 2);
@@ -214,58 +225,47 @@ static size_t osd_calculate_buffer_length(uint32_t width, uint32_t height,
 	}
 }
 
-int32_t osd_buffer_create(struct ion_client *client, osd_buffer_t *osd_buffer)
+int32_t osd_buffer_create(struct ion_client *client, struct osd_buffer *osd_buffer)
 {
-	size_t length;
-	int32_t ret = 0, i;
+	int32_t i;
 
-	for (i = 0; i < OSD_PING_PONG_BUF; i++) {
-		if ((osd_buffer->buf[i].state == OSD_BUF_NULL) &&
-			(osd_buffer->buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
-			length = osd_calculate_buffer_length(osd_buffer->size.w, osd_buffer->size.h,
-			osd_buffer->buf[i].pixel_fmt);
-			osd_buffer->buf[i].length = length;
-			ret = osd_one_buffer_create(client, &osd_buffer->buf[i]);
-			if (ret < 0) {
-				goto EXIT;
+	for (i = 0; i < OSD_PP_BUF; i++) {
+		if ((osd_buffer->buf[i].state == OSD_BUF_NULL) && (osd_buffer->buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
+			osd_buffer->buf[i].length = osd_get_buffer_length(osd_buffer->size.w, osd_buffer->size.h, osd_buffer->buf[i].pixel_fmt);
+			if ((osd_single_buffer_create(client, &osd_buffer->buf[i])) < 0) {
+				goto _exit;
 			}
 			osd_buffer->buf[i].state = OSD_BUF_CREATE + i;
 		}
-		if ((osd_buffer->vga_buf[i].state == OSD_BUF_NULL) &&
-			(osd_buffer->vga_buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
-			length = osd_calculate_buffer_length(osd_buffer->size.w, osd_buffer->size.h,
-				osd_buffer->vga_buf[i].pixel_fmt);
-			osd_buffer->vga_buf[i].length = length;
-			ret = osd_one_buffer_create(client, &osd_buffer->vga_buf[i]);
-			if (ret < 0) {
-				goto EXIT;
+		if ((osd_buffer->vga_buf[i].state == OSD_BUF_NULL) && (osd_buffer->vga_buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
+			osd_buffer->vga_buf[i].length = osd_get_buffer_length(osd_buffer->size.w, osd_buffer->size.h, osd_buffer->vga_buf[i].pixel_fmt);
+			if ((osd_single_buffer_create(client, &osd_buffer->vga_buf[i])) < 0) {
+				goto _exit;
 			}
 			osd_buffer->vga_buf[i].state = OSD_BUF_CREATE;
 		}
 	}
 
-	return ret;
-
-EXIT:
+	return 0;
+_exit:
 	osd_buffer_destroy(client, osd_buffer);
-
-	return ret;
+	return -1;
 }
 
-int32_t osd_buffer_create_vga(struct ion_client *client, osd_buffer_t *osd_buffer)
+int32_t osd_buffer_create_vga(struct ion_client *client, struct osd_buffer *osd_buffer)
 {
 	size_t length;
 	int32_t ret = 0, i;
 
-	for (i = 0; i < OSD_PING_PONG_BUF; i++) {
+	for (i = 0; i < OSD_PP_BUF; i++) {
 		if ((osd_buffer->vga_buf[i].state == OSD_BUF_NULL) &&
 			(osd_buffer->vga_buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
-			length = osd_calculate_buffer_length(osd_buffer->size.w, osd_buffer->size.h,
+			length = osd_get_buffer_length(osd_buffer->size.w, osd_buffer->size.h,
 			osd_buffer->vga_buf[i].pixel_fmt);
 			osd_buffer->vga_buf[i].length = length;
-			ret = osd_one_buffer_create(client, &osd_buffer->vga_buf[i]);
+			ret = osd_single_buffer_create(client, &osd_buffer->vga_buf[i]);
 			if (ret < 0) {
-				goto EXIT;
+				goto exit;
 			}
 			osd_buffer->vga_buf[i].state = osd_buffer->buf[i].state;
 		}
@@ -273,47 +273,47 @@ int32_t osd_buffer_create_vga(struct ion_client *client, osd_buffer_t *osd_buffe
 
 	return ret;
 
-EXIT:
+exit:
 	osd_buffer_destroy_vga(client, osd_buffer);
 
 	return ret;
 }
 
-void osd_buffer_destroy(struct ion_client *client, osd_buffer_t *osd_buffer)
+void osd_buffer_destroy(struct ion_client *client, struct osd_buffer *osd_buffer)
 {
 	int32_t i;
 
-	for (i = 0; i < OSD_PING_PONG_BUF; i++) {
+	for (i = 0; i < OSD_PP_BUF; i++) {
 		if (osd_buffer->buf[i].state != OSD_BUF_NULL) {
-			osd_one_buffer_destroy(client, &osd_buffer->buf[i]);
+			osd_single_buffer_destroy(client, &osd_buffer->buf[i]);
 		}
 		if (osd_buffer->vga_buf[i].state != OSD_BUF_NULL) {
-			osd_one_buffer_destroy(client, &osd_buffer->vga_buf[i]);
+			osd_single_buffer_destroy(client, &osd_buffer->vga_buf[i]);
 		}
 	}
 }
 
-void osd_buffer_destroy_vga(struct ion_client *client, osd_buffer_t *osd_buffer)
+void osd_buffer_destroy_vga(struct ion_client *client, struct osd_buffer *osd_buffer)
 {
 	int32_t i;
 
-	for (i = 0; i < OSD_PING_PONG_BUF; i++) {
+	for (i = 0; i < OSD_PP_BUF; i++) {
 		if (osd_buffer->vga_buf[i].state != OSD_BUF_NULL) {
-			osd_one_buffer_destroy(client, &osd_buffer->vga_buf[i]);
+			osd_single_buffer_destroy(client, &osd_buffer->vga_buf[i]);
 		}
 	}
 }
 
-void osd_buffer_flush(osd_buffer_t *osd_buffer)
+void osd_buffer_flush(struct osd_buffer *osd_buffer)
 {
 	int32_t i = 0;
 
-	for (i = 0; i < OSD_PING_PONG_BUF; i++) {
+	for (i = 0; i < OSD_PP_BUF; i++) {
 		if (osd_buffer->buf[i].state != OSD_BUF_NULL) {
-			osd_one_buffer_flush(&osd_buffer->buf[i]);
+			osd_single_buffer_flush(&osd_buffer->buf[i]);
 		}
 		if (osd_buffer->vga_buf[i].state != OSD_BUF_NULL) {
-			osd_one_buffer_flush(&osd_buffer->vga_buf[i]);
+			osd_single_buffer_flush(&osd_buffer->vga_buf[i]);
 		}
 	}
 }
@@ -333,17 +333,17 @@ struct vio_frame *osd_get_frame(struct list_head *list, int32_t frame_index)
 	return NULL;
 }
 
-void osd_put_input_frame(struct list_head *list, struct vio_frame *frame)
-{
-	list_add_tail(&frame->list, list);
-}
+// void osd_put_input_frame(struct list_head *list, struct vio_frame *frame)
+// {
+// 	list_add_tail(&frame->list, list);
+// }
 
-struct vio_frame *osd_get_input_frame(struct list_head *list)
-{
-	struct vio_frame *frame;
+// struct vio_frame *osd_get_input_frame(struct list_head *list)
+// {
+// 	struct vio_frame *frame;
 
-	frame = list_first_entry(list, struct vio_frame, list);
-	list_del(&frame->list);
+// 	frame = list_first_entry(list, struct vio_frame, list);
+// 	list_del(&frame->list);
 
-	return frame;
-}
+// 	return frame;
+// }

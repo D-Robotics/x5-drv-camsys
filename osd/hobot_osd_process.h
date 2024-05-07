@@ -11,7 +11,7 @@
 
 #include "osd_config.h"
 
-typedef enum osd_process_type_s {
+enum osd_process_type {
 	OSD_PROC_HW_VGA4 = 0,
 	OSD_PROC_VGA4,
 	OSD_PROC_NV12,
@@ -20,14 +20,14 @@ typedef enum osd_process_type_s {
 	OSD_PROC_MOSAIC,
 	OSD_PROC_STA,
 	OSD_PROC_MAX_TYPE
-} osd_process_type_e;
+};
 
-typedef struct osd_process_info_s {
+struct osd_process_info {
 	uint8_t show_en;
 	uint8_t invert_en;
 	uint32_t osd_level;
 	uint32_t fill_color;
-	osd_process_type_e proc_type;
+	enum osd_process_type proc_type;
 	uint32_t width;
 	uint32_t height;
 	uint32_t start_x;
@@ -55,17 +55,18 @@ typedef struct osd_process_info_s {
 
 	struct mutex proc_mutex;
 	struct osd_subdev *subdev;
-} osd_process_info_t;
+};
 
 int32_t osd_vga4_to_sw(uint32_t *color_map, uint8_t *src_addr,
 			uint8_t *tar_addr, uint32_t width, uint32_t height);
-int32_t osd_polygon_analyse(osd_polygon_t *polygon, osd_size_t *size);
-void osd_process_vga4_workfunc(osd_process_info_t *proc_info);
-void osd_process_nv12_workfunc(osd_process_info_t *proc_info);
-void osd_process_rect_workfunc(osd_process_info_t *proc_info);
-void osd_process_polygon_workfunc(osd_process_info_t *proc_info);
-void osd_process_mosaic_workfunc(osd_process_info_t *proc_info);
-void osd_process_sta_workfunc(osd_process_info_t *proc_info);
-void osd_process_null_workfunc(osd_process_info_t *proc_info);
+// int32_t osd_polygon_analyse(struct osd_polygon *polygon, struct osd_size *size);
+// void osd_process_vga4_workfunc(struct osd_process_info *proc_info);
+// void osd_process_nv12_workfunc(struct osd_process_info *proc_info);
+// void osd_process_rect_workfunc(struct osd_process_info *proc_info);
+// void osd_process_polygon_workfunc(struct osd_process_info *proc_info);
+// void osd_process_mosaic_workfunc(struct osd_process_info *proc_info);
+// void osd_process_sta_workfunc(struct osd_process_info *proc_info);
+// void osd_process_null_workfunc(struct osd_process_info *proc_info);
+void osd_run_process(struct osd_process_info *process_info);
 
 #endif // __HOBOT_OSD_PROCESS_H__

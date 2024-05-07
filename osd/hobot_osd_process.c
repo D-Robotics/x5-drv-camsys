@@ -4,6 +4,8 @@
  *                     All rights reserved.
  ***************************************************************************/
 
+#define pr_fmt(fmt) "[hobot_osd](%s): " fmt, __func__
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <asm/neon.h>
@@ -11,9 +13,9 @@
 
 #include "osd_config.h"
 #include "hobot_osd_process.h"
-#include "hobot_dev_osd.h"
+#include "hobot_osd_dev.h"
 
-extern osd_color_map_t g_osd_color;
+extern struct osd_color_map g_osd_color;
 
 #define OSD_U8_BITS 8u
 #define OSD_U16_BITS 16u
@@ -79,7 +81,7 @@ int32_t osd_vga4_to_sw(uint32_t *color_map, uint8_t *src_addr,
 		color_map_tmp = color_map;
 	}
 
-	vio_dbg("vga4-->yuv420 width:%d height:%d vga4 addr:%p"
+	pr_debug("vga4-->yuv420 width:%d height:%d vga4 addr:%p"
 		" yuv420 addr:%p\n", width, height, src_addr, tar_addr);
 
 	memset((void *)addr_y, 0x00, (size_t)width * (size_t)height);
@@ -123,13 +125,13 @@ int32_t osd_vga4_to_sw(uint32_t *color_map, uint8_t *src_addr,
 	osal_time_get(&time_next);
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
-	vio_dbg("osd software vga4 -> yuv420 cost %lldus\n",
+	pr_debug("osd software vga4 -> yuv420 cost %lldus\n",
 		time_us);
 
 	return 0;
 }
 
-int32_t osd_process_info_check(osd_process_info_t *proc_info,
+int32_t osd_process_info_check(struct osd_process_info *proc_info,
 				uint32_t *crop_width, uint32_t *crop_height)
 {
 	if ((proc_info->subdev != NULL) &&
@@ -138,13 +140,13 @@ int32_t osd_process_info_check(osd_process_info_t *proc_info,
 	}
 	if ((__pa(proc_info->tar_y_addr) == 0) ||
 		(__pa(proc_info->tar_uv_addr) == 0)) {
-		vio_err("osd process type:%d tar_addr y:%lld uv:%lld error\n",
+		pr_err("osd process type:%d tar_addr y:%lld uv:%lld error\n",
 			proc_info->proc_type,
 			__pa(proc_info->tar_y_addr), __pa(proc_info->tar_uv_addr));
 		return -EINVAL;
 	}
 	if ((proc_info->tar_y_addr == NULL) || (proc_info->tar_uv_addr == NULL)) {
-		vio_err("osd process type:%d tar_addr y:%p uv:%p error\n",
+		pr_err("osd process type:%d tar_addr y:%p uv:%p error\n",
 			proc_info->proc_type, proc_info->tar_y_addr, proc_info->tar_uv_addr);
 		return -EINVAL;
 		}
@@ -153,21 +155,21 @@ int32_t osd_process_info_check(osd_process_info_t *proc_info,
 	case OSD_PROC_HW_VGA4:
 	case OSD_PROC_NV12:
 		if (proc_info->src_addr == NULL) {
-			vio_err("osd process type:%d src_addr:%p error\n",
+			pr_err("osd process type:%d src_addr:%p error\n",
 			proc_info->proc_type, proc_info->src_addr);
 			return -EINVAL;
 		}
 		break;
 	case OSD_PROC_VGA4:
 		if (proc_info->src_vga_addr == NULL) {
-			vio_err("osd process type:%d src_vga_addr:%p error\n",
+			pr_err("osd process type:%d src_vga_addr:%p error\n",
 			proc_info->proc_type, proc_info->src_vga_addr);
 			return -EINVAL;
 		}
 		break;
 	case OSD_PROC_POLYGON:
 		if (proc_info->polygon_buf == NULL) {
-			vio_err("osd process type:%d polygon_buf:%p error\n",
+			pr_err("osd process type:%d polygon_buf:%p error\n",
 			proc_info->proc_type, proc_info->polygon_buf);
 			return -EINVAL;
 		}
@@ -197,7 +199,7 @@ int32_t osd_process_info_check(osd_process_info_t *proc_info,
 	return 0;
 }
 
-void osd_process_vga4_workfunc(osd_process_info_t *proc_info)
+void osd_process_vga4_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *tar_y_addr, *tar_uv_addr;
 	uint8_t *src_y_addr, *src_y_or_addr, *src_uv_addr, *src_uv_or_addr;
@@ -328,7 +330,7 @@ void osd_process_vga4_workfunc(osd_process_info_t *proc_info)
 	osal_time_get(&time_next);
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
-	vio_dbg("osd vga4 process, show:%d invert:%d level:%d, "
+	pr_debug("osd vga4 process, show:%d invert:%d level:%d, "
 		"frame_id:%d buf_index:%d image w:%d h:%d, "
 		"x:%d y:%d w:%d h:%d src: y_addr:%p %p uv_addr:%p %p, "
 		"image y:%p uv:%p, cost %lldus\n",
@@ -340,7 +342,7 @@ void osd_process_vga4_workfunc(osd_process_info_t *proc_info)
 		cache_y_addr, cache_uv_addr, time_us);
 }
 
-void osd_process_nv12_workfunc(osd_process_info_t *proc_info)
+void osd_process_nv12_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *tar_y_addr, *tar_uv_addr, *src_y_addr, *src_uv_addr;
 	uint32_t offset;
@@ -485,7 +487,7 @@ void osd_process_nv12_workfunc(osd_process_info_t *proc_info)
 	osal_time_get(&time_next);
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
-	vio_dbg("osd nv12 process, show:%d invert:%d level:%d, "
+	pr_debug("osd nv12 process, show:%d invert:%d level:%d, "
 		"frame_id:%d buf_index:%d image w:%d h:%d, "
 		"x:%d y:%d w:%d h:%d bg_trans:0x%x"
 		" src: y_addr:%p uv_addr:%p, image y:%p uv:%p, cost %lldus\n",
@@ -497,7 +499,7 @@ void osd_process_nv12_workfunc(osd_process_info_t *proc_info)
 		src_y_addr, src_uv_addr, cache_y_addr, cache_uv_addr, time_us);
 }
 
-void osd_process_rect_workfunc(osd_process_info_t *proc_info)
+void osd_process_rect_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *tar_y_addr, *tar_uv_addr;
 	uint32_t yuv_color;
@@ -595,7 +597,7 @@ void osd_process_rect_workfunc(osd_process_info_t *proc_info)
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
 
-	vio_dbg("osd rect process, show:%d invert:%d level:%d, "
+	pr_debug("osd rect process, show:%d invert:%d level:%d, "
 		"frame_id:%d buf_index:%d image w:%d h:%d, "
 		"x:%d y:%d w:%d h:%d y_addr:%p uv_addr:%p "
 		"color index:%d yuv:0x%x, cost %lldus\n",
@@ -607,7 +609,7 @@ void osd_process_rect_workfunc(osd_process_info_t *proc_info)
 		yuv_color, time_us);
 }
 
-void osd_process_polygon_workfunc(osd_process_info_t *proc_info)
+void osd_process_polygon_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *tar_y_addr, *tar_uv_addr;
 	uint16_t temp_index[OSD_NEON_PROC_U16];
@@ -749,7 +751,7 @@ void osd_process_polygon_workfunc(osd_process_info_t *proc_info)
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
 
-	vio_dbg("osd polygon process, show:%d invert:%d level:%d, "
+	pr_debug("osd polygon process, show:%d invert:%d level:%d, "
 		"frame_id:%d buf_index:%d image w:%d h:%d, "
 		"x:%d y:%d w:%d h:%d y_addr:%p uv_addr:%p "
 		"polygon_buf:%p color index:%d yuv:0x%x, cost %lldus\n",
@@ -761,7 +763,7 @@ void osd_process_polygon_workfunc(osd_process_info_t *proc_info)
 		proc_info->fill_color, yuv_color, time_us);
 }
 
-void osd_process_mosaic_workfunc(osd_process_info_t *proc_info)
+void osd_process_mosaic_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *tar_y_addr, *tar_uv_addr;
 	osal_time_t time_now = { 0 };
@@ -871,7 +873,7 @@ void osd_process_mosaic_workfunc(osd_process_info_t *proc_info)
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
 
-	vio_dbg("osd mosaic process, show:%d invert:%d level:%d, "
+	pr_debug("osd mosaic process, show:%d invert:%d level:%d, "
 		"frame_id:%d buf_index:%d image w:%d h:%d, "
 		"x:%d y:%d w:%d h:%d y_addr:%p uv_addr:%p cost %lldus\n",
 		proc_info->show_en, proc_info->invert_en, proc_info->osd_level,
@@ -881,7 +883,7 @@ void osd_process_mosaic_workfunc(osd_process_info_t *proc_info)
 		proc_info->height, cache_y_addr, cache_uv_addr, time_us);
 }
 
-void osd_process_sta_workfunc(osd_process_info_t *proc_info)
+void osd_process_sta_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *y_addr, *y_addr_temp;
 	uint32_t h, w;
@@ -895,7 +897,7 @@ void osd_process_sta_workfunc(osd_process_info_t *proc_info)
 		return;
 	}
 	if (proc_info->tar_y_addr == NULL) {
-		vio_err("osd process type:%d tar_addr y:%p error\n",
+		pr_err("osd process type:%d tar_addr y:%p error\n",
 			proc_info->proc_type, proc_info->tar_y_addr);
 		return;
 	}
@@ -942,7 +944,7 @@ void osd_process_sta_workfunc(osd_process_info_t *proc_info)
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
 
-	vio_dbg("osd sta process, x:%d y:%d w:%d h:%d y_addr:%p "
+	pr_debug("osd sta process, x:%d y:%d w:%d h:%d y_addr:%p "
 		"sta_level: %d %d %d bin_value: %d %d %d %d, cost %lldus\n",
 		proc_info->start_x, proc_info->start_y, proc_info->width,
 		proc_info->height, y_addr,
@@ -952,7 +954,35 @@ void osd_process_sta_workfunc(osd_process_info_t *proc_info)
 		proc_info->sta_bin_value[3], time_us);
 }
 
-void osd_process_null_workfunc(osd_process_info_t *proc_info)
+void osd_process_null_workfunc(struct osd_process_info *proc_info)
 {
-	vio_warn("osd process null work, proc_type:%d\n", proc_info->proc_type);
+	pr_warn("osd process null work, proc_type:%d\n", proc_info->proc_type);
+}
+
+void osd_run_process(struct osd_process_info *process_info)
+{
+	switch (process_info->proc_type)
+	{
+	case OSD_PROC_VGA4:
+		osd_process_vga4_workfunc(process_info);
+		break;
+	case OSD_PROC_NV12:
+		osd_process_nv12_workfunc(process_info);
+		break;
+	case OSD_PROC_RECT:
+		osd_process_rect_workfunc(process_info);
+		break;
+	case OSD_PROC_POLYGON:
+		osd_process_polygon_workfunc(process_info);
+		break;
+	case OSD_PROC_MOSAIC:
+		osd_process_mosaic_workfunc(process_info);
+		break;
+	case OSD_PROC_STA:
+		osd_process_sta_workfunc(process_info);
+		break;
+	default:
+		osd_process_null_workfunc(process_info);
+		break;
+	}
 }
