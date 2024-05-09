@@ -920,7 +920,6 @@ static void cim_subdev_close(struct vio_subdev *vdev)
 			      vdev); /*PRQA S 2810,0497*/
 	cim_priv_attr = cim_get_priv_by_subdev(subdev);
 	cim = cim_get_dev(subdev->vin_node_dev->hw_id);
-	cim->sif.insts[cim_priv_attr->ipi_index].frameid_cnt = 0;
 	if (osal_atomic_read(&vdev->refcount) == 0) {
 		if (vnode != NULL) {
 			osal_clear_bit((s32)VIO_NODE_INIT, &vnode->state);
@@ -934,7 +933,9 @@ static void cim_subdev_close(struct vio_subdev *vdev)
 		vdev->state = 0;
 		vdev->reqbuf_flag = 0;
 		/* osal_clear_bit((u32)CIM_IPI0_USED + cim_priv_attr->ipi_index, &cim->state); */
+		cim->sif.insts[cim_priv_attr->ipi_index].frameid_cnt = 0;
 		memset(cim_priv_attr, 0, sizeof(struct vin_cim_private_s));
+		memset(&subdev->vin_attr, 0, sizeof(vin_attr_t));
 	}
 
 	vio_info("[S%d] %s\n", flow_id, __func__);

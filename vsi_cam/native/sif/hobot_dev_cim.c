@@ -162,7 +162,7 @@ s32 cim_video_open(struct vio_video_ctx *vctx)
 
 	ret = cim_open(vctx);
 
-	vio_info("[S%d]%s done\n ret val:%d", vctx->ctx_id, __func__, ret);
+	vio_info("[S%d]%s done ret val:%d", vctx->ctx_id, __func__, ret);
 	return ret;
 }
 
