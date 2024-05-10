@@ -526,7 +526,7 @@ s32 cim_isp_video_update_calib_param(uint32_t flow_id, uint32_t module_type,
 void cim_video_get_frameid(struct vio_node *vnode, struct frame_id_desc *frameid)
 {
 	if (vnode != NULL) {
-		// temp use the last frame in the driver instand of hw
+		// use the last frame in the driver
 		memcpy(frameid, &vnode->frameid, sizeof(struct frame_id_desc));
 	}
 }

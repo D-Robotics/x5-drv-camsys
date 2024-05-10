@@ -542,9 +542,9 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 		isp_write(isp, ISP_ICR, isp_mis);
 		isp_mis &= ~(BIT(26) | BIT(25) | BIT(24) | BIT(23)); /*sensor dataloss*/
 		ins = &isp->insts[isp->next_mi_irq_ctx];
-		if ((isp_mis & BIT(5)) && ins->ctx.is_sink_online_mode)
-			sif_get_frame_des(ins->ctx.src_ctx);
 		if (isp_mis & BIT(6)) {
+			if (ins->ctx.is_sink_online_mode)
+				sif_get_frame_des(ins->ctx.src_ctx);
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FS);
 			isp_mis &= ~BIT(6);
 		}

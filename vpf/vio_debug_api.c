@@ -207,6 +207,14 @@ void vio_set_stat_info(u32 flow_id, u32 module, enum vio_stat_type stype, u32 fr
 	} else {
 		index = frameid % MAX_DELAY_FRAMES;
 		mstat = &chain->mstat[module][index];
+		if (stype == STAT_FS) {
+			mstat->sinfo[STAT_FE].tv_sec = 0;
+			mstat->sinfo[STAT_FE].tv_usec = 0;
+			mstat->sinfo[STAT_QB].tv_sec = 0;
+			mstat->sinfo[STAT_QB].tv_usec = 0;
+			mstat->sinfo[STAT_DQ].tv_sec = 0;
+			mstat->sinfo[STAT_DQ].tv_usec = 0;
+		}
 		mstat->sinfo[stype].frameid = frameid;
 		chain->info_idx[module][stype] = frameid;
 	}
