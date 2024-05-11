@@ -630,7 +630,9 @@ int isp_set_mcm_sch(struct isp_device *isp, struct isp_mcm_sch *sch)
 	list_add_tail(&node->entry, &isp->mcm_sch_busy_list);
 
 	ins = &isp->insts[sch->id];
-	cam_trigger(ins->ctx.src_ctx);
+
+	if (ins->ctx.is_src_online_mode)
+		cam_trigger(ins->ctx.src_ctx);
 
 	memset(&msg, 0, sizeof(msg));
 	msg.id = ISP_MSG_MCM_SCH;
