@@ -48,6 +48,21 @@ int32_t isp_video_get_struct_size(struct vio_struct_size *vio_size)
 	return ret;
 }
 
+s32 isp_get_inst(struct vio_subdev *vdev, int *inst_id)
+{
+	struct isp_nat_instance *isp_inst = NULL;
+
+	isp_inst = container_of(vdev, struct isp_nat_instance, vdev);
+	if (!isp_inst)
+		return -1;
+
+	if (inst_id)
+		*inst_id = isp_inst->id;
+
+	return 0;
+}
+EXPORT_SYMBOL(isp_get_inst);
+
 static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vdev, u8 online_mode)
 {
 	struct isp_nat_instance *inst;

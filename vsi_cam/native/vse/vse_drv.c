@@ -10,6 +10,8 @@
 #define VSE_DT_NAME     "verisilicon,vse"
 #define VSE_DEV_NAME    "vs-vse"
 
+extern s32 isp_get_inst(struct vio_subdev *vdev, int *inst_id);
+
 static struct vio_version_info g_vse_version = {
 	.major = 1,
 	.minor = 0
@@ -50,6 +52,7 @@ static s32 vse_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 	struct vse_nat_instance *inst;
 	enum vio_bind_type bind_type = CHN_BIND_OTF;
 	struct vio_node *remote_node;
+	int cas_id;
 
 	if (!vdev || !remote_vdev)
 		return bind_type;
@@ -70,10 +73,13 @@ static s32 vse_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 	}
 
 	remote_node = remote_vdev->vnode;
-	if (online_mode && remote_node->id == ISP_MODULE && vdev->id == VNODE_ID_SRC)
+	if (online_mode && remote_node->id == ISP_MODULE && vdev->id == VNODE_ID_SRC) {
 		bind_type = CHN_BIND_OTF;
-	else
+		isp_get_inst(remote_vdev, &cas_id);
+		vse_set_cascade(&inst->dev->vse_dev, inst->id, cas_id, online_mode);
+	} else {
 		bind_type = CHN_BIND_M2M;
+	}
 
 	pr_info("%s online_mode=%d,bind_type=%d\n", __func__, online_mode, bind_type);
 	return bind_type;

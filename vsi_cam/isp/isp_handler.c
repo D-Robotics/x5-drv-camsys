@@ -423,15 +423,19 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			} else {
 				pr_debug("isp:%d->%d\n", old_next_mi_irq_ctx, isp->next_mi_irq_ctx);
 			}
-			if (!is_completed) {
-				isp->next_mi_irq_ctx = old_next_mi_irq_ctx;
-				goto _post;
-			} else if (ctx->is_src_online_mode) {
-				cam_trigger(ctx->src_ctx);
+
+			if (isp->mode == STRM_WORK_MODE) {
+				if (!is_completed) {
+					isp->next_mi_irq_ctx = old_next_mi_irq_ctx;
+					goto _post;
+				} else if (ctx->is_src_online_mode) {
+					pr_debug("cam_trigger\n");
+					cam_trigger(ctx->src_ctx);
+				}
 			}
 
 			ins = &isp->insts[isp->next_mi_irq_ctx];
-			if (ctx->src_ctx) {
+			if (!ctx->is_src_online_mode && ctx->src_ctx) {
 				node = list_first_entry_or_null(ctx->src_buf_list2,
 								struct cam_list_node, entry);
 				if (node) {
@@ -448,7 +452,10 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				msg.id = ISP_MSG_MCM_SCH;
 				msg.inst = isp->next_mi_irq_ctx;
 				msg.sch.id = msg.inst;
-				msg.sch.mp_buf.addr = get_phys_addr(node->data, 0);
+				if (node)
+					msg.sch.mp_buf.addr = get_phys_addr(node->data, 0);
+				else
+					msg.sch.mp_buf.addr = 0;
 				msg.sch.mp_buf.size = 0;
 			} else if (node) {
 				isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
@@ -479,7 +486,9 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 						list_add_tail(&mcm_ib->entry,
 							      &isp->ibm[isp->next_mi_irq_ctx].list3);
 						isp_post(isp, &msg, false);
+						pr_debug("test isp post mcm\n");
 					}
+					pr_debug("test isp:%d\n", isp->next_mi_irq_ctx);
 #endif
 				} else {
 					msg.sch.rdma_buf.addr = get_phys_addr(ctx->sink_buf, 0);

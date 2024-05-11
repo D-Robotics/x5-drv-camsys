@@ -13,9 +13,11 @@
 #define VSE_MSG_ALLOC_CMD_BUF (0x1)
 #define VSE_MSG_SET_OSD_BUF   (0x2)
 
-#define VSE_MSG_IRQ_STAT (0x1 << 8)
-#define VSE_MSG_SRC_ALT  (0x2 << 8)
-#define VSE_MSG_MCM_SCH  (0x3 << 8)
+#define VSE_MSG_IRQ_STAT        (0x1 << 8)
+#define VSE_MSG_SRC_ALT         (0x2 << 8)
+#define VSE_MSG_MCM_SCH         (0x3 << 8)
+#define VSE_MSG_CASCADE_UPDATE  (0x4 << 8)
+#define VSE_MSG_SKIP_FRAME      (0x5 << 8)
 
 #define VSE_OUT_CHNL_MAX (6)
 
@@ -68,6 +70,11 @@ struct vse_mcm_sch {
 	struct mem_buf mp_buf[VSE_OUT_CHNL_MAX];
 };
 
+struct vse_cascade {
+	__u8 cascade_id;
+	__u8 cascade_enable;
+};
+
 enum vse_src {
 	VSE_SRC_STRM0,
 	VSE_SRC_STRM1,
@@ -96,6 +103,7 @@ struct vse_msg {
 		__u32 state; /* enum cam_state */
 		__u32 source; /* enum vse_src */
 		struct vse_mcm_sch sch;
+		struct vse_cascade cascade;
 		struct cam_clk clk;
 		struct cam_log log;
 	};

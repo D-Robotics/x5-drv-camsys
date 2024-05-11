@@ -75,6 +75,19 @@ int vse_set_source(struct vse_device *vse, u32 inst, u32 source)
 	return vse_post(vse, &msg, false);
 }
 
+int vse_set_cascade(struct vse_device *vse, u32 inst, u32 cas_id, bool en_cas)
+{
+	struct vse_msg msg;
+
+	msg.id = VSE_MSG_CASCADE_UPDATE;
+	msg.inst = inst;
+	msg.channel = -1;
+	msg.cascade.cascade_id     = cas_id;
+	msg.cascade.cascade_enable = en_cas;
+
+	return vse_post(vse, &msg, true);
+}
+
 int vse_set_fps_rate(struct vse_device *vse, u32 inst, u32 chnl,
 		     struct vse_fps_rate *fps)
 {
@@ -303,6 +316,7 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 			vse_set_mi_buffer(vse, i, phys_addr, &ins->ofmt[i]);
 #else
 			ins->sch.mp_buf[i].addr = phys_addr;
+			pr_debug("vse chn%d mp addr:%x\n", i, (u32)ins->sch.mp_buf[i].addr);
 			ins->sch.ochn_en_mask |= BIT(i);
 #endif
 		}
@@ -376,6 +390,7 @@ int vse_add_job(struct vse_device *vse, u32 inst)
 	int rc;
 	u32 id;
 
+	pr_debug("add job inst:%d\n", inst);
 	rc = push_job(vse->jq, &job);
 	if (rc < 0) {
 		dev_err(vse->dev, "failed to push a job(err=%d)\n", rc);
@@ -495,6 +510,8 @@ int vse_close(struct vse_device *vse, u32 inst)
 	reset_job_queue(vse->jq);
 
 	vse_reset(vse);
+	vse->is_completed = true;
+	vse->error = 1;
 	return vse_runtime_suspend(vse->dev);
 }
 

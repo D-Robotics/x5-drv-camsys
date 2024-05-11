@@ -169,6 +169,11 @@ int new_frame(struct vse_irq_ctx *ctx)
 	u32 i, count = 0;
 	u32 enable = 0;
 
+	if (!ctx) {
+		pr_err("newframe vse_irq_ctx null\n");
+		return -1;
+	}
+
 	if (!ctx->is_sink_online_mode && ctx->sink_ctx) {
 		buf = cam_acqbuf_irq(ctx->sink_ctx);
 		if (!buf)
@@ -200,7 +205,7 @@ int new_frame(struct vse_irq_ctx *ctx)
 			if (buf)
 				cam_qbuf_irq(ctx->sink_ctx, buf, false);
 		}
-		return -ENOMEM;
+		return 1;
 	} else if (!count) {
 		return -ENOMEM;
 	}
@@ -239,6 +244,14 @@ struct vse_irq_ctx *get_next_irq_ctx(struct vse_device *vse)
 		ctx = &inst->ctx;
 		rc = new_frame(ctx);
 		spin_unlock_irqrestore(&inst->lock, flags);
+		if (rc == 1 && ctx->is_sink_online_mode) {
+			struct vse_msg msg = { .id = VSE_MSG_SKIP_FRAME };
+
+			msg.inst = -1;
+			msg.channel = -1;
+			vse_post(vse, &msg, false);
+			pr_debug("vse fps skip frame\n");
+		}
 		if (!rc) {
 			vse->next_irq_ctx = job.irq_ctx_index;
 			break;

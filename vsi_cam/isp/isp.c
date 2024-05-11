@@ -497,6 +497,12 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 		}
 		state = CAM_STATE_STARTED;
 		refcount_inc(&isp->set_state_refcnt);
+
+		//trigger vse
+		if (ins->ctx.is_src_online_mode && isp->mode == STRM_WORK_MODE) {
+			pr_debug("%s isp%d trigger vse...\n", __func__, inst);
+			cam_trigger(ins->ctx.src_ctx);
+		}
 	} else {
 		state = CAM_STATE_STOPPED;
 		if (refcount_read(&isp->set_state_refcnt) > REFCNT_INIT_VAL)
@@ -580,18 +586,23 @@ int isp_add_job(struct isp_device *isp, u32 inst)
 	if (isp->mode == STRM_WORK_MODE)
 		return -EFAULT;
 
+	pr_debug("cam_trigger\n");
+	ins = &isp->insts[inst];
+	cam_trigger(ins->ctx.src_ctx);
+
 	rc = push_job(isp->jq, &job);
 	if (rc < 0) {
 //		dev_err(isp->dev, "failed to push a job(err=%d)\n", rc);
 		return rc;
 	}
-
+	pr_debug("%s test isp add job\n", __func__);
 	if (isp->error && !isp->insts[inst].ctx.is_sink_online_mode) {
 		ctx = get_next_irq_ctx(isp);
 		if (!ctx)
 			return 0;
 		ins = &isp->insts[isp->next_mi_irq_ctx];
-		if (ctx->src_ctx) {
+		pr_debug("%s ctx->is_src_online_mode=%d\n", __func__, ctx->is_src_online_mode);
+		if (!ctx->is_src_online_mode && ctx->src_ctx) {
 			node = list_first_entry_or_null(ctx->src_buf_list2,
 							struct cam_list_node, entry);
 			if (!node)
