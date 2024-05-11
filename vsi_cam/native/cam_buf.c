@@ -73,6 +73,7 @@ int cam_trigger(struct cam_buf_ctx *ctx)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	const struct cam_online_ops *ops = NULL;
+	struct vio_node *vnode;
 
 	if (vdev && vdev->next) {
 		vdev = vdev->next;
@@ -80,6 +81,14 @@ int cam_trigger(struct cam_buf_ctx *ctx)
 			ops = get_online_ops(vdev->vnode->id);
 		if (ops && ops->trigger)
 			return ops->trigger((struct cam_buf_ctx *)vdev);
+	} else if (vdev && vdev->vnode->next){
+		vnode = vdev->vnode->next;
+		if (vnode->id < MODULE_NUM)
+			ops = get_online_ops(vnode->id);
+		if (ops && ops->trigger)
+			return ops->trigger((struct cam_buf_ctx *)vnode->ich_subdev[0]);
+	} else {
+		pr_err("cam trigger null\n");
 	}
 	return -EBUSY;
 }
@@ -88,6 +97,7 @@ bool cam_is_completed(struct cam_buf_ctx *ctx)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	const struct cam_online_ops *ops = NULL;
+	struct vio_node *vnode;
 
 	if (vdev && vdev->next) {
 		vdev = vdev->next;
@@ -95,6 +105,14 @@ bool cam_is_completed(struct cam_buf_ctx *ctx)
 			ops = get_online_ops(vdev->vnode->id);
 		if (ops && ops->is_completed)
 			return ops->is_completed((struct cam_buf_ctx *)vdev);
+	} else if (vdev && vdev->vnode->next){
+		vnode = vdev->vnode->next;
+		if (vnode->id < MODULE_NUM)
+			ops = get_online_ops(vnode->id);
+		if (ops && ops->is_completed)
+			return ops->is_completed((struct cam_buf_ctx *)vnode->ich_subdev[0]);
+	} else {
+		pr_err("cam_is_completed null\n");
 	}
 	return false;
 }

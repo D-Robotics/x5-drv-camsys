@@ -278,12 +278,14 @@ int new_frame(struct isp_irq_ctx *ctx)
 		}
 	}
 
-	if (!ctx->is_src_online_mode && ctx->src_ctx) {
+	if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
 		struct cam_list_node *node;
 
 		buf = cam_dqbuf_irq(ctx->src_ctx, true);
-		if (!buf)
+		if (!buf) {
+			pr_err("isp dq src buf failed\n");
 			return -ENOMEM;
+		}
 		node = list_first_entry_or_null(ctx->src_buf_list1,
 						struct cam_list_node, entry);
 		if (WARN_ON(!node))
@@ -291,6 +293,7 @@ int new_frame(struct isp_irq_ctx *ctx)
 		node->data = buf;
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list2);
+		pr_debug("isp list_add_tail src_buf_list2\n");
 	}
 
 	if (ctx->sink_ctx)
@@ -441,12 +444,13 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			}
 
 			ins = &isp->insts[isp->next_mi_irq_ctx];
-			if (!ctx->is_src_online_mode && ctx->src_ctx) {
+			if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
 				node = list_first_entry_or_null(ctx->src_buf_list2,
 								struct cam_list_node, entry);
 				if (node) {
 					list_del(&node->entry);
 					list_add_tail(&node->entry, ctx->src_buf_list3);
+					pr_debug("isp list_add_tail src_buf_list3\n");
 				}
 			}
 #ifdef WITH_LEGACY_ISP

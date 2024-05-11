@@ -73,8 +73,6 @@ static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 	if (vdev) {
 		if (vdev->id == VNODE_ID_SRC)
 			vdev->prev = remote_vdev;
-		else if (vdev->id == VNODE_ID_CAP)
-			vdev->next = remote_vdev;
 	}
 	if (vdev->id == VNODE_ID_CAP) {
 		vdev->chn_attr.format = MEM_PIX_FMT_NV12;
@@ -523,6 +521,7 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 		inst->ctx.is_sink_online_mode = !!src_inst->online_mode;
 		inst->ctx.is_src_online_mode = !!inst->online_mode;
 		inst->ctx.src_ctx = (struct cam_buf_ctx *)vctx->vdev;
+		inst->ctx.ddr_en = inst->ochn_attr.ddr_en;
 		if (!inst->ctx.is_sink_online_mode)
 			inst->ctx.sink_ctx = (struct cam_buf_ctx *)&src_inst->vdev;
 		inst->ctx.stat_ctx = (struct cam_buf_ctx *)&src_inst->vdev;

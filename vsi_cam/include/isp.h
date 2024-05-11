@@ -27,7 +27,7 @@
 #define isp_read(isp, offset) __raw_readl((isp)->base + (offset))
 
 struct isp_irq_ctx {
-	bool is_sink_online_mode, is_src_online_mode;
+	bool is_sink_online_mode, is_src_online_mode, ddr_en;
 	struct cam_buf *sink_buf, *src_buf;
 	struct cam_buf_ctx *sink_ctx, *src_ctx, *stat_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;

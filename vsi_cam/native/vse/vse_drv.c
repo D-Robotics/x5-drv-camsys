@@ -60,11 +60,6 @@ static s32 vse_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 	inst = container_of(vdev, struct vse_nat_instance, vdev);
 	inst->online_mode = online_mode;
 
-	if (vdev->id == VNODE_ID_SRC)
-		vdev->prev = remote_vdev;
-	else if (vdev->id >= VNODE_ID_CAP)
-		vdev->next = remote_vdev;
-
 	if (vdev->id == VNODE_ID_CAP) {
 		vdev->chn_attr.format = MEM_PIX_FMT_NV12;
 		vdev->chn_attr.height = inst->ochn_attr.target_h;

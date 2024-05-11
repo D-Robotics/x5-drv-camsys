@@ -661,7 +661,7 @@ int isp_set_mcm_sch_offline(struct isp_device *isp, u32 inst)
 	rc = new_frame(ctx);
 	if (rc)
 		return -1;
-	if (!ctx->is_src_online_mode && ctx->src_ctx) {
+	if ((!ctx->is_src_online_mode || ctx->ddr_en) && ctx->src_ctx) {
 		node = list_first_entry_or_null(ctx->src_buf_list2, struct cam_list_node, entry);
 		if (!node)
 			return -1;
@@ -692,6 +692,7 @@ int isp_set_mcm_sch_offline(struct isp_device *isp, u32 inst)
 #endif
 	if (node) {
 		list_del(&node->entry);
+		pr_debug("%s: isp list_add_tail src_buf_list3\n", __func__);
 		list_add_tail(&node->entry, ctx->src_buf_list3);
 	}
 
