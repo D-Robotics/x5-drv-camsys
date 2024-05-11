@@ -120,12 +120,9 @@ static s32 handle_get_func(struct isp_device *isp, struct isp_msg *msg)
 
 	memset(&msg->func, 0, sizeof(msg->func));
 	msg->func.work_mode = isp->mode;
-	if (isp->mcm_en) {
-		msg->func.mcm.enable = 1;
-		if (ins->stream_idx < 0)
-			msg->func.mcm.stream_idx = msg->inst;
-		else
-			msg->func.mcm.stream_idx = ins->stream_idx;
+	if (msg->func.work_mode == MCM_WORK_MODE) {
+		msg->func.mcm.online = ins->online_mcm ? 1 : 0;
+		msg->func.mcm.stream_idx = ins->stream_idx;
 	}
 	return 0;
 }
@@ -221,12 +218,12 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 	struct isp_irq_ctx *ctx = NULL;
 	struct irq_job job;
 	unsigned long flags;
-	u32 id = isp->next_mi_irq_ctx;
+	u32 id;
 	int rc;
 	struct ibuf *mcm_ib;
 
 	if (isp->mode == STRM_WORK_MODE) {
-		inst = &isp->insts[id];
+		inst = &isp->insts[0];
 		if (inst->state != CAM_STATE_STARTED)
 			return NULL;
 		spin_lock_irqsave(&inst->lock, flags);
@@ -249,15 +246,13 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 
 		id = job.irq_ctx_index;
 		inst = &isp->insts[id];
-		if (inst->state != CAM_STATE_STARTED)
+		if (inst->state != CAM_STATE_STARTED || !inst->online_mcm)
 			continue;
-		if (isp->mcm_en) {
-			mcm_ib = list_first_entry_or_null(&isp->ibm[id].list2,
-							  struct ibuf, entry);
-			if (!mcm_ib) {
-				pr_warn("%s no mcm buf available!\n", __func__);
-				continue;
-			}
+		mcm_ib = list_first_entry_or_null(&isp->ibm[id].list2,
+							struct ibuf, entry);
+		if (!mcm_ib) {
+			pr_warn("%s no mcm buf available!\n", __func__);
+			continue;
 		}
 		spin_lock_irqsave(&inst->lock, flags);
 		ctx = &inst->ctx;
@@ -306,20 +301,20 @@ int new_frame(struct isp_irq_ctx *ctx)
 static inline int handle_mcm(struct isp_device *isp, u32 path)
 {
 	u32 inst = isp->stream_idx_mapping[path];
+	struct isp_instance *ins;
 
-	if (unlikely(inst < 0))
+	if (unlikely(inst >= isp->num_insts))
 		return -1;
 
-	if (!isp->mcm_en)
+	ins = &isp->insts[inst];
+	if (!ins->online_mcm || ins->state != CAM_STATE_STARTED)
 		return -EFAULT;
 
 #ifndef WITH_LEGACY_ISP
 	{
-		struct isp_instance *ins;
 		struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
 							   struct ibuf, entry);
 
-		ins = &isp->insts[inst];
 		if (ib) {
 			list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list2);
 			list_del(&ib->entry);
@@ -337,13 +332,27 @@ static inline int handle_mcm(struct isp_device *isp, u32 path)
 	return 0;
 }
 
+static inline int get_cur_mi_ctx_irq(struct isp_device *isp, u32 *inst)
+{
+	int rc = 0;
+
+	if (isp->mode == STRM_WORK_MODE)
+		*inst = 0;
+	else
+		rc = isp_get_mcm_sch(isp, inst);
+	return rc;
+}
+
 irqreturn_t mi_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
 	struct isp_msg msg;
+	struct isp_mcm_sch sch;
 	struct isp_instance *ins;
 	u32 miv2_mis, miv2_mis1, miv2_mis2, miv2_mis3, mi_mis_hdr1;
+	u32 cur_mi_irq_ctx;
 	struct isp_irq_ctx *ctx;
+	int rc;
 
 	pr_debug("+\n");
 	miv2_mis = isp_read(isp, MIV2_MIS);
@@ -365,68 +374,65 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 	pr_debug("mi mis:0x%x, mis1:0x%x, mis2:0x%x, mis3:0x%x, mis_hdr1:0x%x\n",
 				miv2_mis, miv2_mis1, miv2_mis2, miv2_mis3, mi_mis_hdr1);
 
-	if (miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK) {
-		handle_mcm(isp, 0);
-	}
-	if (miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK) {
-		if (!isp->unit_test)
-			handle_mcm(isp, 1);
-	}
-	if (miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK) {
-		if (!isp->unit_test)
-			handle_mcm(isp, 2);
-	}
-	if (miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK) {
-		if (!isp->unit_test)
-			handle_mcm(isp, 3);
-	}
-
 	// skip buffer management if running unit test!
 	if (!isp->unit_test) {
+		if (miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK)
+			handle_mcm(isp, 0);
+		if (miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK)
+			handle_mcm(isp, 1);
+		if (miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK)
+			handle_mcm(isp, 2);
+		if (miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK)
+			handle_mcm(isp, 3);
+
 		if (miv2_mis & 0x1) {
-			// handle isp frame end intr
-			ins = &isp->insts[isp->next_mi_irq_ctx];
-			frame_done(&ins->ctx);
 			isp->rdma_busy = false;
+			isp->error = 1;
+			rc = get_cur_mi_ctx_irq(isp, &cur_mi_irq_ctx);
+			if (rc) {
+				pr_err("fail to get currect isp instance id!\n");
+			} else {
+				pr_debug("isp:%d, mi frame done!\n", cur_mi_irq_ctx);
+				isp->cur_mi_irq_ctx = cur_mi_irq_ctx;
+				// handle isp frame end intr
+				ins = &isp->insts[isp->cur_mi_irq_ctx];
+				frame_done(&ins->ctx);
+				if (ins->online_mcm) {
+					struct ibuf *ib;
 
-			if (isp->mcm_en) {
-				struct ibuf *ib;
-
-				ib = list_first_entry_or_null
-						(&isp->ibm[isp->next_mi_irq_ctx].list3,
-						struct ibuf, entry);
-				if (ib) {
-					list_del(&ib->entry);
-					list_add_tail(&ib->entry,
-						      &isp->ibm[isp->next_mi_irq_ctx].list1);
+					ib = list_first_entry_or_null
+							(&isp->ibm[isp->cur_mi_irq_ctx].list3,
+							struct ibuf, entry);
+					if (ib) {
+						list_del(&ib->entry);
+						list_add_tail(&ib->entry,
+							&isp->ibm[isp->cur_mi_irq_ctx].list1);
+					}
 				}
 			}
 		}
 
 		if (!isp->rdma_busy) {
 			// handle mcm_wr frame end intr
-			u32 old_next_mi_irq_ctx = isp->next_mi_irq_ctx;
 			bool is_completed = true;
 			struct cam_list_node *node = NULL;
 
 			ctx = get_next_irq_ctx(isp);
 			if (!ctx) {
-				isp->next_mi_irq_ctx = old_next_mi_irq_ctx;
 				isp->error = 1;
 				goto _post;
 			}
 
 			if (ctx->is_src_online_mode) {
 				is_completed = cam_is_completed(ctx->src_ctx);
-				pr_debug("isp:%d->%d,vse:%d\n", old_next_mi_irq_ctx,
+				pr_debug("isp:%d->%d,vse:%d\n", isp->cur_mi_irq_ctx,
 					 isp->next_mi_irq_ctx, is_completed);
 			} else {
-				pr_debug("isp:%d->%d\n", old_next_mi_irq_ctx, isp->next_mi_irq_ctx);
+				pr_debug("isp:%d->%d\n", isp->cur_mi_irq_ctx, isp->next_mi_irq_ctx);
 			}
 
 			if (isp->mode == STRM_WORK_MODE) {
 				if (!is_completed) {
-					isp->next_mi_irq_ctx = old_next_mi_irq_ctx;
 					goto _post;
 				} else if (ctx->is_src_online_mode) {
 					pr_debug("cam_trigger\n");
@@ -446,63 +452,58 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 #ifdef WITH_LEGACY_ISP
 			if (0)
 #else
-			if (isp->mode != STRM_WORK_MODE)
+			if (node)
 #endif
 			{
-				msg.id = ISP_MSG_MCM_SCH;
-				msg.inst = isp->next_mi_irq_ctx;
-				msg.sch.id = msg.inst;
-				if (node)
-					msg.sch.mp_buf.addr = get_phys_addr(node->data, 0);
-				else
-					msg.sch.mp_buf.addr = 0;
-				msg.sch.mp_buf.size = 0;
-			} else if (node) {
-				isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+				if (isp->mode != STRM_WORK_MODE) {
+					sch.id = isp->next_mi_irq_ctx;
+					sch.mp_buf.addr = get_phys_addr(node->data, 0);
+					sch.mp_buf.size = 0;
+				} else {
+					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+				}
+			} else if (ctx->is_src_online_mode) {
+				sch.id = isp->next_mi_irq_ctx;
+				sch.mp_buf.addr = 0;
+				sch.mp_buf.size = 0;
 			}
 			if (isp->mode != STRM_WORK_MODE) {
-				if (isp->mcm_en) {
 #ifdef WITH_LEGACY_ISP
-					u32 count, size;
+				u32 count, size;
 
-					count = isp->in_counts[isp->next_mi_irq_ctx] % MCM_BUF_NUM;
-					if (count > 0)
-						count--;
-					else
-						count = MCM_BUF_NUM - 1;
-					size = ins->fmt.ifmt.stride * ins->fmt.ifmt.height;
-					isp_set_rdma_buffer(isp, isp->in_bufs[isp->next_mi_irq_ctx].addr +
-								count * size);
+				count = isp->in_counts[isp->next_mi_irq_ctx] % MCM_BUF_NUM;
+				if (count > 0)
+					count--;
+				else
+					count = MCM_BUF_NUM - 1;
+				size = ins->fmt.ifmt.stride * ins->fmt.ifmt.height;
+				isp_set_rdma_buffer(isp, isp->in_bufs[isp->next_mi_irq_ctx].addr +
+							count * size);
 #else
-					struct ibuf *mcm_ib;
+				struct ibuf *mcm_ib;
 
-					mcm_ib = list_first_entry_or_null
-							(&isp->ibm[isp->next_mi_irq_ctx].list2,
-							struct ibuf, entry);
-					if (mcm_ib) {
-						msg.sch.rdma_buf.addr = mcm_ib->buf.addr;
-						msg.sch.rdma_buf.size = mcm_ib->buf.size;
-						list_del(&mcm_ib->entry);
-						list_add_tail(&mcm_ib->entry,
-							      &isp->ibm[isp->next_mi_irq_ctx].list3);
-						isp_post(isp, &msg, false);
-						pr_debug("test isp post mcm\n");
-					}
-					pr_debug("test isp:%d\n", isp->next_mi_irq_ctx);
-#endif
-				} else {
-					msg.sch.rdma_buf.addr = get_phys_addr(ctx->sink_buf, 0);
-					msg.sch.rdma_buf.size = 0;
-					isp_post(isp, &msg, false);
+				mcm_ib = list_first_entry_or_null
+						(&isp->ibm[isp->next_mi_irq_ctx].list2,
+						struct ibuf, entry);
+				if (mcm_ib) {
+					sch.rdma_buf.addr = mcm_ib->buf.addr;
+					sch.rdma_buf.size = mcm_ib->buf.size;
+					list_del(&mcm_ib->entry);
+					list_add_tail(&mcm_ib->entry,
+							&isp->ibm[isp->next_mi_irq_ctx].list3);
+					isp_set_mcm_sch(isp, &sch);
 				}
+#endif
 				isp->error = 0;
+				isp->rdma_busy = true;
 			} else if (ctx->sink_buf) {
 				isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
 				isp->error = 0;
+				isp->rdma_busy = true;
 			} else if (ctx->sink_ctx) {
 				isp->error = 1;
+				isp->rdma_busy = false;
 			}
-			isp->rdma_busy = true;
 		}
 	}
 

@@ -105,7 +105,7 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	if (rc < 0)
 		return rc;
 
-	return isp_add_job(isp->dev, isp->id);
+	return isp_set_mcm_sch_offline(isp->dev, isp->id);
 }
 
 static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx)
@@ -348,11 +348,11 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	}
 
 #ifdef WITH_LEGACY_ISP
-	inst->dev->mcm_en = true; /*enable mcm by default*/
+	inst->dev->insts[inst->id].online_mcm = true; /*enable mcm by default*/
 	inst->dev->mode = MCM_WORK_MODE;
 #endif
-	pr_info("%s *** inst->dev->mcm_en=%d,mode=%d ***\n", __func__,
-		inst->dev->mcm_en, inst->dev->mode);
+	pr_info("%s *** inst->dev->insts[%d].online_mcm=%d, mode=%d ***\n", __func__,
+		inst->id, inst->dev->insts[inst->id].online_mcm, inst->dev->mode);
 
 	{
 		// FIXME

@@ -11,7 +11,10 @@
 #include "job_queue.h"
 #include "mem_helper.h"
 
-#define ISP_SINK_ONLINE_PATH_MAX        (4)
+#define ISP_SINK_ONLINE_PATH_MAX  (4)
+#define ISP_SINK_OFFLINE_PATH_MAX (2)
+#define ISP_SINK_PATH_MAX (ISP_SINK_ONLINE_PATH_MAX + ISP_SINK_OFFLINE_PATH_MAX)
+#define SRC_BUF_NUM (16)
 #define MCM_BUF_NUM (4)
 #define HDR_BUF_NUM (2)
 
@@ -44,7 +47,7 @@ struct isp_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct isp_irq_ctx ctx;
 	struct list_head src_buf_list1, src_buf_list2, src_buf_list3;
-	struct cam_list_node src_bufs[16];
+	struct cam_list_node src_bufs[SRC_BUF_NUM];
 	struct ibuf *mcm_ib, *prev_mcm_ib;
 	struct isp_format_cap fmt_cap[ISP_FMT_MAX];
 	struct isp_format fmt;
@@ -55,6 +58,7 @@ struct isp_instance {
 	int stream_idx;
 	bool hdr_en;
 	u32 rdma_buf_count;
+	u32 online_mcm;
 };
 
 struct ibuf {
@@ -66,6 +70,11 @@ struct ibuf_manage {
 	struct list_head list1;
 	struct list_head list2;
 	struct list_head list3;
+};
+
+struct mcm_sch_node {
+	u32 inst;
+	struct list_head entry;
 };
 
 struct isp_device {
@@ -87,15 +96,18 @@ struct isp_device {
 	struct list_head hdr_buf_list;
 	struct mem_buf hdr_bufs[HDR_BUF_NUM];
 	u32 in_counts[ISP_SINK_ONLINE_PATH_MAX];
-	u32 next_mcm_irq_ctx, next_mi_irq_ctx;
+	u32 cur_mi_irq_ctx, next_mi_irq_ctx;
 	refcount_t set_state_refcnt;
 	enum cam_error error;
 	bool rdma_busy;
 	bool unit_test;
-	bool mcm_en;
 	enum work_mode mode;
 	struct mutex open_lock; /* lock for open_cnt */
 	struct mutex set_input_lock; /* lock for set_input */
+	struct mutex set_state_lock; /* lock for set_state */
+	spinlock_t mcm_sch_lock; /* lock for mcm_sch */
+	struct list_head mcm_sch_idle_list, mcm_sch_busy_list;
+	struct mcm_sch_node sch_node[ISP_SINK_PATH_MAX * SRC_BUF_NUM];
 	refcount_t open_cnt;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
@@ -123,6 +135,10 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable);
 int isp_set_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx);
 int isp_add_job(struct isp_device *isp, u32 inst);
+int isp_set_mcm_sch_offline(struct isp_device *isp, u32 inst);
+int isp_set_mcm_sch(struct isp_device *isp, struct isp_mcm_sch *sch);
+int isp_get_mcm_sch(struct isp_device *isp, u32 *inst);
+int isp_reset_mcm_sch(struct isp_device *isp);
 int isp_open(struct isp_device *isp, u32 inst);
 int isp_close(struct isp_device *isp, u32 inst);
 int isp_probe(struct platform_device *pdev, struct isp_device *isp);

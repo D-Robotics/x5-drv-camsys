@@ -70,7 +70,7 @@ struct isp_func {
 	__u32 work_mode;
 	union {
 		struct {
-			__u16 enable;
+			__u16 online;
 			__u16 stream_idx;
 		} mcm;
 	};

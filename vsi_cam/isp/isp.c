@@ -350,7 +350,7 @@ int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt)
 			alloc_hdr_buf(isp, i, &fmt->ifmt);
 	}
 
-	if (isp->mcm_en && ins->stream_idx > -1)
+	if (ins->online_mcm && ins->stream_idx > -1)
 		alloc_mcm_buf(isp, inst, &fmt->ifmt);
 
 	memcpy(&ins->fmt, fmt, sizeof(ins->fmt));
@@ -449,6 +449,34 @@ void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam
 	isp_write(isp, MI_MP_CTRL, 0x00000038); /* force update */
 }
 
+static inline void isp_set_state_safety(struct isp_device *isp, u32 inst, int state)
+{
+	struct isp_instance *ins;
+	bool state_check = false;
+	int i;
+
+	ins = &isp->insts[inst];
+	mutex_lock(&isp->set_state_lock);
+	ins->state = state;
+	if (state == CAM_STATE_STARTED) {
+		for (i = 0; i < isp->num_insts; i++) {
+			if (i == inst)
+				continue;
+			if (isp->insts[i].state == CAM_STATE_STARTED) {
+				state_check = true;
+				break;
+			}
+		}
+		/**
+		 * if there is no other instance working in CAM_STATE_STARTED mode,
+		 * reset mcm sch list!
+		 **/
+		if (!state_check)
+			isp_reset_mcm_sch(isp);
+	}
+	mutex_unlock(&isp->set_state_lock);
+}
+
 int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 {
 	struct isp_msg msg;
@@ -470,7 +498,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 			}
 		}
 
-		if (isp->mcm_en && ins->stream_idx > -1) {
+		if (ins->online_mcm && ins->stream_idx > -1) {
 			struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
 								   struct ibuf, entry);
 			if (!ib)
@@ -479,21 +507,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 			isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
 			ins->mcm_ib = ib;
 			list_del(&ib->entry);
-		}
-
-		isp->rdma_busy = !isp->mcm_en;
-
-		if (isp->rdma_busy) {
-#if 0
-			rc = new_frame(&ins->ctx);
-			if (rc < 0) {
-				dev_info(isp->dev, "failed to call new_frame (ignored).\n");
-			} else if (ins->ctx.src_buf) {
-				phys_addr = get_phys_addr(ins->ctx.src_buf, 0);
-				isp_set_mp_buffer(isp, phys_addr, &ins->fmt.ofmt);
-				isp->next_mi_irq_ctx = inst;
-			}
-#endif
 		}
 		state = CAM_STATE_STARTED;
 		refcount_inc(&isp->set_state_refcnt);
@@ -509,6 +522,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 			refcount_dec(&isp->set_state_refcnt);
 	}
 
+	isp_set_state_safety(isp, inst, state);
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = inst;
 	msg.state = state;
@@ -519,7 +533,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 	if (!enable) {
 		list_splice_tail_init(&ins->src_buf_list2, &ins->src_buf_list1);
 		list_splice_tail_init(&ins->src_buf_list3, &ins->src_buf_list1);
-		if (isp->mcm_en) {
+		if (ins->online_mcm) {
 			list_splice_tail_init(&isp->ibm[inst].list2, &isp->ibm[inst].list1);
 			list_splice_tail_init(&isp->ibm[inst].list3, &isp->ibm[inst].list1);
 			if (ins->mcm_ib) {
@@ -529,7 +543,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 		}
 	}
 
-	ins->state = state;
 	return 0;
 }
 
@@ -564,12 +577,9 @@ int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx)
 	if (inst >= isp->num_insts)
 		return -EINVAL;
 
-	if (idx >= ARRAY_SIZE(isp->stream_idx_mapping))
-		return -EINVAL;
-
 	ins = &isp->insts[inst];
 
-	if (idx > -1)
+	if (ins->online_mcm && idx > -1)
 		isp->stream_idx_mapping[idx] = inst;
 	ins->stream_idx = idx;
 	return 0;
@@ -577,69 +587,163 @@ int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx)
 
 int isp_add_job(struct isp_device *isp, u32 inst)
 {
-	struct isp_instance *ins;
-	struct isp_irq_ctx *ctx;
 	struct irq_job job = { inst };
-	struct cam_list_node *node = NULL;
 	int rc;
 
 	if (isp->mode == STRM_WORK_MODE)
 		return -EFAULT;
-
-	pr_debug("cam_trigger\n");
-	ins = &isp->insts[inst];
-	cam_trigger(ins->ctx.src_ctx);
 
 	rc = push_job(isp->jq, &job);
 	if (rc < 0) {
 //		dev_err(isp->dev, "failed to push a job(err=%d)\n", rc);
 		return rc;
 	}
-	pr_debug("%s test isp add job\n", __func__);
-	if (isp->error && !isp->insts[inst].ctx.is_sink_online_mode) {
-		ctx = get_next_irq_ctx(isp);
-		if (!ctx)
-			return 0;
-		ins = &isp->insts[isp->next_mi_irq_ctx];
-		pr_debug("%s ctx->is_src_online_mode=%d\n", __func__, ctx->is_src_online_mode);
-		if (!ctx->is_src_online_mode && ctx->src_ctx) {
-			node = list_first_entry_or_null(ctx->src_buf_list2,
-							struct cam_list_node, entry);
-			if (!node)
-				return 0;
-		}
-		dev_dbg(isp->dev, "%s try to start isp\n", __func__);
-#ifdef WITH_LEGACY_ISP
-		if (node)
-			isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
-		if (ctx->sink_buf) {
-			isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
-			isp->error = 0;
-		}
-#else
-		if (ctx->sink_buf) {
-			struct isp_msg msg;
 
-			memset(&msg, 0, sizeof(msg));
-			msg.id = ISP_MSG_MCM_SCH;
-			msg.inst = isp->next_mi_irq_ctx;
-			if (node)
-				msg.sch.mp_buf.addr = get_phys_addr(node->data, 0);
-			msg.sch.rdma_buf.addr = get_phys_addr(ctx->sink_buf, 0);
-			rc = isp_post(isp, &msg, false);
-			if (rc < 0) {
-				dev_warn(isp->dev, "%s failed to post MCM_SCH (err=%d).\n", __func__, rc);
-				return rc;
-			}
-			isp->error = 0;
-		}
-#endif
-		if (node) {
-			list_del(&node->entry);
-			list_add_tail(&node->entry, ctx->src_buf_list3);
-		}
-	}
 	return 0;
+}
+
+int isp_set_mcm_sch(struct isp_device *isp, struct isp_mcm_sch *sch)
+{
+	unsigned long flags;
+	struct mcm_sch_node *node = NULL;
+	struct isp_msg msg;
+	struct isp_instance *ins;
+	int rc = 0;
+
+	if (!isp || !sch)
+		return -EINVAL;
+
+	spin_lock_irqsave(&isp->mcm_sch_lock, flags);
+	node = list_first_entry_or_null(&isp->mcm_sch_idle_list, struct mcm_sch_node, entry);
+	if (WARN_ON(!node)) {
+		rc = -ENOMEM;
+		goto _exit;
+	}
+
+	node->inst = sch->id;
+	if (WARN_ON(node->inst >= isp->num_insts)) {
+		rc = -EFAULT;
+		goto _exit;
+	}
+
+	list_del(&node->entry);
+	list_add_tail(&node->entry, &isp->mcm_sch_busy_list);
+
+	ins = &isp->insts[sch->id];
+	cam_trigger(ins->ctx.src_ctx);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.id = ISP_MSG_MCM_SCH;
+	msg.inst = sch->id;
+	memcpy(&msg.sch, sch, sizeof(msg.sch));
+	isp_post(isp, &msg, false);
+
+_exit:
+	spin_unlock_irqrestore(&isp->mcm_sch_lock, flags);
+	return rc;
+}
+
+int isp_set_mcm_sch_offline(struct isp_device *isp, u32 inst)
+{
+	struct isp_instance *ins;
+	struct isp_irq_ctx *ctx;
+	struct cam_list_node *node = NULL;
+	int rc = 0;
+
+	if (WARN_ON(inst >= isp->num_insts))
+		return -1;
+
+	ins = &isp->insts[inst];
+	if (ins->state != CAM_STATE_STARTED)
+		return -1;
+
+	ctx = &ins->ctx;
+	rc = new_frame(ctx);
+	if (rc)
+		return -1;
+	if (!ctx->is_src_online_mode && ctx->src_ctx) {
+		node = list_first_entry_or_null(ctx->src_buf_list2, struct cam_list_node, entry);
+		if (!node)
+			return -1;
+	}
+#ifdef WITH_LEGACY_ISP
+	isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+	if (ctx->sink_buf) {
+		isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
+		isp->error = 0;
+	}
+#else
+	if (ctx->sink_buf) {
+		struct isp_mcm_sch sch;
+
+		sch.id = inst;
+		sch.mp_buf.addr = node ? get_phys_addr(node->data, 0) : 0;
+		sch.mp_buf.size = 0;
+		sch.rdma_buf.addr = get_phys_addr(ctx->sink_buf, 0);
+		sch.rdma_buf.size = 0;
+		rc = isp_set_mcm_sch(isp, &sch);
+		if (rc) {
+			dev_warn(isp->dev, "%s inst:%d, failed to set mcm sch (err=%d)!\n", __func__,
+				inst, rc);
+			return -1;
+		}
+		isp->error = 0;
+	}
+#endif
+	if (node) {
+		list_del(&node->entry);
+		list_add_tail(&node->entry, ctx->src_buf_list3);
+	}
+
+	return 0;
+}
+
+int isp_get_mcm_sch(struct isp_device *isp, u32 *inst)
+{
+	unsigned long flags;
+	struct mcm_sch_node *node = NULL;
+	int rc = 0;
+
+	if (!isp || !inst)
+		return -EINVAL;
+
+	spin_lock_irqsave(&isp->mcm_sch_lock, flags);
+	node = list_first_entry_or_null(&isp->mcm_sch_busy_list, struct mcm_sch_node, entry);
+	if (WARN_ON(!node)) {
+		rc = -ENOMEM;
+		goto _exit;
+	}
+
+	*inst = node->inst;
+	list_del(&node->entry);
+	list_add_tail(&node->entry, &isp->mcm_sch_idle_list);
+
+_exit:
+	spin_unlock_irqrestore(&isp->mcm_sch_lock, flags);
+	return rc;
+}
+
+int isp_reset_mcm_sch(struct isp_device *isp)
+{
+	unsigned long flags;
+	struct mcm_sch_node *node = NULL;
+	int rc = 0;
+
+	if (!isp)
+		return -EINVAL;
+
+	spin_lock_irqsave(&isp->mcm_sch_lock, flags);
+	do {
+		node = list_first_entry_or_null(&isp->mcm_sch_busy_list, struct mcm_sch_node,
+						entry);
+		if (!node)
+			break;
+		list_del(&node->entry);
+		list_add_tail(&node->entry, &isp->mcm_sch_idle_list);
+	} while (node);
+
+	spin_unlock_irqrestore(&isp->mcm_sch_lock, flags);
+	return rc;
 }
 
 static void isp_bound(struct isc_handle *isc, void *arg)
@@ -728,7 +832,6 @@ int isp_close(struct isp_device *isp, u32 inst)
 	memset(&ins->fmt, 0, sizeof(ins->fmt));
 	memset(&ins->in, 0, sizeof(ins->in));
 	ins->input_bayer_format = 0;
-	ins->error = 1;
 	ins->hdr_en = false;
 	INIT_LIST_HEAD(&ins->src_buf_list1);
 	INIT_LIST_HEAD(&ins->src_buf_list2);
@@ -747,6 +850,7 @@ int isp_close(struct isp_device *isp, u32 inst)
 	if (isp->hdr_bufs[inst].size > 0)
 		mem_free(isp->dev, &isp->hdr_buf_list, &isp->hdr_bufs[inst]);
 
+	ins->state = CAM_STATE_CLOSED;
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = inst;
 	msg.state = CAM_STATE_CLOSED;
@@ -841,6 +945,7 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 	isp->error = 1;
 	mutex_init(&isp->open_lock);
 	mutex_init(&isp->set_input_lock);
+	mutex_init(&isp->set_state_lock);
 	refcount_set(&isp->open_cnt, REFCNT_INIT_VAL);
 
 	isp->insts = devm_kcalloc(dev, isp_dt.num_insts, sizeof(*isp->insts),
@@ -881,6 +986,12 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 		INIT_LIST_HEAD(&isp->ibm[i].list2);
 		INIT_LIST_HEAD(&isp->ibm[i].list3);
 	}
+
+	spin_lock_init(&isp->mcm_sch_lock);
+	INIT_LIST_HEAD(&isp->mcm_sch_idle_list);
+	INIT_LIST_HEAD(&isp->mcm_sch_busy_list);
+	for (i = 0; i < ARRAY_SIZE(isp->sch_node); i++)
+		list_add_tail(&isp->sch_node[i].entry, &isp->mcm_sch_idle_list);
 
 	INIT_LIST_HEAD(&isp->in_buf_list);
 	INIT_LIST_HEAD(&isp->hdr_buf_list);

@@ -98,10 +98,15 @@ static void isp_frame_work(struct vio_node *vnode)
 {
 	struct vio_subdev *vdev;
 	struct isp_nat_instance *inst;
+	int rc = 0;
 
 	vdev = vnode->ich_subdev[0];
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
-	isp_add_job(&inst->dev->isp_dev, vnode->ctx_id);
+
+	rc = isp_set_mcm_sch_offline(&inst->dev->isp_dev, vnode->ctx_id);
+	if (rc)
+		pr_err("%s: failed to call isp_set_mcm_sch_offline.\n", __func__);
+
 	vio_set_hw_free(vnode);
 	osal_clear_bit(VIO_NODE_SHOT, &vnode->state);
 }
@@ -314,7 +319,6 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	struct isp_nat_device *dev;
 	struct vio_node **vn = NULL;
 	struct isp_msg msg;
-	bool online = false;
 	int i, rc;
 
 	if (!vctx || !vctx->vdev)
@@ -330,30 +334,25 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	if (rc)
 		return rc;
 
+	dev = inst->dev;
 	if (inst->attr.input_mode == MCM_MODE) {
-		inst->dev->isp_dev.mode = MCM_WORK_MODE;
-		inst->dev->isp_dev.mcm_en = true;
+		dev->isp_dev.mode = MCM_WORK_MODE;
+		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 1;
 	} else if (inst->attr.input_mode == DDR_MODE) {
 		/** handling frame buffer from previous IP modules,
 		 *  we treat it as MCM work mode too.
 		 */
-		inst->dev->isp_dev.mode = MCM_WORK_MODE;
-		inst->dev->isp_dev.mcm_en = false;
+		dev->isp_dev.mode = MCM_WORK_MODE;
+		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 0;
 	} else {
-		inst->dev->isp_dev.mode = STRM_WORK_MODE;
-		inst->dev->isp_dev.mcm_en = false;
+		dev->isp_dev.mode = STRM_WORK_MODE;
+		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 0;
 	}
 	memset(&inst->ctx, 0, sizeof(inst->ctx));
 
 	if (vctx->id == VNODE_ID_SRC) {
 		vctx->vdev->leader = 1;
-		dev = inst->dev;
-
-		if (inst->attr.input_mode == PASSTHROUGH_MODE ||
-		    inst->attr.input_mode == MCM_MODE)
-			online = true;
-
-		if (online) {
+		if (inst->attr.input_mode != DDR_MODE) {
 			mutex_lock(&dev->stream_vnodes_lock);
 			if (inst->attr.sensor_mode == ISP_DOL2_M ||
 			    inst->attr.input_mode == PASSTHROUGH_MODE) {
@@ -375,13 +374,14 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 			}
 			*vn = &dev->vnode[vctx->ctx_id];
 			mutex_unlock(&dev->stream_vnodes_lock);
-			inst->stream_idx = i;
-			isp_set_stream_idx(&dev->isp_dev, vctx->ctx_id, i);
 		}
+		inst->stream_idx = dev->isp_dev.insts[vctx->ctx_id].online_mcm ? i : 0;
+		isp_set_stream_idx(&dev->isp_dev, vctx->ctx_id, inst->stream_idx);
 
 		msg.id = CAM_MSG_STATE_CHANGED;
 		msg.inst = vctx->ctx_id;
 		msg.state = CAM_STATE_INITED;
+		dev->isp_dev.insts[vctx->ctx_id].state = CAM_STATE_INITED;
 		pr_info("%s set isp state to INITED\n", __func__);
 		return isp_post(&dev->isp_dev, &msg, true);
 	}
