@@ -290,7 +290,7 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	u32 irq_val;
 
 	sif = &dev->insts[inst];
-	spin_lock_irqsave(&sif->lock, flags);
+	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
 	irq_val |= SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF;
@@ -308,7 +308,7 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	sif_write(dev, SIF_IPI_IRQ_CLR(inst), irq_val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
 
-	spin_unlock_irqrestore(&sif->lock, flags);
+	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 }
 
 static void sif_stop_ipi(struct sif_device *dev, u32 inst)
@@ -319,10 +319,10 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	u32 irq_val;
 
 	sif = &dev->insts[inst];
-	spin_lock_irqsave(&sif->lock, flags);
+	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
 	irq_val &= ~(SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF);
-	if (sif->ctx.buf_ctx) {
+	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
 		val = sif_read(dev, SIF_DMA_CTL);
 		val &= ~SIF_ENABLE_IPI[inst];
 		sif_write(dev, SIF_DMA_CTL, val);
@@ -333,7 +333,7 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 		irq_val &= ~SIF_IRQ_EBD_DMA_DONE;
 
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
-	spin_unlock_irqrestore(&sif->lock, flags);
+	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 }
 
 int sif_reset_ipi(struct sif_device *sif, u32 inst)
@@ -498,6 +498,7 @@ int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 	sif->pclk = sif_dt.clks[1].clk;
 	sif->rst = sif_dt.rsts[0].rst;
 	spin_lock_init(&sif->isc_lock);
+	spin_lock_init(&sif->cfg_reg_lock);
 
 	sif->insts = devm_kcalloc(dev, sif_dt.num_insts, sizeof(*sif->insts),
 				  GFP_KERNEL);

@@ -107,6 +107,7 @@ struct sif_device {
 	struct reset_control *rst;
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */
+	spinlock_t cfg_reg_lock; /* lock for cfg register*/
 	struct cam_ctrl_device *ctrl_dev;
 	struct sif_instance *insts;
 };

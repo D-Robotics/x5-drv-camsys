@@ -292,6 +292,7 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
 	u32 i, status, val, pps_status;
+	unsigned long flags;
 
 	pr_debug("+\n");
 	for (i = 0; i < sif->num_insts; i++) {
@@ -324,9 +325,11 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 		if (status & SIF_IRQ_EBD_DMA_DONE)
 			sif_handle_emb_done(sif, i);
 
+		spin_lock_irqsave(&sif->cfg_reg_lock, flags);
 		val = sif_read(sif, SIF_DMA_CTL);
 		val |= SIF_DMA_CONFIG_IPI[i];
 		sif_write(sif, SIF_DMA_CTL, val);
+		spin_unlock_irqrestore(&sif->cfg_reg_lock, flags);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;
