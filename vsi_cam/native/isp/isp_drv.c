@@ -39,6 +39,12 @@ int32_t isp_video_get_struct_size(struct vio_struct_size *vio_size)
 	case OCHN_ATTR:
 		vio_size->size = sizeof(isp_ochn_attr_t);
 		break;
+	case EX_ATTR:
+		vio_size->size = 0;
+		break;
+	case OCHN_EX_ATTR:
+		vio_size->size = 0;
+		break;
 	default:
 		ret = -EINVAL;
 		vio_err("Unknown isp struct type-%d\n", vio_size->type);

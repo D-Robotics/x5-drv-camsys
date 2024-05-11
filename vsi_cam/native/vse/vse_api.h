@@ -30,6 +30,15 @@ typedef struct vse_ochn_attr_s {
 	frame_fps_ctrl_t fps;
 } vse_ochn_attr_t;
 
+typedef struct vse_ochn_attr_ex_s {
+	__u32 src_fps;
+	__u32 dst_fps;
+	__u32 chn_en;
+	rect_t roi;
+	__u32 target_w;
+	__u32 target_h;
+} vse_ochn_attr_ex_t;
+
 // clang-format on
 
 #endif /* _VSE_API_H_ */

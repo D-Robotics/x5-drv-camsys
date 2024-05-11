@@ -82,6 +82,7 @@ typedef enum vpf_struct_type_e {
 	ICHN_ATTR,
 	OCHN_ATTR,
 	EX_ATTR,
+	OCHN_EX_ATTR,
 	STRUCT_ATTR_MAX,
 } vpf_struct_type_t;
 

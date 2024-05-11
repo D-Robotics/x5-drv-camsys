@@ -38,6 +38,12 @@ int32_t vse_video_get_struct_size(struct vio_struct_size *vio_size)
 	case OCHN_ATTR:
 		vio_size->size = sizeof(vse_ochn_attr_t);
 		break;
+	case EX_ATTR:
+		vio_size->size = 0;
+		break;
+	case OCHN_EX_ATTR:
+		vio_size->size = sizeof(vse_ochn_attr_ex_t);
+		break;
 	default:
 		ret = -EINVAL;
 		vio_err("Unknown isp struct type-%d\n", vio_size->type);
@@ -551,6 +557,11 @@ static s32 vse_video_get_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	return 0;
 }
 
+static s32 vse_video_set_ochn_attr_ex(struct vio_video_ctx *vctx, unsigned long arg)
+{
+	return 0;
+}
+
 static struct vio_common_ops vse_vops = {
 	.open = vse_nat_open,
 	.close = vse_nat_close,
@@ -568,6 +579,7 @@ static struct vio_common_ops vse_vops = {
 	.video_set_ochn_attr = vse_video_set_ochn_attr,
 	.video_get_ichn_attr = vse_video_get_ichn_attr,
 	.video_get_ochn_attr = vse_video_get_ochn_attr,
+	.video_set_ochn_attr_ex = vse_video_set_ochn_attr_ex,
 	.video_get_struct_size = vse_video_get_struct_size,
 };
 
