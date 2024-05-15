@@ -46,37 +46,6 @@ typedef enum enum_isp_module_version {
 	HBN_ISP_MODULE_BUTT
 } hbn_isp_module_version_e;
 
-// typedef enum enum_isp_module_v0 {
-//	HBN_ISP_WDR_BLC,
-//	HBN_ISP_WDR_DGAIN,
-//	HBN_ISP_WDR_WB_GAIN,
-//	HBN_ISP_FRAME_STITCH, // frame stitch
-//	HBN_ISP_DECOMPARE,  //expand module, pwl 解压模块
-//	HBN_ISP_WB,  // white balance
-//	HBN_ISP_ISP_DGAIN, // isp digital gain
-//	HBN_ISP_BLC, // black level
-//	HBN_ISP_GE, // Green Equalization
-//	HBN_ISP_DDPC, // dynamic defect Pixel Correction
-//	HBN_ISP_SDPC, // static defect Pixel Correction
-//	HBN_ISP_MESH_SHADING, // mesh shading
-//	HBN_ISP_2DNR, //2D Noise Reduction 模块
-//	HBN_ISP_3DNR, //3D Noise Reduction 模块
-//	HBN_ISP_WDR, // ltm & gtm
-//	HBN_ISP_DEMOSAIC,
-//	HBN_ISP_CAC, // Chromatic Aberration Correction
-//	HBN_ISP_DEPURLE, // depurple
-//	HBN_ISP_CCM,
-//	HBN_ISP_GAMMA, // rgb gamma
-//	HBN_ISP_CA, // Color/Contrast Adjustment
-//	HBN_ISP_CNR, //Chroma Noise Reduction
-//	HBN_ISP_EE, // Edge Enhancement
-//	HBN_ISP_CSC, // RGB TO YUV
-//	HBN_ISP_COLOR_PROCESS, //Color Processing
-//	HBN_ISP_RGBIR,
-//	HBN_ISP_RADIAL_SHADING, // radial shading
-//	HBN_ISP_YNR,
-// } hbn_isp_module_e;
-
 typedef union tag_isp_module_ctrl_u {
 	__u32 u32Key;
 	struct {
@@ -310,6 +279,21 @@ typedef struct hbn_isp_af_statistics_s {
 	__u32 histHighData[HBN_ISP_AFM_BLOCK_NUM];
 	__u32 frame_id;	// 当前对应frame id(备用)
 } hbn_isp_af_statistics_t;
+
+/* exposure table */
+#define CAMDEV_AE_EXP_TABLE_NUM	8
+
+typedef struct hbn_isp_table_s {
+	__u32 exposure_time;/**< AE exposure time */
+	__u32 again;        /**< AE simulated again */
+	__u32 dgain;        /**< AE digital gain */
+	__u32 isp_gain;     /**< AE isp gain */
+} hbn_isp_table_t;
+
+typedef struct hbn_isp_exposure_table_s {
+	hbn_isp_table_t exp_table[CAMDEV_AE_EXP_TABLE_NUM]; /**< Exposure table */
+	__u8 valid_num; /**< The valid number of exposure table */
+} hbn_isp_exposure_table_t;
 
 typedef struct hbn_isp_sensor_param_s {
 	__u32 lines_per_second;
