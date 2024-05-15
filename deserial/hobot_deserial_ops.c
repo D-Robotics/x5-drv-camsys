@@ -695,6 +695,8 @@ static int32_t deserial_init_req(struct deserial_device_s *des, unsigned long ar
 			       g_des_pre_state_names[user->pre_state]);
 		} else {
 			des_info(dev, "%s cmd: wait & drop", __func__);
+			/* wake up nex wait if need when drop */
+			osal_wake_up(&user->pre_wq);
 			ret = -EACCES;
 		}
 		osal_mutex_unlock(&user->mutex);
@@ -890,6 +892,8 @@ static int32_t deserial_start_req(struct deserial_device_s *des, unsigned long a
 			       g_des_pre_state_names[user->pre_state]);
 		} else {
 			des_info(dev, "%s cmd: wait & drop", __func__);
+			/* wake up nex wait if need when drop */
+			osal_wake_up(&user->pre_wq);
 			ret = -EACCES;
 		}
 		osal_mutex_unlock(&user->mutex);

@@ -1281,6 +1281,8 @@ int32_t camera_init_req(struct sensor_device_s *sen, unsigned long arg)
 			       g_sen_pre_state_names[user->pre_state]);
 		} else {
 			sen_info(dev, "%s cmd: wait & drop", __func__);
+			/* wake up nex wait if need when drop */
+			osal_wake_up(&user->pre_wq);
 			ret = -EACCES;
 		}
 		osal_mutex_unlock(&user->mutex);
