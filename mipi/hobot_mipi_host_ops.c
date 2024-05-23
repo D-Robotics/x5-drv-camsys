@@ -2843,7 +2843,7 @@ static int32_t mipi_host_snrclk_set_freq(struct mipi_hdev_s *hdev, uint32_t freq
 	uint32_t diff;
 
 	if ((snrclk->index < 0) || (name == NULL)) {
-		mipi_err(dev, "snrclk set freq not support\n");
+		mipi_info(dev, "snrclk set freq not support\n");
 		mipi_host_error_report(hdev, ESW_MipiHostSnrclkSetErr, SUB_ID_0, 0U, __LINE__);
 		return -1;
 	}
@@ -2890,7 +2890,7 @@ static int32_t mipi_host_snrclk_set_en(struct mipi_hdev_s *hdev, int32_t enable)
 	struct mipi_host_param_s *param = &hdev->host.param;
 
 	if (snrclk->pinctrl == NULL) {
-		mipi_err(dev, "snrclk set en not support\n");
+		mipi_info(dev, "snrclk set en not support\n");
 		mipi_host_error_report(hdev, ESW_MipiHostSnrclkSetErr, SUB_ID_3, (uint8_t)snrclk->index, __LINE__);
 		return -1;
 	}
