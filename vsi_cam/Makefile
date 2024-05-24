@@ -16,7 +16,11 @@ ccflags-y += -I$(srctree)/drivers/osal/linux/inc/
 ccflags-y += -D X5_CHIP
 
 # isc
-vs_isc-objs += isc/isc.o isc/mem_helper.o
+ifneq ($(CONFIG_ION_HOBOT),)
+  vs_isc-objs += isc/isc.o isc/ion_mem_helper.o
+else
+  vs_isc-objs += isc/isc.o isc/mem_helper.o
+endif
 # obj-$(CONFIG_VIDEO_VS_SW_ISC) += vs_isc.o
 obj-m += vs_isc.o
 
