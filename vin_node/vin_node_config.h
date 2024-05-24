@@ -534,6 +534,7 @@ typedef struct vin_attr_ex_s{
         mclk_attr_ex_t          mclk_ex_attr;           //mclk 扩展属性，用于设置 mclk 频率
 	uint32_t                ipi_reset;             // mipi  ipi reset
 	uint32_t                bypass_enable;         // bypass enable
+	uint64_t		vin_attr_ex_mask;
 }vin_attr_ex_t;
 
 typedef struct vin_emb_attr_s{
