@@ -419,6 +419,8 @@ static s32 vse_ochn_attr_check(u32 ochn_id, vse_ichn_attr_t *vse_ichn_attr, vse_
 	} else if (ochn_id == VSE_DOWN_SCALE_720P0 || ochn_id == VSE_DOWN_SCALE_720P1) {
 		max_output_h = 720;
 		max_output_w = 1280;
+	} else {
+		return -EINVAL;
 	}
 	if (attr->target_w == 0 || attr->target_h == 0) {
 		attr->target_w = CFG_MIN(attr->roi.w, max_output_w);
@@ -652,7 +654,7 @@ static ssize_t vse_stat_show(struct device *dev, struct device_attribute *attr, 
 		if (size - len <= 0)
 			break;
 
-		for (j = 0; j < VSE_OUT_CHNL_MAX; j++) {
+		for (j = 0; j < VSE_OUT_CHNL_MAX - 1; j++) {
 			cap_ins = &nat_dev->cap_instance[j][i];
 			if (!cap_ins->ochn_attr.chn_en)
 				continue;
@@ -667,6 +669,8 @@ static ssize_t vse_stat_show(struct device *dev, struct device_attribute *attr, 
 				break;
 		}
 
+		if (size - len <= 0)
+			break;
 		cap_ins = &nat_dev->cap_instance[j][i];
 		if (!cap_ins->ochn_attr.chn_en)
 			continue;

@@ -602,13 +602,14 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 
 		ib->uid = bind.uid;
 
-		if (is_k2u(bind.dir))
+		if (is_k2u(bind.dir)) {
 			ib->k2u = isc;
-		else if (is_u2k(bind.dir))
+		} else if (is_u2k(bind.dir)) {
 			ib->u2k = isc;
-		else
+		} else {
+			kfree(ib);
 			return -EINVAL;
-
+		}
 		mutex_lock(&bind_lock);
 		list_add_tail(&ib->entry, &bind_list);
 		mutex_unlock(&bind_lock);
@@ -622,16 +623,20 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 		mem = &isc->u2k_mem;
 		cus = &isc->u2k_cus;
 	} else {
+		kfree(isc->ib);
 		return -EINVAL;
 	}
 
 	rc = isc_mem_alloc(isc->dev, size, mem);
-	if (rc < 0)
+	if (rc < 0) {
+		kfree(isc->ib);
 		return rc;
+	}
 
 	rc = isc_create_msg_queue(mem->va, bind.msz, bind.num, &cus->wp);
 	if (rc < 0) {
 		isc_mem_free(isc->dev, mem);
+		kfree(isc->ib);
 		return rc;
 	}
 
@@ -640,6 +645,7 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 		if (rc < 0) {
 			isc_destroy_msg_queue(cus->wp);
 			isc_mem_free(isc->dev, mem);
+			kfree(isc->ib);
 			return rc;
 		}
 	}

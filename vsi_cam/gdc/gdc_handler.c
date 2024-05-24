@@ -37,7 +37,7 @@ static s32 handle_set_fmt_cap(struct gdc_device *gdc, struct gdc_msg *msg)
 	if (!c)
 		return -EINVAL;
 
-	if (msg->fcap.index > ARRAY_SIZE(c->res))
+	if (msg->fcap.index >= ARRAY_SIZE(c->res))
 		return -EINVAL;
 
 	c->res[msg->fcap.index] = msg->fcap.res;

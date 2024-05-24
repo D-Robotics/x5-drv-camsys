@@ -192,6 +192,7 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 	} else if (inst->buf_ctx.pad) {
+		memset(&ctx, 0, sizeof(ctx));
 		ctx.buf_ctx = &inst->buf_ctx;
 		ctx.buf = NULL;
 		sif_set_ctx(inst->dev, inst->id, &ctx);

@@ -664,8 +664,8 @@ static int create_link(struct device *dev, struct media_entity *src,
 		       u16 src_pad_idx, struct media_entity *sink,
 		       u16 sink_pad_idx, u32 flags)
 {
-	int rc;
 	struct media_pad *src_pad, *sink_pad, *pad;
+	int rc = 0;
 
 	src_pad = get_pad(src, src_pad_idx, false);
 	sink_pad = get_pad(sink, sink_pad_idx, true);
@@ -714,13 +714,11 @@ static int create_link(struct device *dev, struct media_entity *src,
 int create_default_links(struct vid_device *vdev)
 {
 	struct vid_video_device *v = NULL;
-	int rc;
-	u32 i = 0, j = 0;
 	struct media_entity *src, *sink;
 	char name[64];
+	u32 i = 0, j = 0;
+	int rc = 0;
 
-	i = 0;
-	j = 0;
 	for (;;) {
 		snprintf(name, sizeof(name), "%s%d-%d", CSI_DEV_NAME, i, j);
 		src = find_entity_by_name(&vdev->v4l2_dev, name);

@@ -37,7 +37,7 @@ static s32 handle_set_fmt_cap(struct vse_device *vse, struct vse_msg *msg)
 	if (!c)
 		return -EINVAL;
 
-	if (msg->fcap.index > ARRAY_SIZE(c->res))
+	if (msg->fcap.index >= ARRAY_SIZE(c->res))
 		return -EINVAL;
 
 	for (i = 0; i < msg->fcap.res_num; i++)

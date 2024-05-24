@@ -850,8 +850,10 @@ int isp_close(struct isp_device *isp, u32 inst)
 			isp->in_bufs[inst].size = 0;
 		}
 	}
-	if (isp->hdr_bufs[inst].size > 0)
+	if (inst < HDR_BUF_NUM && isp->hdr_bufs[inst].size > 0) {
 		mem_free(isp->dev, &isp->hdr_buf_list, &isp->hdr_bufs[inst]);
+		isp->hdr_bufs[inst].size = 0;
+	}
 
 	ins->state = CAM_STATE_CLOSED;
 	msg.id = CAM_MSG_STATE_CHANGED;
