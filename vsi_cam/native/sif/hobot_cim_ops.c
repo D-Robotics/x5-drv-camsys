@@ -95,6 +95,16 @@ static s32 cim_config_param_check(const cim_attr_t *cim_cfg)
 	return ret;
 }
 
+static void vinattr_ex_to_sifsetting(vin_attr_ex_t *vin_attr_ex , struct sif_cfg *sif_cfg)
+{
+	// fps control
+	sif_cfg->fps_ctrl = vin_attr_ex->cim_static_attr.frame_drop;
+	// yuv conv
+	sif_cfg->yuv_conv = vin_attr_ex->cim_static_attr.yuv_conv;
+	// sram merge
+	sif_cfg->sram_merge = vin_attr_ex->cim_static_attr.sram_merge;
+}
+
 /**
  * @NO{S10E04C01}
  * @ASIL{B}
@@ -114,13 +124,14 @@ static s32 cim_config_param_check(const cim_attr_t *cim_cfg)
 s32 cim_subdev_init_ex(struct vio_video_ctx *vctx, vin_attr_ex_t *vin_attr_ex)
 {
 	s32 ret = 0;
-	u32 ipi_channel;
+	u32 ipi_channel, i;
 	struct vio_node *vnode;
 	struct vin_node_subdev *subdev;
 	struct j6_cim_dev *cim;
 	struct vio_subdev *vdev;
 	struct j6_vin_node_dev *vin_node_dev;
 	struct vin_cim_private_s *cim_priv_attr;
+	struct sif_instance *ins;
 
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
@@ -131,6 +142,16 @@ s32 cim_subdev_init_ex(struct vio_video_ctx *vctx, vin_attr_ex_t *vin_attr_ex)
 	cim_priv_attr = cim_get_priv_by_subdev(subdev);
 	ipi_channel = cim_priv_attr->ipi_index;
 
+	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+		ins = &cim->sif.insts[ipi_channel + i];
+		vinattr_ex_to_sifsetting(vin_attr_ex, &ins->sif_cfg);
+		ret = sif_set_format(&cim->sif, ipi_channel + i, &ins->fmt, false, EX_FEAT_CHANNEL);
+		if (ret < 0) {
+			vio_err("[S%d][ipi%d]%s failed to call sif_set_format for extended feature\n",
+				vctx->ctx_id, ipi_channel, __func__);
+			return ret;
+		}
+	}
 	return ret;
 }
 
@@ -380,13 +401,6 @@ static void vinattr_to_sifsetting(vin_attr_t *vin_attr, struct sif_cfg *sif_cfg)
 	sif_cfg->ts_ctrl.pps_trigger_src = func->pps_src;
 	// hdr mode
 	sif_cfg->hdr_mode = func->hdr_mode;
-
-	// fps control
-	sif_cfg->fps_ctrl = vin_attr_ex->cim_static_attr.frame_drop;
-	// yuv conv
-	sif_cfg->yuv_conv = vin_attr_ex->cim_static_attr.yuv_conv;
-	// sram merge
-	sif_cfg->sram_merge = vin_attr_ex->cim_static_attr.sram_merge;
 }
 
 /**

@@ -31,7 +31,8 @@ enum sif_channel_type {
 	OUT_CHANNEL_MAIN = 1,
 	OUT_CHANNEL_EMB  = 2,
 	BOTH_CHANNEL     = 3,
-	INVALID_CHANNEL  = 4,
+	EX_FEAT_CHANNEL  = 4,
+	INVALID_CHANNEL  = 5,
 };
 
 enum time_stamp_type {

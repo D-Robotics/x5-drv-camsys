@@ -81,8 +81,6 @@ static void sif_set_ipi_feature(struct sif_device *sif, u32 inst)
 
 	ins = &sif->insts[inst];
 
-	sif_write(sif, SIF_DMA_FPS_CTRL, ins->sif_cfg.fps_ctrl << (inst * 4));
-
 	if (ins->sif_cfg.f_id_ctrl.frame_id_en) {
 		sif_write(sif, SIF_IPI_FRAME_ID_INITAL(inst),
 			  ins->sif_cfg.f_id_ctrl.initial_frame_id);
@@ -123,20 +121,36 @@ static void sif_set_ipi_feature(struct sif_device *sif, u32 inst)
 		}
 	}
 
-	if (ins->sif_cfg.yuv_conv) {
-		val = sif_read(sif, SIF_YUV_CONV_CTRL);
-		val |= BIT(inst);
-		sif_write(sif, SIF_YUV_CONV_CTRL, BIT(inst));
-	}
-	if (ins->sif_cfg.sram_merge) {
-		val = sif_read(sif, SIF_IPI_RAM_CTRL);
-		val |= BIT(ins->sif_cfg.sram_merge);
-		sif_write(sif, SIF_IPI_RAM_CTRL, BIT(ins->sif_cfg.sram_merge));
-	}
 	if (ins->sif_cfg.hdr_mode) {
 	    sif_write(sif, SIF_HDR_CTRL, 0x90 | ins->sif_cfg.hdr_mode);
 	    sif_write(sif, SIF_HDR_EN, 0x1);
 	}
+}
+
+static void sif_set_ex_feature(struct sif_device *sif, u32 inst)
+{
+	u32 val;
+	unsigned long flags;
+	struct sif_instance *ins;
+
+	ins = &sif->insts[inst];
+	spin_lock_irqsave(&sif->cfg_reg_lock, flags);
+	if (ins->sif_cfg.fps_ctrl) {
+		val = sif_read(sif, SIF_DMA_FPS_CTRL);
+		val |= ins->sif_cfg.fps_ctrl << (inst * 4);
+		sif_write(sif, SIF_DMA_FPS_CTRL, val);
+	}
+	if (ins->sif_cfg.yuv_conv) {
+		val = sif_read(sif, SIF_YUV_CONV_CTRL);
+		val |= BIT(inst);
+		sif_write(sif, SIF_YUV_CONV_CTRL, val);
+	}
+	if (ins->sif_cfg.sram_merge) {
+		val = sif_read(sif, SIF_IPI_RAM_CTRL);
+		val |= BIT(ins->sif_cfg.sram_merge - 1);
+		sif_write(sif, SIF_IPI_RAM_CTRL, val);
+	}
+	spin_unlock_irqrestore(&sif->cfg_reg_lock, flags);
 }
 
 static int sif_set_ipi_fmt(struct sif_device *sif, u32 inst, struct cam_format *fmt)
@@ -239,6 +253,9 @@ static int sif_config(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 
 	if (channel_type == IN_CHANNEL || channel_type == BOTH_CHANNEL)
 		sif_set_ipi_feature(sif, inst);
+
+	if (channel_type == EX_FEAT_CHANNEL || channel_type == BOTH_CHANNEL)
+		sif_set_ex_feature(sif, inst);
 
 	if (channel_type == OUT_CHANNEL_MAIN || channel_type == BOTH_CHANNEL) {
 		ret = sif_set_ipi_fmt(sif, inst, fmt);
