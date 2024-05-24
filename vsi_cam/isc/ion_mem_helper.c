@@ -49,6 +49,7 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 	struct _mem_buf *_buf;
 	const u32 ion_heap_mask = ION_HEAP_TYPE_CMA_RESERVED_MASK;
 	const u32 ion_flags = ION_FLAG_CACHED_NEEDS_SYNC | ION_FLAG_CACHED;
+	size_t size;
 
 	if (!dev || !list || !buf || !buf->size)
 		return -EINVAL;
@@ -67,7 +68,8 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 		pr_err("%s ion_alloc buf failed\n", __func__);
 		return -EFAULT;
 	}
-	ion_phys(g_ion_client, _buf->ion_handle->id, &_buf->addr, &_buf->size);
+	size = buf->size;
+	ion_phys(g_ion_client, _buf->ion_handle->id, &_buf->addr, &size);
 	_buf->vaddr = ion_map_kernel(g_ion_client, _buf->ion_handle);
 
 	if (!_buf->vaddr) {

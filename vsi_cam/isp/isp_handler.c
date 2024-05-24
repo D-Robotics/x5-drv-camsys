@@ -282,10 +282,8 @@ int new_frame(struct isp_irq_ctx *ctx)
 		struct cam_list_node *node;
 
 		buf = cam_dqbuf_irq(ctx->src_ctx, true);
-		if (!buf) {
-			pr_err("isp dq src buf failed\n");
+		if (!buf)
 			return -ENOMEM;
-		}
 		node = list_first_entry_or_null(ctx->src_buf_list1,
 						struct cam_list_node, entry);
 		if (WARN_ON(!node))
