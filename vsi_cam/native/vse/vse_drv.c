@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/timekeeping.h>
 
 #include "cam_online_ops.h"
 #include "vse_drv.h"
@@ -395,7 +396,7 @@ static s32 vse_ochn_attr_check(u32 ochn_id, vse_ichn_attr_t *vse_ichn_attr, vse_
 	if (!attr->chn_en)
 		return 0;
 
-	/* use input size if roi == 0 
+	/* use input size if roi == 0
 	 * roi just used by o, so this set once is acceptable
 	 */
 	if (attr->roi.w == 0 || attr->roi.h == 0) {
@@ -703,7 +704,9 @@ static int vse_nat_probe(struct platform_device *pdev)
 	u32 i, j;
 	s32 ret;
 	int rc;
+	ktime_t start, end;
 
+	start = ktime_get_boottime();
 	nat_dev = devm_kzalloc(dev, sizeof(*nat_dev), GFP_KERNEL);
 	if (!nat_dev)
 		return -ENOMEM;
@@ -791,7 +794,8 @@ static int vse_nat_probe(struct platform_device *pdev)
 	vse_debugfs_init(&nat_dev->vse_dev);
 #endif
 
-	dev_dbg(dev, "VS VSE driver (native) probed done\n");
+	end = ktime_get_boottime();
+	dev_info(dev, "VS VSE driver (native) probed done, time used: %lldus\n", ktime_to_us(ktime_sub(end, start)));
 	return 0;
 }
 

@@ -11,6 +11,7 @@
 #include <linux/io.h>
 #include <linux/poll.h>
 #include <linux/of.h>
+#include <linux/timekeeping.h>
 
 #include "cim_hw_api.h"
 #include "hobot_cim_ops.h"
@@ -829,7 +830,9 @@ static s32 cim_probe(struct platform_device *pdev)
 #ifdef CONFIG_OF
 	struct device_node *dnode;
 #endif
+	ktime_t start, end;
 
+	start = ktime_get_boottime();
 	dev = &pdev->dev;
 	cim = (struct j6_cim_dev *)devm_kzalloc(
 		&pdev->dev, sizeof(struct j6_cim_dev), GFP_KERNEL);
@@ -936,7 +939,9 @@ static s32 cim_probe(struct platform_device *pdev)
 	/* if (ret != 0) */
 	/* dev_warn(dev, "diagnose_report_startup_status fail! ret=%d\n", ret); */
 	g_cim_dev[cim->hw_id] = cim;
-	vio_info("%s hw_id %d done\n", __func__, cim->hw_id);
+
+	end = ktime_get_boottime();
+	vio_info("%s hw_id %d done, time used: %lldus\n", __func__, cim->hw_id, ktime_to_us(ktime_sub(end, start)));
 	return 0;
 }
 

@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/timekeeping.h>
 
 #include "hobot_dev_vin_node.h"
 #include "vin_node_config.h"
@@ -879,7 +880,9 @@ static int isp_nat_probe(struct platform_device *pdev)
 	u32 i;
 	s32 ret;
 	int rc;
+	ktime_t start, end;
 
+	start = ktime_get_boottime();
 	nat_dev = devm_kzalloc(dev, sizeof(*nat_dev), GFP_KERNEL);
 	if (!nat_dev)
 		return -ENOMEM;
@@ -954,7 +957,8 @@ static int isp_nat_probe(struct platform_device *pdev)
 	isp_debugfs_init(&nat_dev->isp_dev);
 #endif
 
-	dev_dbg(dev, "VS ISP driver (native) probed done\n");
+	end = ktime_get_boottime();
+	dev_info(dev, "VS ISP driver (native) probed done, time used: %lldus\n", ktime_to_us(ktime_sub(end, start)));
 	return 0;
 }
 
