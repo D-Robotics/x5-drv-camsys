@@ -720,8 +720,6 @@ static int vse_nat_probe(struct platform_device *pdev)
 
 	nat_dev->gtask.no_worker = 1;
 	nat_dev->gtask.id = VSE_MODULE;
-	nat_dev->gtask.no_worker = 1;
-	nat_dev->gtask.id = VSE_MODULE;
 
 	for (i = 0; i < VIO_MAX_STREAM; i++) {
 		nat_dev->vnode[i].flow_id = INVALID_FLOW_ID;
