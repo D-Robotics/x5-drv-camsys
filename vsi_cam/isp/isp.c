@@ -745,6 +745,8 @@ int isp_reset_mcm_sch(struct isp_device *isp)
 		list_add_tail(&node->entry, &isp->mcm_sch_idle_list);
 	} while (node);
 
+	isp->rdma_busy = false;
+	isp->error = 1;
 	spin_unlock_irqrestore(&isp->mcm_sch_lock, flags);
 	return rc;
 }
