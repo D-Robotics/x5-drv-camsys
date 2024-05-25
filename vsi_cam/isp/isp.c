@@ -414,6 +414,8 @@ void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr)
 	mi_ctrl = isp_read(isp, MI_CTRL);
 	mi_ctrl |= BIT(15);
 	isp_write(isp, MI_CTRL, mi_ctrl); /* start rdma */
+
+	dev_dbg(isp->dev, "rdma_addr %llu\n", rdma_addr);
 }
 
 static inline void isp_set_hdr_raw_buffer(struct isp_device *isp, u32 n,
@@ -447,6 +449,8 @@ void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam
 	isp_write(isp, MI_MP_CR_OFFS, 0x00000000);
 
 	isp_write(isp, MI_MP_CTRL, 0x00000038); /* force update */
+
+	dev_dbg(isp->dev, "stride %d, height %d, phys_addr %llx\n", fmt->stride, fmt->height, phys_addr);
 }
 
 static inline void isp_set_state_safety(struct isp_device *isp, u32 inst, int state)

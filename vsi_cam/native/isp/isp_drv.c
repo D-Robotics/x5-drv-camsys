@@ -358,6 +358,8 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	} else {
 		dev->isp_dev.mode = STRM_WORK_MODE;
 		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 0;
+		dev->isp_dev.cur_mi_irq_ctx = 0;
+		dev->isp_dev.next_mi_irq_ctx = 0;
 	}
 	memset(&inst->ctx, 0, sizeof(inst->ctx));
 
