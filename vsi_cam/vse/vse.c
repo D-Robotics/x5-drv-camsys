@@ -532,6 +532,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		{ "core", NULL },
 		{ "axi", NULL },
 		{ "ups", NULL },
+		{ "gdc_axi", NULL },
 		{ "gdc_hclk", NULL },
 		{},
 	};
@@ -565,7 +566,8 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->core = vse_dt.clks[0].clk;
 	vse->axi = vse_dt.clks[1].clk;
 	vse->ups = vse_dt.clks[2].clk;
-	vse->gdc_hclk = vse_dt.clks[3].clk;
+	vse->gdc_axi = vse_dt.clks[3].clk;
+	vse->gdc_hclk = vse_dt.clks[4].clk;
 	vse->rst = vse_dt.rsts[0].rst;
 	spin_lock_init(&vse->isc_lock);
 	mutex_init(&vse->open_lock);
@@ -714,6 +716,8 @@ int vse_runtime_suspend(struct device *dev)
 
 	if (vse->axi)
 		clk_disable_unprepare(vse->axi);
+	if (vse->gdc_axi)
+		clk_disable_unprepare(vse->gdc_axi);
 	if (vse->gdc_hclk)
 		clk_disable_unprepare(vse->gdc_hclk);
 	if (vse->core)
@@ -732,6 +736,11 @@ int vse_runtime_resume(struct device *dev)
 		rc = clk_prepare_enable(vse->gdc_hclk);
 		if (rc)
 			return rc;
+	}
+	if (vse->gdc_axi) {
+		rc = clk_prepare_enable(vse->gdc_axi);
+		if (rc)
+			goto _gdc_axi_err;
 	}
 	if (vse->axi) {
 		rc = clk_prepare_enable(vse->axi);
@@ -756,6 +765,9 @@ _core_err:
 	if (vse->axi)
 		clk_disable_unprepare(vse->axi);
 _axi_err:
+	if (vse->gdc_axi)
+		clk_disable_unprepare(vse->gdc_axi);
+_gdc_axi_err:
 	if (vse->gdc_hclk)
 		clk_disable_unprepare(vse->gdc_hclk);
 	return rc;
