@@ -297,6 +297,7 @@ struct vio_node {
 	struct vio_group_task *gtask;
 	u8 path_print;
 
+	u8 no_online_support;
 	osal_atomic_t start_cnt; /* resource count */
 	void (*frame_work)(struct vio_node *vnode);
 	s32 (*allow_bind)(struct vio_subdev *vdev, struct vio_subdev *remote_vdev, u8 online_mode);

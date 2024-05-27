@@ -275,7 +275,7 @@ static s32 vpf_bind_vnode(struct vio_video_ctx *vctx, u32 bind_flag)
 		goto err;
 	}
 
-	if (ochn == 1) {
+	if (ochn == 1 && src_vnode->no_online_support == 0) {
 		ochn = 0;
 		online_mode = 1;
 	}

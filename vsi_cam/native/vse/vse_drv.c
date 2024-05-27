@@ -67,7 +67,7 @@ static s32 vse_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 	inst = container_of(vdev, struct vse_nat_instance, vdev);
 	inst->online_mode = online_mode;
 
-	if (vdev->id == VNODE_ID_CAP) {
+	if (vdev->id >= VNODE_ID_CAP) {
 		vdev->chn_attr.format = MEM_PIX_FMT_NV12;
 		vdev->chn_attr.height = inst->ochn_attr.target_h;
 		vdev->chn_attr.width = inst->ochn_attr.target_w;
@@ -734,6 +734,7 @@ static int vse_nat_probe(struct platform_device *pdev)
 		nat_dev->vnode[i].frame_work = vse_frame_work;
 		nat_dev->vnode[i].ich_subdev[VSE_MAIN_FRAME] = &nat_dev->src_instance[i].vdev;
 		nat_dev->vnode[i].active_ich = 1 << VSE_MAIN_FRAME;
+		nat_dev->vnode[i].no_online_support = 1;
 		for (j = 0; j < VSE_OUT_CHNL_MAX; j++) {
 			nat_dev->vnode[i].och_subdev[j] = &nat_dev->cap_instance[j][i].vdev;
 			nat_dev->vnode[i].active_och |= 1 << j;
