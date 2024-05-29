@@ -263,7 +263,7 @@ static inline int32_t MIPI_HOST_PORT_FOR_CIMDMA(int32_t port) {
 #ifdef X5_CHIP
 /* x5 ISP need frame_start vsync, so we must choose legacy mode for IPI ADV
 */
-#define MIPI_HOST_ADV_DEFAULT     ((uint32_t)(0x100UL << 16))
+#define MIPI_HOST_ADV_DEFAULT     ((uint32_t)(0x103UL << 16))
 #else
 #define MIPI_HOST_ADV_DEFAULT      ((uint32_t)(0x3UL << 16))
 #endif
@@ -280,7 +280,7 @@ static inline int32_t MIPI_HOST_PORT_FOR_CIMDMA(int32_t port) {
 #define MIPI_HOST_MEM_DEFAULT      (1)
 #define MIPI_HOST_ERROR_DIAG_DEFAULT (1)
 #define MIPI_HOST_IPI_OVERST_DEFAULT (1)
-#define MIPI_HOST_IPILIMIT_DEFAULT (102000000U)
+#define MIPI_HOST_IPILIMIT_DEFAULT (600000000U)
 #define MIPI_HOST_IPIFORCE_MIN     (10000000U)
 #define MIPI_HOST_IRQ_CNT          (10)
 #define MIPI_HOST_IRQ_DEBUG_PRERR  (0x1U)

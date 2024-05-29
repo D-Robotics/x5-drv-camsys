@@ -175,6 +175,13 @@
 #define REG_X5SYS_MIPI_PHY_CFG_CLK_OFFS                 (9)
 #define REG_X5SYS_MIPI_PHY_CFG_CLK_MASK                 (0x1FU)
 
+#define REG_X5SYS_MIPI_PHY_CTRL_OFFS                 (24)
+#define REG_X5SYS_MIPI_PHY_CTRL_MASK                 (0x1U)
+
+#define REG_X5SYS_MIPI_PHY_TEST_SEL_4L_0_OFFS		(7)
+#define REG_X5SYS_MIPI_PHY_TEST_SEL_4L_1_OFFS           (8)
+#define REG_X5SYS_MIPI_PHY_TEST_SEL_4L_MASK           (0x1U)
+
 #endif
 
 #define PASSWD_KEY							(0x95F2D303U)

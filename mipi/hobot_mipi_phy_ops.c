@@ -441,6 +441,17 @@ uint32_t mipi_host_dphy_testdata_read(const struct mipi_phy_s *phy, const void _
         return testdata;
 }
 
+static void dphy_merge_write(struct mipi_phy_s *phy, const void __iomem *iomem, uint32_t reg_addr,
+				uint32_t major, uint32_t minor)
+{
+	uint16_t port = (phy != NULL) ? (phy->sub.port) : 0;
+
+	mipi_dphy_set_test_sel_4l(MIPI_DPHY_TYPE_HOST, port, 0);
+	mipi_host_dphy_testdata(phy, iomem, reg_addr, major);
+	mipi_dphy_set_test_sel_4l(MIPI_DPHY_TYPE_HOST, port, 1);
+	mipi_host_dphy_testdata(phy, iomem, reg_addr, minor);
+}
+
 /* host 1p4 dphy init */
 static void mipi_host_dphy_initialize_1p4(const struct mipi_phy_s *phy, const void __iomem *iomem,
 				uint8_t osc_freq_low, uint8_t osc_freq_high)
@@ -557,6 +568,7 @@ int32_t mipi_host_dphy_initialize(uint16_t mipiclk, uint16_t lane, uint16_t sett
 	struct mipi_phy_param_s *param = &g_pdev->dphy.param;
 	int32_t is_1p4 = (phy != NULL) ? MIPI_VERSION_GE(phy->sub.iomem, MIPI_IP_VERSION_1P4) : 1;
 	uint16_t osc_freq = (is_1p4 != 0) ? OSC_FREQ_DEFAULT_1P4: OSC_FREQ_DEFAULT_1P3;
+	uint16_t port = (phy != NULL) ? (phy->sub.port) : 0;
 	uint8_t osc_freq_low, osc_freq_high;
 
 	mipi_dbg(param, dev, "host dphy initialize begin\n");
@@ -576,25 +588,45 @@ int32_t mipi_host_dphy_initialize(uint16_t mipiclk, uint16_t lane, uint16_t sett
 	}
 	/*Configure the D-PHY frequency range*/
 #ifdef X5_CHIP
-       (void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, (phy != NULL) ? (phy->sub.port) : 0,
+       (void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, port,
                MIPI_PHY_HS_FREQRANGE, mipi_dphy_clk_range(phy, mipiclk / lane, &osc_freq));
+
 #else
-	(void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, (phy != NULL) ? (phy->sub.port) : 0,
+	(void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, port,
 		MIPI_HSFREQRANGE, mipi_dphy_clk_range(phy, mipiclk / lane, &osc_freq));
 #endif
-	osc_freq_low = RX_OSCFREQ_LOW(osc_freq);
-	osc_freq_high = RX_OSCFREQ_HIGH(osc_freq);
-	if (rxdphy_deskew_cfg != 0U) {
-		mipi_host_dphy_testdata(phy, iomem, REGS_RX_SYS_7, (uint8_t)rxdphy_deskew_cfg); /* qacfix: conversion */
+
+	if(lane >= 3 && (port == 0 || port == 2)) {
+		dphy_merge_write(phy, iomem, REGS_RX_DUAL_PHY_0, 1, 0);
+		dphy_merge_write(phy, iomem, REGS_RX_CLKLANE_LANE_6, 4, 0);
+		dphy_merge_write(phy, iomem, REGS_RX_LANE0_LANE_7, 0x20, 0x20);
+		dphy_merge_write(phy, iomem, REGS_RX_LANE1_LANE_7, 0x20, 0x20);
+
+		dphy_merge_write(phy, iomem, REGS_RX_LANE2_LANE7, 0x20, 0x20);
+		dphy_merge_write(phy, iomem, REGS_RX_LANE3_LANE7, 0x20, 0x20);
+		dphy_merge_write(phy, iomem, REGS_RX_CLKLANE_LANE_7, 0x00, 0x08);
+
+		mipi_host_dphy_testdata(phy, iomem, REGS_RX_STARTUP_OVR_0, 0x03);
+		mipi_host_dphy_testdata(phy, iomem, REGS_RX_STARTUP_OVR_1, 0x02);
+		mipi_host_dphy_testdata(phy, iomem, REGS_RX_CLKLANE_LANE_6, 0x08);
+		mipi_host_dphy_testdata(phy, iomem, REGS_RX_CLKLANE_LANE_3, 0x80);
+		mipi_host_dphy_testdata(phy, iomem, REGS_RX_CLKLANE_LANE_4, 0xa);
+
 	} else {
-		if (mipiclk < (lane * TXOUT_FREQ_SLEWRATE_MBPS)) {
-			mipi_host_dphy_testdata(phy, iomem, REGS_RX_SYS_7, RX_SYSTEM_CONFIG);
+		osc_freq_low = RX_OSCFREQ_LOW(osc_freq);
+		osc_freq_high = RX_OSCFREQ_HIGH(osc_freq);
+		if (rxdphy_deskew_cfg != 0U) {
+			mipi_host_dphy_testdata(phy, iomem, REGS_RX_SYS_7, (uint8_t)rxdphy_deskew_cfg); /* qacfix: conversion */
+		} else {
+			if (mipiclk < (lane * TXOUT_FREQ_SLEWRATE_MBPS)) {
+				mipi_host_dphy_testdata(phy, iomem, REGS_RX_SYS_7, RX_SYSTEM_CONFIG);
+			}
 		}
-	}
-	if (is_1p4 != 0) {
-		mipi_host_dphy_initialize_1p4(phy, iomem, osc_freq_low, osc_freq_high);
-	} else {
-		mipi_host_dphy_initialize_1p3(phy, iomem, osc_freq_low, osc_freq_high);
+		if (is_1p4 != 0) {
+			mipi_host_dphy_initialize_1p4(phy, iomem, osc_freq_low, osc_freq_high);
+		} else {
+			mipi_host_dphy_initialize_1p3(phy, iomem, osc_freq_low, osc_freq_high);
+		}
 	}
 
 	/* record host */
@@ -1974,6 +2006,8 @@ static int32_t x5sys_mipi_set_cfg(int32_t type, int32_t port, int32_t region, in
 			}
 			break;
 		case MIPI_PHY_CTRL_SEL:
+			val &= ~DP_VMASK(REG_X5SYS_MIPI_PHY_CTRL_MASK, REG_X5SYS_MIPI_PHY_CTRL_OFFS);	//clean bit
+			val |= DP_V2REG(value, REG_X5SYS_MIPI_PHY_CTRL_MASK, REG_X5SYS_MIPI_PHY_CTRL_OFFS); //set bit
 			break;
                 case MIPI_CFG_CLK_FREQRANGE:
 			reg = REG_X5SYS_MIPI_PHY_CFG2;
@@ -2042,11 +2076,129 @@ static int32_t x5sys_mipi_set_testcode(int32_t type, int32_t port, int32_t code)
 
 }
 
+static int32_t x5sys_mipi_get_lanemode(int32_t type, int32_t port)
+{
+	struct mipi_dphy_s *dphy = &g_pdev->dphy;
+	void __iomem *iomem = dphy->iomem;
+	struct os_dev *dev = &g_pdev->osdev;
+	mipi_flags_t flags;
+	uint32_t reg, val = 0U;
+	int32_t ret;
+
+	if (iomem == NULL) {
+		return -1;
+	}
+
+	if ((type == MIPI_DPHY_TYPE_HOST) && (port < MIPI_HOST_HW_PORT_NUM)) {
+		switch (port) {
+		case MIPI_PORT0:
+		case MIPI_PORT1:
+		default:
+			reg = REG_X5SYS_MIPI_PHY_CFG0;
+			break;
+		case MIPI_PORT2:
+		case MIPI_PORT3:
+			reg = REG_X5SYS_MIPI_PHY_CFG1;
+			break;
+		}
+
+		osal_spin_lock_irqsave(&dphy->lock, &flags);
+		val = mipi_getreg(iomem, reg);
+		osal_spin_unlock_irqrestore(&dphy->lock, &flags);
+
+		ret = DP_REG2V(val, REG_X5SYS_MIPI_PHY_CTRL_MASK, REG_X5SYS_MIPI_PHY_CTRL_OFFS);
+	} else {
+		ret = -1;
+	}
+
+	mipi_info(dev, "get mipi%s%d lanemode 0x%x = %d\n",
+			g_mp_type[type], port, val, ret);
+	return ret;
+}
+
+static int32_t x5sys_mipi_set_lanemode(int32_t type, int32_t port, int32_t lanemode)
+{
+	struct mipi_dphy_s *dphy = &g_pdev->dphy;
+	void __iomem *iomem = dphy->iomem;
+	struct os_dev *dev = &g_pdev->osdev;
+	mipi_flags_t flags;
+	int32_t ret = 0;
+	uint32_t reg, val = 0U;
+
+	if (iomem == NULL) {
+		return -1;
+	}
+
+	if ((type == MIPI_DPHY_TYPE_HOST) && (port < MIPI_HOST_HW_PORT_NUM)) {
+		switch (port) {
+			case MIPI_PORT0:
+			case MIPI_PORT1:
+			default:
+				reg = REG_X5SYS_MIPI_PHY_CFG0;
+				break;
+			case MIPI_PORT2:
+			case MIPI_PORT3:
+				reg = REG_X5SYS_MIPI_PHY_CFG1;
+				break;
+		}
+
+		osal_spin_lock_irqsave(&dphy->lock, &flags);
+		val = mipi_getreg(iomem, reg);
+		val &= ~DP_VMASK(REG_X5SYS_MIPI_PHY_CTRL_MASK, REG_X5SYS_MIPI_PHY_CTRL_OFFS);	//clean bit
+		val |= DP_V2REG(lanemode, REG_X5SYS_MIPI_PHY_CTRL_MASK, REG_X5SYS_MIPI_PHY_CTRL_OFFS); //set bit
+		mipi_putreg(iomem, reg, val);
+		osal_spin_unlock_irqrestore(&dphy->lock, &flags);
+	} else {
+		ret = -1;
+	}
+
+	mipi_info(dev, "set mipi%s%d lanemode %d, regv 0x%x, %d\n",
+			g_mp_type[type], port, lanemode, val, ret);
+	return ret;
+}
+
+static int32_t x5sys_mipi_set_test_sel(int32_t type, int32_t port, int32_t value)
+{
+	struct mipi_dphy_s *dphy = &g_pdev->dphy;
+	void __iomem *iomem = dphy->iomem;
+	struct os_dev *dev = &g_pdev->osdev;
+	struct mipi_phy_param_s *param = &g_pdev->dphy.param;
+	mipi_flags_t flags;
+	int32_t ret = 0;
+	uint32_t val = 0U;
+
+	if (iomem == NULL) {
+		return -1;
+	}
+
+	if ((type == MIPI_DPHY_TYPE_HOST) && (port < MIPI_HOST_HW_PORT_NUM)) {
+		osal_spin_lock_irqsave(&dphy->lock, &flags);
+		val = mipi_getreg(iomem, REG_X5SYS_MIPI_PHY_CFG2);
+		if (port == MIPI_PORT0 || port == MIPI_PORT1) {
+			val &= ~DP_VMASK(REG_X5SYS_MIPI_PHY_TEST_SEL_4L_MASK, REG_X5SYS_MIPI_PHY_TEST_SEL_4L_0_OFFS);	//clean bit
+			val |= DP_V2REG(value, REG_X5SYS_MIPI_PHY_TEST_SEL_4L_MASK, REG_X5SYS_MIPI_PHY_TEST_SEL_4L_0_OFFS); //set bit
+		} else if (port == MIPI_PORT2 || port == MIPI_PORT3) {
+			val &= ~DP_VMASK(REG_X5SYS_MIPI_PHY_TEST_SEL_4L_MASK, REG_X5SYS_MIPI_PHY_TEST_SEL_4L_1_OFFS);	//clean bit
+			val |= DP_V2REG(value, REG_X5SYS_MIPI_PHY_TEST_SEL_4L_MASK, REG_X5SYS_MIPI_PHY_TEST_SEL_4L_1_OFFS); //set bit
+		}
+		mipi_putreg(iomem, REG_X5SYS_MIPI_PHY_CFG2, val);
+		osal_spin_unlock_irqrestore(&dphy->lock, &flags);
+	} else {
+		ret = -1;
+	}
+
+	mipi_dbg(param, dev, "set mipi%s%d test_sel_4l %d\n",
+			g_mp_type[type], port, value);
+	return ret;
+}
 
 static struct mipi_dphy_ops_s x5sys_dphy_ops = {
 	.name = "x5sys",
 	.set_freqrange = x5sys_mipi_set_cfg,
 	.set_testcode = x5sys_mipi_set_testcode,
+	.get_lanemode = x5sys_mipi_get_lanemode,
+	.set_lanemode = x5sys_mipi_set_lanemode,
+	.set_test_sel = x5sys_mipi_set_test_sel,
 };
 #endif
 
@@ -2403,6 +2555,20 @@ int32_t mipi_dphy_set_testcode(int32_t type, int32_t port, int32_t code)
 		return 0;
 	} else {
 		return ops->set_testcode(type, port, code);
+	}
+}
+
+int32_t mipi_dphy_set_test_sel_4l(int32_t type, int32_t port, int32_t value)
+{
+	struct mipi_dphy_s *dphy = &g_pdev->dphy;
+	void __iomem *iomem = dphy->iomem;
+	struct mipi_dphy_ops_s *ops = g_pdev->ops;
+
+	if ((iomem == NULL) || (ops == NULL) || (ops->set_test_sel == NULL)) {
+		mipi_err(NULL, "mipi_dphy_set_testcode dummy \n");
+		return 0;
+	} else {
+		return ops->set_test_sel(type, port, value);
 	}
 }
 

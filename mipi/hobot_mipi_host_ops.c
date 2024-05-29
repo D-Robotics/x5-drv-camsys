@@ -1650,10 +1650,11 @@ static struct mipi_host_icnt_drop g_mh_icnt_drops_1p5[] = {
  */
 static const struct mipi_host_port_hw_s mh_port_hw_comb2[] = {
 	{ 0, 0, 2, 4, 4 },
+	{ 0, 1, 2, 4, 4 },
 	{ 1, 0, 2, 4, 4 },
-	{ 0, 1, 2, 0, 2 },
-	{ 1, 1, 2, 0, 2 },
+	{ 1, 1, 2, 4, 4 },
 };
+
 #define MIPI_HOST_PORT_HW_COMB2_UNIT (sizeof(mh_port_hw_comb2)/sizeof(mh_port_hw_comb2[0]))
 #define MIPI_HOST_PORT_HW_COMB2_UGRP (2)
 
@@ -3864,7 +3865,10 @@ static int32_t mipi_host_start(struct mipi_hdev_s *hdev)
 		nocheck = 1U;
 	}
 
-	(void)mipi_host_dphy_set_source(iomem);
+	/* merge lane mode(4 lane mode) don't need to set source */
+	if (hdev->lane_mode == 0) {
+		(void)mipi_host_dphy_set_source(iomem);
+	}
 
 	if (nocheck == 0U) {
 		if (0 != mipi_host_dphy_start_hs_reception(hdev)) {
@@ -4292,7 +4296,9 @@ int32_t hobot_mipi_host_close_do(struct mipi_hdev_s *hdev)
 			(void)mipi_host_deinit(hdev);
 			if (hdev->ex_hdev != NULL) {
 				ex_hdev = (struct mipi_hdev_s *)(hdev->ex_hdev);
+#ifndef X5_CHIP
 				(void)mipi_host_stop(ex_hdev);
+#endif
 				(void)mipi_host_deinit(ex_hdev);
 			}
 			host->state = MIPI_STATE_DEFAULT;
@@ -4432,7 +4438,9 @@ static int32_t hobot_mipi_host_ioc_deinit(struct mipi_hdev_s *hdev)
 
 static int32_t hobot_mipi_host_ioc_start(struct mipi_hdev_s *hdev)
 {
+#ifndef X5_CHIP
 	struct mipi_hdev_s *ex_hdev;
+#endif
 	struct os_dev *dev = &hdev->osdev;
 	struct mipi_host_s *host = &hdev->host;
 	struct mipi_user_s *user = &hdev->user;
@@ -4456,6 +4464,7 @@ static int32_t hobot_mipi_host_ioc_start(struct mipi_hdev_s *hdev)
 			mipi_host_error_report(hdev, ESW_MipiHostStatusErr, SUB_ID_2, (uint8_t)(host->state), __LINE__);
 			return -EBUSY;
 		}
+#ifndef X5_CHIP
 		/* state ok */
 		if (hdev->ex_hdev != NULL) {
 			ex_hdev = (struct mipi_hdev_s *)(hdev->ex_hdev);
@@ -4465,6 +4474,7 @@ static int32_t hobot_mipi_host_ioc_start(struct mipi_hdev_s *hdev)
 				return ret;
 			}
 		}
+#endif
 		ret = mipi_host_start(hdev);
 		if (ret != 0) {
 			mipi_err(dev, "start error: %d\n", ret);
@@ -4488,7 +4498,9 @@ static int32_t hobot_mipi_host_ioc_start(struct mipi_hdev_s *hdev)
 
 static int32_t hobot_mipi_host_ioc_stop(struct mipi_hdev_s *hdev)
 {
+#ifndef X5_CHIP
 	struct mipi_hdev_s *ex_hdev;
+#endif
 	struct os_dev *dev = &hdev->osdev;
 	struct mipi_host_s *host = &hdev->host;
 	struct mipi_user_s *user = &hdev->user;
@@ -4516,11 +4528,13 @@ static int32_t hobot_mipi_host_ioc_stop(struct mipi_hdev_s *hdev)
 			mipi_host_error_report(hdev, ESW_MipiHostStatusErr, SUB_ID_3, (uint8_t)(host->state), __LINE__);
 			return -EBUSY;
 		}
+#ifndef X5_CHIP
 		/* state ok */
 		if (hdev->ex_hdev != NULL) {
 			ex_hdev = (struct mipi_hdev_s *)(hdev->ex_hdev);
 			(void)mipi_host_stop(ex_hdev);
 		}
+#endif
 		ret = mipi_host_stop(hdev);
 		if (ret != 0) {
 			mipi_err(dev, "stop error: %d\n", ret);

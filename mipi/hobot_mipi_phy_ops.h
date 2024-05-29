@@ -125,6 +125,8 @@ static inline uint32_t mipi_dphy_pinctrl0_sel(int32_t sel) {
 /*test code: addr*/
 #define REGS_RX_SYS_7            (0x08)
 #define REGS_RX_SYSTIMERS_0      (0x7A)
+#define REGS_RX_STARTUP_OVR_0    (0xE0)
+#define REGS_RX_STARTUP_OVR_1    (0xE1)
 #define REGS_RX_STARTUP_OVR_2    (0xE2)
 #define REGS_RX_STARTUP_OVR_3    (0xE3)
 #define REGS_RX_STARTUP_OVR_4    (0xE4)
@@ -132,8 +134,15 @@ static inline uint32_t mipi_dphy_pinctrl0_sel(int32_t sel) {
 #define REGS_RX_STARTUP_OVR_17   (0xF1)
 #define REGS_RX_CB_0             (0x1aa)
 #define REGS_RX_CB_2             (0x1ac)
+#define REGS_RX_CLKLANE_LANE_3   (0x304)
+#define REGS_RX_CLKLANE_LANE_4   (0x305)
 #define REGS_RX_CLKLANE_LANE_6   (0x307)
 #define REGS_RX_CLKLANE_LANE_7   (0x308)
+#define REGS_RX_LANE0_LANE_7     (0x508)
+#define REGS_RX_LANE1_LANE_7     (0x708)
+#define REGS_RX_LANE2_LANE7      (0x908)
+#define REGS_RX_LANE3_LANE7      (0xB08)
+
 #define REGS_RX_LANE0_DDL_4      (0x60A)
 #define REGS_RX_LANE0_DDL_5      (0x60B)
 #define REGS_RX_LANE0_DDL_6      (0x60C)
@@ -177,6 +186,8 @@ static inline uint32_t mipi_dphy_pinctrl0_sel(int32_t sel) {
 #define REGS_TX_CB_2             (0x1AC)
 #define REGS_TX_SLEW_5           (0x270)
 #define REGS_TX_SLEW_7           (0x272)
+
+#define REGS_RX_DUAL_PHY_0       (0x133)
 
 /*test code: data*/
 #define RX_CLK_SETTLE_EN         (0x01)
@@ -370,6 +381,7 @@ struct mipi_dphy_ops_s {
 	int32_t (*get_lanemode)(int32_t type, int32_t port);
 	int32_t (*set_lanemode)(int32_t type, int32_t port, int32_t lanemode);
 	int32_t (*set_testcode)(int32_t type, int32_t port, int32_t code);
+	int32_t (*set_test_sel)(int32_t type, int32_t port, int32_t value);
 };
 
 /* mipi dphy device struct */

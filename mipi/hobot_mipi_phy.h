@@ -290,4 +290,7 @@ typedef struct mipi_phy_dbg_ops_s {
 extern int32_t hobot_mipi_phy_debug_setup(const mipi_phy_dbg_ops_t *phy_dbg_ops);
 
 extern int32_t mipi_dphy_set_testcode(int32_t type, int32_t port, int32_t testcode);
+extern int32_t mipi_dphy_set_test_sel_4l(int32_t type, int32_t port, int32_t value);
+
+
 #endif /*__HOBOT_MIPI_PHY_H__*/
