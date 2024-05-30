@@ -4,8 +4,6 @@
  *                     All rights reserved.
  ***************************************************************************/
 
-#define pr_fmt(fmt) "[hobot_osd](%s): " fmt, __func__
-
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -620,35 +618,34 @@ static int32_t osd_probe(struct platform_device *pdev)
 
 	osd = kzalloc(sizeof(struct osd_dev), GFP_ATOMIC);
 	if (!osd) {
-		pr_err("osd is NULL\n");
-		ret = -ENOMEM;
-		goto exit;
+		osd_err("osd is NULL\n");
+		return -ENOMEM;
 	}
 
 	ret = osd_device_node_init(osd);
 	if (ret < 0) {
-		pr_err("osd_device_node_init fail\n");
+		osd_err("osd_device_node_init fail\n");
 		ret = -ENOMEM;
-		goto exit;
+		goto _exit_create_file;
 	}
 
 	ret = osd_sysfs_create(&pdev->dev);
 	if (ret < 0) {
-		pr_err("osd_sysfs_create fail\n");
+		osd_err("osd_sysfs_create fail\n");
 		ret = -ENOMEM;
-		goto exit;
+		goto _exit_create_file;
 	}
 
 	hb_ion_dev = hobot_ion_get_ion_device();
 	if (hb_ion_dev == NULL) {
-		pr_err("%s: hb_ion_dev is null.\n", __func__);
+		osd_err("hb_ion_dev is null.\n");
 		ret = -EFAULT;
-		goto exit;
+		goto _exit_create_file;
 	}
 
 	osd->ion_client = ion_client_create(hb_ion_dev, "osd_driver_ion");
 	if (IS_ERR(osd->ion_client)) {
-		pr_err("osd ion client create failed.");
+		osd_err("ion client create failed.");
 		goto _exit_create_file;
 	}
 
@@ -668,13 +665,14 @@ static int32_t osd_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	pr_err("[FRT:D] %s\n", __func__);
-	return 0;
+	osd_err("done\n");
 
+	return 0;
 _exit_create_file:
 	kfree(osd);
 exit:
-	pr_err("[FRT:D] %s(%d)\n", __func__, ret);
+	osd_err("fail\n");
+
 	return ret;
 }
 

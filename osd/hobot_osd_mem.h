@@ -43,7 +43,7 @@ struct osd_single_buffer {
 	enum osd_buf_state state;
 	enum osd_pixel_format pixel_fmt;
 	atomic_t ref_count;
-};	
+};
 
 struct osd_buffer {
 	struct osd_size size;

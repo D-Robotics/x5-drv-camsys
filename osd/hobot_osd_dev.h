@@ -59,7 +59,7 @@
 #define MAX_OSD_NUM 3
 #define MAX_STA_NUM 8
 #define MAX_OSD_STA_LEVEL_NUM 3
-#define MAX_OSD_COLOR_NUM 15
+#define MAX_OSD_COLOR_NUM 16
 
 struct osd_box {
 	u8 osd_en;
@@ -323,6 +323,15 @@ struct osd_dev {
 	struct mutex osd_list_mutex;
 	struct mutex osd_mutex;
 };
+
+#define osd_fmt(fmt) "[HOBOT_OSD] (%s) " fmt
+#define osd_pr_warp(p_func_, str, fmt, ...) do { \
+		p_func_(str osd_fmt(fmt), __func__, ##__VA_ARGS__); \
+	} while(0)
+#define osd_debug(fmt, ...)	osd_pr_warp(pr_debug, "[DBG]", fmt, ##__VA_ARGS__)
+#define osd_info(fmt, ...)	osd_pr_warp(pr_info, "[INFO]", fmt, ##__VA_ARGS__)
+#define osd_warn(fmt, ...)	osd_pr_warp(pr_warn, "[WARN]", fmt, ##__VA_ARGS__)
+#define osd_err(fmt, ...)	osd_pr_warp(pr_err, "[ERR]", fmt, ##__VA_ARGS__)
 
 struct vio_osd_info* osd_get_info(uint32_t chn_id, uint32_t ctx_id);
 

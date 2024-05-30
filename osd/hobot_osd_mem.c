@@ -4,8 +4,6 @@
  *                     All rights reserved.
  ***************************************************************************/
 
-#define pr_fmt(fmt) "[hobot_osd](%s): " fmt, __func__
-
 #include <linux/dma-mapping.h>
 #include <asm/cacheflush.h>
 #include <linux/delay.h>

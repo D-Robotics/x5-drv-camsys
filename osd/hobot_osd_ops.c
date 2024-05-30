@@ -4,8 +4,6 @@
  *                     All rights reserved.
  ***************************************************************************/
 
-#define pr_fmt(fmt) "[hobot_osd](%s): " fmt, __func__
-
 #include "hobot_osd_ops.h"
 #include "vse_drv.h"
 
@@ -173,19 +171,19 @@ static struct osd_bind *osd_find_bind_node(struct osd_subdev *osd_subdev, int32_
 
 static int32_t osd_handle_info_check(struct osd_handle_info *handle_info)
 {
-	pr_debug("[H%d]: fill_color:%d yuv_bg_transparent:%d proc_type:%d size:%dx%d\n",
+	osd_debug("[H%d]: fill_color: %d yuv_bg_transparent: %d proc_type: %d size(%dx%d)\n",
 		handle_info->handle_id, handle_info->fill_color,
 		handle_info->yuv_bg_transparent, handle_info->proc_type,
 		handle_info->size.w, handle_info->size.h);
 
 	if (handle_info->handle_id >= OSD_HANDLE_MAX) {
-		pr_err("osd handle id:%d error\n", handle_info->handle_id);
+		osd_err("handle id: %d exceed %d!\n", handle_info->handle_id, OSD_HANDLE_MAX);
 		return -EINVAL;
 	}
 
 	if (handle_info->proc_type >= OSD_PROC_MAX_TYPE) {
-		pr_err("osd handle:%d proc_type:%d error\n",
-			handle_info->handle_id, handle_info->proc_type);
+		osd_err("handle id: %d proc_type %d exceed %d!\n",
+			handle_info->handle_id, handle_info->proc_type, OSD_PROC_MAX_TYPE);
 		return -EINVAL;
 	}
 
@@ -194,11 +192,11 @@ static int32_t osd_handle_info_check(struct osd_handle_info *handle_info)
 
 static void osd_print_bind_info(struct osd_bind_info *bind_info)
 {
-	pr_debug("[S%d][V%d][H%d]: show:%d invert:%d level:%d buf_layer:%d start: (%d, %d)\n",
+	osd_debug("[S%d][V%d][H%d]: show:%d invert:%d level:%d buf_layer:%d start: (%d, %d)\n",
 		bind_info->chn_id, bind_info->ctx_id, bind_info->handle_id,
 		bind_info->show_en, bind_info->invert_en, bind_info->osd_level,
 		bind_info->buf_layer, bind_info->start_point.x, bind_info->start_point.y);
-	pr_debug("polygon: side num:%d point:(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
+	osd_debug("polygon: side num:%d point:(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
 		"(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) buffer:%p\n",
 		bind_info->side_num, bind_info->point[0].x, bind_info->point[0].y,
 		bind_info->point[1].x, bind_info->point[1].y,
@@ -209,7 +207,8 @@ static void osd_print_bind_info(struct osd_bind_info *bind_info)
 		bind_info->point[6].x, bind_info->point[6].y,
 		bind_info->point[7].x, bind_info->point[7].y,
 		bind_info->point[8].x, bind_info->point[8].y,
-		bind_info->point[9].x, bind_info->point[9].y, bind_info->polygon_buf);
+		bind_info->point[9].x, bind_info->point[9].y,
+		bind_info->polygon_buf);
 }
 
 static int32_t handle_find_buffer(struct osd_handle *handle, enum osd_buf_state state,
@@ -230,6 +229,7 @@ static int32_t handle_find_buffer(struct osd_handle *handle, enum osd_buf_state 
 			}
 		}
 	}
+
 	return -1;
 }
 
@@ -251,7 +251,7 @@ static void handle_update_buffer(struct osd_handle *handle, int32_t index)
 			if (handle->buffer.vga_buf[i].state != OSD_BUF_NULL) {
 				handle->buffer.vga_buf[i].state = OSD_BUF_PROCESS;
 			}
-			pr_debug("[H%d] update buffer index:%d paddr:0x%llx vaddr:%p\n",
+			osd_debug("[H%d] update buffer index: %d paddr: 0x%llx vaddr: %p\n",
 				handle->info.handle_id, i, handle->buffer.buf[i].paddr,
 				handle->buffer.buf[i].vaddr);
 		}
@@ -280,7 +280,7 @@ static void osd_sw_set_process_flag(struct osd_subdev *subdev)
 
 	osd_info = subdev->osd_info;
 	if (!osd_info) {
-		pr_err("%s get osd info fail\n", __func__);
+		osd_err("get osd info fail\n");
 		return ;
 	}
 
@@ -290,7 +290,7 @@ static void osd_sw_set_process_flag(struct osd_subdev *subdev)
 				atomic_set(&osd_info->need_sw_osd, 1);
 				return;
 			} else {
-				pr_err("bind null\n");
+				osd_err("bind null\n");
 			}
 		}
 	}
@@ -355,13 +355,12 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	handle = kzalloc(sizeof(struct osd_handle), GFP_ATOMIC);
 	if (handle == NULL) {
-		pr_err("osd kzalloc failed\n");
-		ret = -ENOMEM;
-		goto exit;
+		osd_err("kzalloc failed!\n");
+		return -ENOMEM;
 	}
 
 	if (copy_from_user((void *)&handle->info, (void __user *)arg, sizeof(struct osd_handle_info))) {
-		pr_err("%s copy_from_user failed\n", __func__);
+		osd_err("copy_from_user failed!\n");
 		ret = -EFAULT;
 		goto exit_free;
 	}
@@ -379,7 +378,7 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 		ret = osd_buffer_create(osd_dev->ion_client, &handle->buffer);
 		if (ret < 0) {
-			pr_err("[H%d] osd alloc buffer size %dx%d failed\n",
+			osd_err("[H%d] alloc buffer size %dx%d failed\n",
 				handle->info.handle_id, handle->buffer.size.w, handle->buffer.size.h);
 			goto exit_free;
 		}
@@ -402,24 +401,22 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	tmp_handle = osd_find_handle_node(osd_dev, handle->info.handle_id);
 	if (tmp_handle != NULL) {
 		if (tmp_handle->info.proc_type != handle->info.proc_type)  {
-			pr_err("[H%d] %s proc_type:%d %d not match\n",
-				tmp_handle->info.handle_id, __func__,
+			osd_err("[H%d] proc_type: %d %d not match\n",
+				tmp_handle->info.handle_id,
 				tmp_handle->info.proc_type, handle->info.proc_type);
 			ret = -EINVAL;
 		} else {
 			atomic_inc(&tmp_handle->ref_cnt);
-			pr_info("[H%d] %s already create, count:%d\n",
-				handle->info.handle_id, __func__,
-				atomic_read(&tmp_handle->ref_cnt));
+			osd_info("[H%d] already create, count: %d\n",
+				handle->info.handle_id,	atomic_read(&tmp_handle->ref_cnt));
 		}
 		mutex_unlock(&osd_dev->osd_list_mutex);
 		goto exit_destroy;
 	}
-
 	list_add_tail(&handle->node, &osd_dev->osd_list);
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	pr_info("[H%d] %s done\n", handle->info.handle_id, __func__);
+	osd_info("[H%d] done\n", handle->info.handle_id);
 
 	return ret;
 exit_destroy:
@@ -428,7 +425,7 @@ exit_destroy:
 	}
 exit_free:
 	kfree(handle);
-exit:
+
 	return ret;
 }
 
@@ -489,30 +486,27 @@ int32_t osd_get_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = copy_from_user((void *)&handle_info, (void __user *)arg, sizeof(struct osd_handle_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return ret;
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
 	handle = osd_find_handle_node(osd_dev, handle_info.handle_id);
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		pr_err("[H%d] %s handle was null\n", handle_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+		osd_err("[H%d] handle was null\n", handle_info.handle_id);
+		return -EINVAL;
 	}
 	ret = copy_to_user((void __user *)arg, (void *)&handle->info, sizeof(struct osd_handle_info));
 	if (ret) {
-		pr_err("%s: copy_to_user failed\n", __func__);
+		osd_err("[H%d] copy_to_user failed\n", handle_info.handle_id);
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		ret = -EFAULT;
-		goto exit;
+		return ret;
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	pr_debug("[H%d] %s done\n", handle_info.handle_id, __func__);
-exit:
+	osd_debug("[H%d] done\n", handle_info.handle_id);
+
 	return ret;
 }
 
@@ -528,28 +522,24 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = copy_from_user((void *)&handle_info, (void __user *)arg, sizeof(struct osd_handle_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return -EFAULT;
 	}
 
-	if (osd_handle_info_check(&handle->info) < 0) {
-		ret = -EINVAL;
-		goto exit;
-	}
+	if (osd_handle_info_check(&handle->info) < 0)
+		return -EINVAL;
 
 	tmp_handle = kzalloc(sizeof(struct osd_handle), GFP_ATOMIC);
 	if (tmp_handle == NULL) {
-		pr_err("osd kzalloc failed\n");
-		ret = -ENOMEM;
-		goto exit;
+		osd_err("kzalloc failed\n");
+		return -ENOMEM;
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
 	handle = osd_find_handle_node(osd_dev, handle_info.handle_id);
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		pr_err("[H%d] %s handle was null\n", handle_info.handle_id, __func__);
+		osd_err("[H%d] handle was null\n", handle_info.handle_id);
 		ret = -EINVAL;
 		goto exit_free;
 	}
@@ -559,15 +549,16 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
 	if (tmp_handle->info.proc_type != handle_info.proc_type) {
-		pr_err("[%d] %s proc_type:%d %d not match\n",
-			tmp_handle->info.handle_id, __func__,
+		osd_err("[H%d] proc_type: %d %d not match\n",
+			tmp_handle->info.handle_id,
 			tmp_handle->info.proc_type, handle_info.proc_type);
 		ret = -EINVAL;
 		goto exit_free;
 	}
 
 	if (handle_info.proc_type <= OSD_PROC_NV12) {
-		if ((tmp_handle->info.size.w != handle_info.size.w) || (tmp_handle->info.size.h != handle_info.size.h)) {
+		if ((tmp_handle->info.size.w != handle_info.size.w) ||
+			(tmp_handle->info.size.h != handle_info.size.h)) {
 			if (atomic_read(&tmp_handle->bind_cnt) == 0) {
 				tmp_handle->info.proc_type = handle_info.proc_type;
 				tmp_handle->info.size.w = handle_info.size.w;
@@ -597,7 +588,7 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 				osd_single_buffer_flush(&tmp_handle->buffer.buf[1]);
 				need_replace = 1;
 			} else {
-				pr_err("[H%d] already bind, can`t modify size\n",
+				osd_err("[H%d] already bind, cannot modify size\n",
 					tmp_handle->info.handle_id);
 				ret = -EINVAL;
 				goto exit_free;
@@ -611,7 +602,7 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	handle = osd_find_handle_node(osd_dev, handle_info.handle_id);
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		pr_err("[H%d] %s handle was null\n", handle_info.handle_id, __func__);
+		osd_err("[H%d] handle was null\n", handle_info.handle_id);
 		ret = -EINVAL;
 		goto exit_buffer_destroy;
 	}
@@ -632,7 +623,7 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	pr_debug("[H%d] %s done\n", handle_info.handle_id, __func__);
+	osd_debug("[H%d] done\n", handle_info.handle_id);
 
 	return ret;
 exit_buffer_destroy:
@@ -644,7 +635,7 @@ exit_free:
 		kfree(tmp_handle);
 		tmp_handle = NULL;
 	}
-exit:
+
  	return ret;
 }
 
@@ -660,18 +651,16 @@ int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = copy_from_user((void *)&buffer_info, (void __user *)arg, sizeof(struct osd_buffer_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed (ret=%d)\n", __func__, ret);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return -EFAULT;
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
 	handle = osd_find_handle_node(osd_dev, buffer_info.handle_id);
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		pr_err("[H%d] %s handle was null\n", buffer_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+		osd_err("[H%d] handle was null\n", buffer_info.handle_id);
+		return -EINVAL;
 	}
 
 	if (handle->info.proc_type <= OSD_PROC_NV12) {
@@ -682,10 +671,9 @@ int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 			buffer_info.index = handle_find_buffer(handle, OSD_BUF_CREATE, &single_buf, 0);
 			if (buffer_info.index < 0) {
 				mutex_unlock(&osd_dev->osd_list_mutex);
-				pr_err("[H%d] osd find buffer:%d failed\n",
+				osd_err("[H%d] osd find buffer: %d failed\n",
 					buffer_info.handle_id, OSD_BUF_CREATE);
-				ret = -ENOBUFS;
-				goto exit;
+				return -ENOBUFS;
 			}
 		} else {
 			single_buf = &handle->buffer.buf[!!buffer_info.index];
@@ -697,13 +685,12 @@ int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = copy_to_user((void __user *)arg, (void *)&buffer_info, sizeof(struct osd_buffer_info));
 	if (ret) {
-		pr_err("%s: copy_to_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_to_user failed\n");
+		return -EFAULT;
 	}
 
-	pr_debug("[H%d] %s done\n", buffer_info.handle_id, __func__);
-exit:
+	osd_debug("[H%d] done\n", buffer_info.handle_id);
+
 	return ret;
 }
 
@@ -719,18 +706,16 @@ int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = copy_from_user((void *)&buffer_info, (void __user *)arg, sizeof(struct osd_buffer_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return -EFAULT;
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
 	handle = osd_find_handle_node(osd_dev, buffer_info.handle_id);
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		pr_err("[H%d] %s handle was null\n", buffer_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+		osd_err("[H%d] handle was null\n", buffer_info.handle_id);
+		return -EINVAL;
 	}
 
 	if (handle->info.proc_type <= OSD_PROC_NV12) {
@@ -738,10 +723,9 @@ int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 			buffer_info.index = handle_find_buffer(handle, OSD_BUF_CREATE, &single_buf, 0);
 			if (buffer_info.index < 0) {
 				mutex_unlock(&osd_dev->osd_list_mutex);
-				pr_err("[H%d] osd find buffer:%d failed\n",
+				osd_err("[H%d] find buffer: %d failed\n",
 					buffer_info.handle_id, OSD_BUF_CREATE);
-				ret = -EINVAL;
-				goto exit;
+				return -EINVAL;
 			}
 		}
 
@@ -761,9 +745,8 @@ int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	pr_info("[H%d] %s done\n", buffer_info.handle_id, __func__);
+	osd_info("[H%d] done\n", buffer_info.handle_id);
 
-exit:
 	return ret;
 }
 
@@ -780,13 +763,13 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	bind = kzalloc(sizeof(struct osd_bind), GFP_ATOMIC);
 	if (bind == NULL) {
-		pr_err("osd kzalloc failed\n");
+		osd_err("kzalloc failed\n");
 		return -ENOMEM;
 	}
 
 	ret = copy_from_user((void *)&bind->bind_info, (void __user *)arg, sizeof(struct osd_bind_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
+		osd_err("copy_from_user failed\n");
 		goto exit_free_bind;
 	}
 
@@ -805,30 +788,29 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	if (bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) {
 		polygon_buf = kzalloc(2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t), GFP_ATOMIC);
 		if (polygon_buf == NULL) {
-			pr_err("osd kzalloc polygon buffer is fail\n");
+			osd_err("kzalloc polygon buffer is fail\n");
 			ret = -ENOMEM;
 			goto exit_free_bind;
 		}
 		ret = copy_from_user(polygon_buf, (void __user *)bind->bind_info.polygon_buf,
 				2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t));
 		if (ret) {
-			pr_err("%s: copy_from_user failed (ret=%d)\n", __func__, ret);
-			ret = -EFAULT;
+			osd_err("copy_from_user failed!\n");
 			goto exit_free_polygon;
 		}
 		bind->bind_info.polygon_buf = (uint32_t *)polygon_buf;
 	}
-
 
 	mutex_lock(&subdev->bind_mutex);
 	tmp_bind = osd_find_bind_node(subdev, bind->bind_info.handle_id,
 					bind->bind_info.buf_layer);
 	if (tmp_bind != NULL) {
 		atomic_inc(&tmp_bind->ref_cnt);
-		pr_info("[S%d][C%d][H%d] already attach: count:%d\n",
-			bind->bind_info.chn_id, bind->bind_info.ctx_id,
-			bind->bind_info.handle_id, atomic_read(&tmp_bind->ref_cnt));
+		osd_info("[H%d][CHN%d][CTX%d] already attach, count: %d\n",
+			bind->bind_info.handle_id, bind->bind_info.chn_id,
+			bind->bind_info.ctx_id, atomic_read(&tmp_bind->ref_cnt));
 		mutex_unlock(&subdev->bind_mutex);
+		ret = -EINVAL;
 		goto exit_free_polygon;
 	}
 
@@ -837,15 +819,16 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
 		mutex_unlock(&subdev->bind_mutex);
-		pr_err("[S%d][V%d][H%d] %s handle was null!\n",
-			bind->bind_info.chn_id, bind->bind_info.ctx_id,
-			bind->bind_info.handle_id, __func__);
+		osd_err("[H%d][CHN%d][CTX%d] handle was null!\n",
+			bind->bind_info.handle_id, bind->bind_info.chn_id,
+			bind->bind_info.ctx_id);
 		ret = -EINVAL;
 		goto exit_free_polygon;
 	}
 
 	mutex_lock(&bind->proc_info.proc_mutex);
-	bind->proc_info.proc_type = (handle->info.proc_type >= OSD_PROC_RECT) ? bind->bind_info.handle_info.proc_type : handle->info.proc_type;
+	bind->proc_info.proc_type = (handle->info.proc_type >= OSD_PROC_RECT) ?
+				bind->bind_info.handle_info.proc_type : handle->info.proc_type;
 	if (bind->proc_info.proc_type == OSD_PROC_VGA4) {
 		bind->proc_info.proc_type = osd_hw_check_limit(subdev, handle, bind);
 	}
@@ -879,8 +862,8 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	atomic_inc(&handle->bind_cnt);
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4) &&
-		(bind->bind_info.osd_level == 0)) {
+	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4)
+		&& (bind->bind_info.osd_level == 0)) {
 		// hw level: 0, sw level: 1-3
 		bind->bind_info.osd_level = 1;
 	}
@@ -895,9 +878,9 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	osd_sw_set_process_flag(subdev);
 	mutex_unlock(&subdev->bind_mutex);
 
-	pr_info("[S%d][V%d][H%d] %s done\n",
-		bind->bind_info.chn_id, bind->bind_info.ctx_id,
-		bind->bind_info.handle_id, __func__);
+	osd_info("[H%d][CHN%d][CTX%d] done\n",
+		bind->bind_info.handle_id, bind->bind_info.chn_id,
+		bind->bind_info.ctx_id);
 
 	return ret;
 
@@ -923,9 +906,8 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = copy_from_user((void *)&bind_info, (void __user *)arg, sizeof(struct osd_bind_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return ret;
 	}
 
 	osd_dev = osd_ctx->osd_dev;
@@ -935,11 +917,10 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	bind = osd_find_bind_node(subdev, bind_info.handle_id, bind_info.buf_layer);
 	if (bind == NULL) {
 		mutex_unlock(&subdev->bind_mutex);
-		pr_err("[S%d][V%d][H%d] %s bind was null!\n",
-			bind_info.chn_id, bind_info.ctx_id,
-			bind_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+		osd_err("[H%d][CHN%d][CTX%d] bind was null!\n",
+			bind_info.handle_id, bind_info.chn_id,
+			bind_info.ctx_id);
+		return -EINVAL;
 	}
 
 	if (atomic_dec_return(&bind->ref_cnt) == 0) {
@@ -955,9 +936,9 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		mutex_lock(&osd_dev->osd_list_mutex);
 		handle = osd_find_handle_node(osd_dev, bind_info.handle_id);
 		if (handle == NULL) {
-			pr_err("[S%d][V%d][H%d] %s handle was null!\n",
-			bind_info.chn_id, bind_info.ctx_id,
-			bind_info.handle_id, __func__);
+			osd_err("[H%d][CHN%d][CTX%d] handle was null!\n",
+				bind_info.handle_id, bind_info.chn_id,
+				bind_info.ctx_id);
 		} else {
 			atomic_dec(&handle->bind_cnt);
 		}
@@ -973,9 +954,9 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		mutex_unlock(&subdev->bind_mutex);
 	}
 
-	pr_info("[S%d][V%d][H%d] %s done\n", bind_info.chn_id, bind_info.ctx_id, bind_info.handle_id, __func__);
+	osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+		bind_info.chn_id, bind_info.ctx_id);
 
-exit:
 	return ret;
 }
 
@@ -989,9 +970,8 @@ static int32_t osd_get_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 
 	ret = copy_from_user((void *)&bind_info, (void __user *)arg, sizeof(struct osd_bind_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return ret;
 	}
 
 	osd_dev = osd_ctx->osd_dev;
@@ -1001,45 +981,39 @@ static int32_t osd_get_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	bind = osd_find_bind_node(subdev, bind_info.handle_id, bind_info.buf_layer);
 	if (bind == NULL) {
 		mutex_unlock(&subdev->bind_mutex);
-		pr_err("[S%d][V%d][H%d] %s bind was null!\n",
-			bind_info.chn_id, bind_info.ctx_id,
-			bind_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+		osd_err("[H%d][CHN%d][CTX%d] bind was null!\n",
+			bind_info.handle_id, bind_info.chn_id,
+			bind_info.ctx_id);
+		return -EINVAL;
 	}
 
 	ret = copy_to_user((void __user *)arg, (void *)&bind->bind_info, sizeof(struct osd_bind_info));
 	if (ret) {
-		pr_err("%s: copy_to_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_to_user failed\n");
+		return ret;
 	}
 	mutex_unlock(&subdev->bind_mutex);
 
-	pr_debug("[S%d][V%d][H%d] %s done: ret:%d\n",
-		bind_info.chn_id, bind_info.ctx_id,
-		bind_info.handle_id, __func__, ret);
+	osd_debug("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+		bind_info.chn_id, bind_info.ctx_id);
 
-exit:
 	return ret;
 }
 
 static int32_t osd_vga4_check_need_sw_process(struct osd_bind_info *old_info,
 						struct osd_bind_info *new_info)
 {
-	if (new_info->show_en == 0) {
+	if (new_info->show_en == 0)
 		return 1;
-	}
-	if (new_info->osd_level > 0) {
+	if (new_info->osd_level > 0)
 		return 1;
-	}
-	if (old_info->start_point.y != new_info->start_point.y) {
+	if (old_info->start_point.y != new_info->start_point.y)
 		return 1;
-	}
+
 	return 0;
 }
 
-static int32_t osd_polygon_check_is_change(struct osd_bind_info *old_info,
+static int32_t osd_polygon_check_change(struct osd_bind_info *old_info,
 					struct osd_bind_info *new_info)
 {
 	int32_t i;
@@ -1047,14 +1021,14 @@ static int32_t osd_polygon_check_is_change(struct osd_bind_info *old_info,
 	if (old_info->side_num != new_info->side_num) {
 		return 1;
 	}
+
 	for (i = 0; i < old_info->side_num; i++) {
-		if (old_info->point[i].x != new_info->point[i].x) {
+		if (old_info->point[i].x != new_info->point[i].x)
 			return 1;
-		}
-		if (old_info->point[i].y != new_info->point[i].y) {
+		if (old_info->point[i].y != new_info->point[i].y)
 			return 1;
-		}
 	}
+
 	return 0;
 }
 
@@ -1067,14 +1041,13 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	struct osd_handle *handle;
 	struct osd_subdev *subdev;
 	int32_t buf_index = -1;
-	struct osd_single_buffer *one_buf, *vga_buf;
+	struct osd_single_buffer *single_buf, *vga_buf;
 	uint32_t *polygon_buf = NULL;
 
-	ret = (int32_t)copy_from_user((void *)&bind_info, (void __user *)arg, sizeof(struct osd_bind_info));
+	ret = copy_from_user((void *)&bind_info, (void __user *)arg, sizeof(struct osd_bind_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed (ret=%d)\n", __func__, ret);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return -EFAULT;
 	}
 
 	osd_print_bind_info(&bind_info);
@@ -1085,11 +1058,10 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	bind = osd_find_bind_node(subdev, bind_info.handle_id, bind_info.buf_layer);
 	if (bind == NULL) {
 		mutex_unlock(&subdev->bind_mutex);
-		pr_err("[S%d][V%d][H%d] %s bind was null!\n",
-			bind_info.chn_id, bind_info.ctx_id,
-			bind_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+		osd_err("[H%d][CHN%d][CTX%d] bind was null!\n",
+			bind_info.handle_id, bind_info.chn_id,
+			bind_info.ctx_id);
+		return -EINVAL;
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
@@ -1097,30 +1069,27 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
 		mutex_unlock(&subdev->bind_mutex);
-		pr_err("[S%d][V%d][H%d] %s handle was null!\n",
+		osd_err("[H%d][CHN%d][CTX%d] handle was null!\n",
 			bind_info.chn_id, bind_info.ctx_id,
-			bind_info.handle_id, __func__);
-		ret = -EINVAL;
-		goto exit;
+			bind_info.handle_id);
+		return -EINVAL;
 	}
 	if ((bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) &&
-		(osd_polygon_check_is_change(&bind->bind_info, &bind_info))) {
+		(osd_polygon_check_change(&bind->bind_info, &bind_info))) {
 		polygon_buf = kzalloc(2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t), GFP_ATOMIC);
 		if (polygon_buf == NULL) {
 			mutex_unlock(&osd_dev->osd_list_mutex);
 			mutex_unlock(&subdev->bind_mutex);
-			pr_err("osd kzalloc failed\n");
-			ret = -ENOMEM;
-			goto exit;
+			osd_err("kzalloc failed\n");
+			return -ENOMEM;
 		}
-		ret = (int32_t)copy_from_user((void *)polygon_buf,
-			(void __user *)bind_info.polygon_buf,
-			2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t));
+		ret = copy_from_user((void *)polygon_buf,
+				(void __user *)bind_info.polygon_buf,
+				2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t));
 		if (ret) {
 			mutex_unlock(&osd_dev->osd_list_mutex);
 			mutex_unlock(&subdev->bind_mutex);
-			pr_err("%s: copy_from_user failed (ret=%d)\n", __func__, ret);
-			ret = -EFAULT;
+			osd_err("copy_from_user failed\n");
 			goto exit_free;
 		}
 	}
@@ -1136,16 +1105,17 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 				mutex_unlock(&subdev->bind_mutex);
 				goto exit_free;
 			}
-			buf_index = handle_find_buffer(handle, OSD_BUF_PROCESS, &one_buf, 0);
+			buf_index = handle_find_buffer(handle, OSD_BUF_PROCESS, &single_buf, 0);
 			if (buf_index < 0) {
 				osd_buffer_destroy_vga(osd_dev->ion_client, &handle->buffer);
 				mutex_unlock(&osd_dev->osd_list_mutex);
 				mutex_unlock(&subdev->bind_mutex);
+				ret = -EFAULT;
 				goto exit_free;
 			}
 			vga_buf = &handle->buffer.vga_buf[buf_index];
-			osd_vga4_to_sw(g_osd_color.color_map, one_buf->vaddr, vga_buf->vaddr,
-			handle->buffer.size.w, handle->buffer.size.h);
+			osd_vga4_to_sw(g_osd_color.color_map, single_buf->vaddr, vga_buf->vaddr,
+					handle->buffer.size.w, handle->buffer.size.h);
 			osd_single_buffer_flush(vga_buf);
 		}
 
@@ -1156,36 +1126,37 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 		atomic_dec(&subdev->osd_hw_cnt);
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
+
 	if (polygon_buf != NULL) {
-		if (bind->bind_info.polygon_buf != NULL) {
+		if (bind->bind_info.polygon_buf != NULL)
 			kfree(bind->bind_info.polygon_buf);
-		}
 	} else {
 		polygon_buf = bind->bind_info.polygon_buf;
 	}
-	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4) &&
-		(bind->bind_info.osd_level == 0)) {
+
+	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4)
+		&& (bind->bind_info.osd_level == 0)) {
 		// hw level: 0, sw level: 1-3
 		bind->bind_info.osd_level = 1;
 	}
+
 	memcpy(&bind->bind_info, &bind_info, sizeof(struct osd_bind_info));
 	bind->bind_info.polygon_buf = polygon_buf;
 	atomic_set(&bind->need_update, 1);
 	kthread_queue_work(&osd_dev->worker, &osd_dev->work);
 	mutex_unlock(&subdev->bind_mutex);
 
-	pr_debug("[S%d][V%d][H%d] %s done: ret:%d\n",
-		bind_info.chn_id, bind_info.ctx_id,
-		bind_info.handle_id, __func__, ret);
+	osd_debug("[H%d][CHN%d][CTX%d] done\n",
+		bind_info.handle_id, bind_info.chn_id,
+		bind_info.ctx_id);
 
 	return ret;
-
 exit_free:
 	if (polygon_buf != NULL) {
-	kfree(polygon_buf);
-	polygon_buf = NULL;
+		kfree(polygon_buf);
+		polygon_buf = NULL;
 	}
-exit:
+
 	return ret;
 }
 
@@ -1366,9 +1337,8 @@ static int32_t osd_set_color_map(struct osd_video_ctx *osd_ctx, unsigned long ar
 
 	ret = copy_from_user((void *)&osd_color, (void __user *)arg, sizeof(struct osd_color_map));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
-		ret = -EFAULT;
-		goto exit;
+		osd_err("copy_from_user failed\n");
+		return -EFAULT;
 	}
 
 	osd_dev = osd_ctx->osd_dev;
@@ -1379,7 +1349,8 @@ static int32_t osd_set_color_map(struct osd_video_ctx *osd_ctx, unsigned long ar
 		kthread_queue_work(&osd_dev->worker, &osd_dev->work);
 	}
 
-exit:
+	osd_info("done\n");
+
 	return ret;
 }
 
@@ -1915,9 +1886,8 @@ int32_t hb_osd_open(struct inode *inode, struct file *file)
 	osd_dev = container_of(inode->i_cdev, struct osd_dev, cdev);
 	osd_ctx = kzalloc(sizeof(struct osd_video_ctx), GFP_ATOMIC);
 	if (osd_ctx == NULL) {
-		pr_err("osd kzalloc failed\n");
-		ret = -ENOMEM;
-		goto exit;
+		osd_err("kzalloc failed\n");
+		return -ENOMEM;
 	}
 
 	osd_ctx->osd_dev = osd_dev;
@@ -1941,7 +1911,7 @@ exit_free:
 	kfree(osd_ctx);
 	atomic_dec(&osd_dev->open_cnt);
 	osd_dev->task = NULL;
-exit:
+
 	return ret;
 }
 

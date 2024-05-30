@@ -4,8 +4,6 @@
  *                     All rights reserved.
  ***************************************************************************/
 
-#define pr_fmt(fmt) "[hobot_osd](%s): " fmt, __func__
-
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <asm/neon.h>
