@@ -35,6 +35,7 @@ enum osd_pixel_format {
 
 struct osd_single_buffer {
 	struct list_head node;
+	uint32_t share_id;
 	// int32_t fd;
 	ssize_t length;
 	uint8_t *vaddr;

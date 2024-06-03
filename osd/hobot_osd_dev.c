@@ -221,7 +221,7 @@ static void osd_set_process_bind_info(struct osd_process_info *process_info,
 		process_info->fill_color = bind_info->handle_info.fill_color;
 		process_info->width = bind_info->handle_info.size.w;
 		process_info->height = bind_info->handle_info.size.h;
-		process_info->polygon_buf = bind_info->polygon_buf;
+		process_info->polygon_buf = bind_info->handle_info.polygon_buf;
 	}
 	if (process_info->proc_type == OSD_PROC_HW_VGA4) {
 		atomic_set(&process_info->subdev->osd_hw_need_update, 1);
@@ -459,95 +459,95 @@ static ssize_t osd_bind_show(struct device *dev,
                 struct device_attribute *attr, char* buf)
 {
 	uint32_t offset = 0;
-	int32_t i, j, m, len;
-	struct osd_dev *osd_dev;
-	struct osd_subdev *subdev;
-	struct osd_bind *bind, *temp;
+	// int32_t i, j, m, len;
+	// struct osd_dev *osd_dev;
+	// struct osd_subdev *subdev;
+	// struct osd_bind *bind, *temp;
 
-	osd_dev = dev_get_drvdata(dev);
+	// osd_dev = dev_get_drvdata(dev);
 
-	len = snprintf(&buf[offset], PAGE_SIZE - offset,
-			"******************osd bind info******************\n");
-	offset += len;
-	for (i = 0; i < OSD_CHN_MAX; i++) {
-		for (j = 0; j < VIO_MAX_STREAM; j++) {
-			subdev = &osd_dev->subdev[i][j];
+	// len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 		"******************osd bind info******************\n");
+	// offset += len;
+	// for (i = 0; i < OSD_CHN_MAX; i++) {
+	// 	for (j = 0; j < VIO_MAX_STREAM; j++) {
+	// 		subdev = &osd_dev->subdev[i][j];
 
-			mutex_lock(&subdev->bind_mutex);
-			list_for_each_entry_safe(bind, temp, &subdev->bind_list, node) {
-				len = snprintf(&buf[offset], PAGE_SIZE - offset,
-					"[S%d][V%d][H%d]: show:%d invert:%d level:%d "
-					"buf_layer:%d start: (%d, %d) bind_cnt:%d\n",
-					bind->bind_info.chn_id, bind->bind_info.ctx_id,
-					bind->bind_info.handle_id, bind->bind_info.show_en,
-					bind->bind_info.invert_en, bind->bind_info.osd_level,
-					bind->bind_info.buf_layer, bind->bind_info.start_point.x,
-					bind->bind_info.start_point.y, atomic_read(&bind->ref_cnt));
-				offset += len;
-				if (bind->bind_info.handle_info.proc_type == OSD_PROC_RECT) {
-					len = snprintf(&buf[offset], PAGE_SIZE - offset,
-						"rect: size:%dx%d fill_color:%d\n",
-						bind->bind_info.handle_info.size.w,
-						bind->bind_info.handle_info.size.h,
-						bind->bind_info.handle_info.fill_color);
-					offset += len;
-				}
-				if (bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) {
-					len = snprintf(&buf[offset], PAGE_SIZE - offset,
-						"polygon: side num:%d fill_color:%d point:(%d, %d) \n"
-						"(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
-						"\n(%d, %d) (%d, %d) (%d, %d) buffer:%p\n",
-						bind->bind_info.side_num,
-						bind->bind_info.handle_info.fill_color,
-						bind->bind_info.point[0].x, bind->bind_info.point[0].y,
-						bind->bind_info.point[1].x, bind->bind_info.point[1].y,
-						bind->bind_info.point[2].x, bind->bind_info.point[2].y,
-						bind->bind_info.point[3].x, bind->bind_info.point[3].y,
-						bind->bind_info.point[4].x, bind->bind_info.point[4].y,
-						bind->bind_info.point[5].x, bind->bind_info.point[5].y,
-						bind->bind_info.point[6].x, bind->bind_info.point[6].y,
-						bind->bind_info.point[7].x, bind->bind_info.point[7].y,
-						bind->bind_info.point[8].x, bind->bind_info.point[8].y,
-						bind->bind_info.point[9].x, bind->bind_info.point[9].y,
-						bind->bind_info.polygon_buf);
-					offset += len;
-				}
-				if (bind->bind_info.handle_info.proc_type == OSD_PROC_MOSAIC) {
-					len = snprintf(&buf[offset], PAGE_SIZE - offset,
-						"mosaic: size:%dx%d\n",
-						bind->bind_info.handle_info.size.w,
-						bind->bind_info.handle_info.size.h);
-					offset += len;
-				}
-				len = snprintf(&buf[offset], PAGE_SIZE - offset, "******************\n");
-				offset += len;
-			}
-			mutex_unlock(&subdev->bind_mutex);
+	// 		mutex_lock(&subdev->bind_mutex);
+	// 		list_for_each_entry_safe(bind, temp, &subdev->bind_list, node) {
+	// 			len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 				"[S%d][V%d][H%d]: show:%d invert:%d level:%d "
+	// 				"buf_layer:%d start: (%d, %d) bind_cnt:%d\n",
+	// 				bind->bind_info.chn_id, bind->bind_info.ctx_id,
+	// 				bind->bind_info.handle_id, bind->bind_info.show_en,
+	// 				bind->bind_info.invert_en, bind->bind_info.osd_level,
+	// 				bind->bind_info.buf_layer, bind->bind_info.start_point.x,
+	// 				bind->bind_info.start_point.y, atomic_read(&bind->ref_cnt));
+	// 			offset += len;
+	// 			if (bind->bind_info.handle_info.proc_type == OSD_PROC_RECT) {
+	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 					"rect: size:%dx%d fill_color:%d\n",
+	// 					bind->bind_info.handle_info.size.w,
+	// 					bind->bind_info.handle_info.size.h,
+	// 					bind->bind_info.handle_info.fill_color);
+	// 				offset += len;
+	// 			}
+	// 			if (bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) {
+	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 					"polygon: side num:%d fill_color:%d point:(%d, %d) \n"
+	// 					"(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
+	// 					"\n(%d, %d) (%d, %d) (%d, %d) buffer:%p\n",
+	// 					bind->bind_info.side_num,
+	// 					bind->bind_info.handle_info.fill_color,
+	// 					bind->bind_info.point[0].x, bind->bind_info.point[0].y,
+	// 					bind->bind_info.point[1].x, bind->bind_info.point[1].y,
+	// 					bind->bind_info.point[2].x, bind->bind_info.point[2].y,
+	// 					bind->bind_info.point[3].x, bind->bind_info.point[3].y,
+	// 					bind->bind_info.point[4].x, bind->bind_info.point[4].y,
+	// 					bind->bind_info.point[5].x, bind->bind_info.point[5].y,
+	// 					bind->bind_info.point[6].x, bind->bind_info.point[6].y,
+	// 					bind->bind_info.point[7].x, bind->bind_info.point[7].y,
+	// 					bind->bind_info.point[8].x, bind->bind_info.point[8].y,
+	// 					bind->bind_info.point[9].x, bind->bind_info.point[9].y,
+	// 					bind->bind_info.polygon_buf);
+	// 				offset += len;
+	// 			}
+	// 			if (bind->bind_info.handle_info.proc_type == OSD_PROC_MOSAIC) {
+	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 					"mosaic: size:%dx%d\n",
+	// 					bind->bind_info.handle_info.size.w,
+	// 					bind->bind_info.handle_info.size.h);
+	// 				offset += len;
+	// 			}
+	// 			len = snprintf(&buf[offset], PAGE_SIZE - offset, "******************\n");
+	// 			offset += len;
+	// 		}
+	// 		mutex_unlock(&subdev->bind_mutex);
 
-			if (subdev->osd_hw_cfg != NULL) {
-				spin_lock(&subdev->osd_hw_cfg->osd_cfg_slock);
-				for (m = 0; m < OSD_HW_PROC_NUM; m++) {
-					if (subdev->osd_hw_cfg->osd_box[m].osd_en == 0) {
-						continue;
-					}
-					len = snprintf(&buf[offset], PAGE_SIZE - offset,
-						"[V%d][%d]: hw en:%d mode:%d start:(%d, %d) size:(%d, %d)\n",
-						subdev->chn_id, m,
-						subdev->osd_hw_cfg->osd_box[m].osd_en,
-						subdev->osd_hw_cfg->osd_box[m].overlay_mode,
-						subdev->osd_hw_cfg->osd_box[m].start_x,
-						subdev->osd_hw_cfg->osd_box[m].start_y,
-						subdev->osd_hw_cfg->osd_box[m].width,
-						subdev->osd_hw_cfg->osd_box[m].height);
-						offset += len;
-						len = snprintf(&buf[offset], PAGE_SIZE - offset,
-						"******************\n");
-					offset += len;
-				}
-				spin_unlock(&subdev->osd_hw_cfg->osd_cfg_slock);
-			}
-		}
-	}
+	// 		if (subdev->osd_hw_cfg != NULL) {
+	// 			spin_lock(&subdev->osd_hw_cfg->osd_cfg_slock);
+	// 			for (m = 0; m < OSD_HW_PROC_NUM; m++) {
+	// 				if (subdev->osd_hw_cfg->osd_box[m].osd_en == 0) {
+	// 					continue;
+	// 				}
+	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 					"[V%d][%d]: hw en:%d mode:%d start:(%d, %d) size:(%d, %d)\n",
+	// 					subdev->chn_id, m,
+	// 					subdev->osd_hw_cfg->osd_box[m].osd_en,
+	// 					subdev->osd_hw_cfg->osd_box[m].overlay_mode,
+	// 					subdev->osd_hw_cfg->osd_box[m].start_x,
+	// 					subdev->osd_hw_cfg->osd_box[m].start_y,
+	// 					subdev->osd_hw_cfg->osd_box[m].width,
+	// 					subdev->osd_hw_cfg->osd_box[m].height);
+	// 					offset += len;
+	// 					len = snprintf(&buf[offset], PAGE_SIZE - offset,
+	// 					"******************\n");
+	// 				offset += len;
+	// 			}
+	// 			spin_unlock(&subdev->osd_hw_cfg->osd_cfg_slock);
+	// 		}
+	// 	}
+	// }
 	return offset;
 }
 
@@ -665,12 +665,12 @@ static int32_t osd_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	osd_err("done\n");
+	osd_info("done\n");
 
 	return 0;
 _exit_create_file:
 	kfree(osd);
-exit:
+
 	osd_err("fail\n");
 
 	return ret;

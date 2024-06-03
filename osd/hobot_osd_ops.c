@@ -192,23 +192,23 @@ static int32_t osd_handle_info_check(struct osd_handle_info *handle_info)
 
 static void osd_print_bind_info(struct osd_bind_info *bind_info)
 {
-	osd_debug("[S%d][V%d][H%d]: show:%d invert:%d level:%d buf_layer:%d start: (%d, %d)\n",
-		bind_info->chn_id, bind_info->ctx_id, bind_info->handle_id,
-		bind_info->show_en, bind_info->invert_en, bind_info->osd_level,
-		bind_info->buf_layer, bind_info->start_point.x, bind_info->start_point.y);
-	osd_debug("polygon: side num:%d point:(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
-		"(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) buffer:%p\n",
-		bind_info->side_num, bind_info->point[0].x, bind_info->point[0].y,
-		bind_info->point[1].x, bind_info->point[1].y,
-		bind_info->point[2].x, bind_info->point[2].y,
-		bind_info->point[3].x, bind_info->point[3].y,
-		bind_info->point[4].x, bind_info->point[4].y,
-		bind_info->point[5].x, bind_info->point[5].y,
-		bind_info->point[6].x, bind_info->point[6].y,
-		bind_info->point[7].x, bind_info->point[7].y,
-		bind_info->point[8].x, bind_info->point[8].y,
-		bind_info->point[9].x, bind_info->point[9].y,
-		bind_info->polygon_buf);
+	// osd_debug("[S%d][V%d][H%d]: show:%d invert:%d level:%d buf_layer:%d start: (%d, %d)\n",
+	// 	bind_info->chn_id, bind_info->ctx_id, bind_info->handle_id,
+	// 	bind_info->show_en, bind_info->invert_en, bind_info->osd_level,
+	// 	bind_info->buf_layer, bind_info->start_point.x, bind_info->start_point.y);
+	// osd_debug("polygon: side num:%d point:(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
+	// 	"(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) buffer:%p\n",
+	// 	bind_info->side_num, bind_info->point[0].x, bind_info->point[0].y,
+	// 	bind_info->point[1].x, bind_info->point[1].y,
+	// 	bind_info->point[2].x, bind_info->point[2].y,
+	// 	bind_info->point[3].x, bind_info->point[3].y,
+	// 	bind_info->point[4].x, bind_info->point[4].y,
+	// 	bind_info->point[5].x, bind_info->point[5].y,
+	// 	bind_info->point[6].x, bind_info->point[6].y,
+	// 	bind_info->point[7].x, bind_info->point[7].y,
+	// 	bind_info->point[8].x, bind_info->point[8].y,
+	// 	bind_info->point[9].x, bind_info->point[9].y,
+	// 	bind_info->polygon_buf);
 }
 
 static int32_t handle_find_buffer(struct osd_handle *handle, enum osd_buf_state state,
@@ -261,7 +261,9 @@ static void handle_update_buffer(struct osd_handle *handle, int32_t index)
 static enum osd_process_type osd_hw_check_limit(struct osd_subdev *subdev,
 						struct osd_handle *handle, struct osd_bind *bind)
 {
-	if ((subdev->chn_id >= OSD_VSE_US) || (subdev->osd_hw_cfg == NULL) ||
+	// todo : for test, use sw first 
+	if ((subdev->chn_id >= 0) ||
+		(subdev->osd_hw_cfg == NULL) ||
 		(bind->bind_info.show_en == 0) || (bind->bind_info.osd_level > 0)||
 		(bind->bind_info.start_point.y < subdev->osd_hw_limit_y) ||
 		(atomic_read(&subdev->osd_hw_cnt) >= OSD_HW_PROC_NUM)) {
@@ -290,7 +292,9 @@ static void osd_sw_set_process_flag(struct osd_subdev *subdev)
 				atomic_set(&osd_info->need_sw_osd, 1);
 				return;
 			} else {
-				osd_err("bind null\n");
+				if (!bind) {
+					osd_err("bind null\n");
+				}
 			}
 		}
 	}
@@ -350,6 +354,7 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	int32_t ret = 0;
 	struct osd_handle *handle, *tmp_handle;
 	struct osd_dev *osd_dev;
+	void *polygon_buf = NULL;
 
 	osd_dev = osd_ctx->osd_dev;
 
@@ -394,6 +399,22 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		osd_single_buffer_flush(&handle->buffer.buf[1]);
 	}
 
+	if (handle->info.proc_type == OSD_PROC_POLYGON) {
+		polygon_buf = kzalloc(2 * handle->info.size.h * sizeof(uint32_t), GFP_ATOMIC);
+		if (polygon_buf == NULL) {
+			osd_err("kzalloc polygon buffer is fail\n");
+			ret = -ENOMEM;
+			goto exit_destroy;
+		}
+		ret = copy_from_user(polygon_buf, (void __user *)handle->info.polygon_buf,
+					2 * handle->info.size.h * sizeof(uint32_t));
+		if (ret) {
+			osd_err("copy_from_user failed!\n");
+			goto exit_free_polygon;
+		}
+		handle->info.polygon_buf = (uint32_t *)polygon_buf;
+	}
+
 	atomic_set(&handle->bind_cnt, 0);
 	atomic_set(&handle->ref_cnt, 1);
 
@@ -411,7 +432,7 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 				handle->info.handle_id,	atomic_read(&tmp_handle->ref_cnt));
 		}
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		goto exit_destroy;
+		goto exit_free_polygon;
 	}
 	list_add_tail(&handle->node, &osd_dev->osd_list);
 	mutex_unlock(&osd_dev->osd_list_mutex);
@@ -419,6 +440,9 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	osd_info("[H%d] done\n", handle->info.handle_id);
 
 	return ret;
+exit_free_polygon:
+	if (polygon_buf != NULL)
+		kfree(polygon_buf);
 exit_destroy:
 	if (handle != NULL) {
 		osd_buffer_destroy(osd_dev->ion_client, &handle->buffer);
@@ -440,7 +464,7 @@ int32_t osd_destroy_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	ret = get_user(id, (int32_t __user *) arg);
 	if (ret) {
-		pr_err("%s copy_from_user failed (ret=%d)\n", __func__, ret);
+		osd_err("copy_from_user failed\n");
 		return -EFAULT;
 	}
 
@@ -451,26 +475,29 @@ int32_t osd_destroy_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	handle = osd_find_handle_node(osd_dev, id);
 	if (handle == NULL) {
 		mutex_unlock(&osd_dev->osd_list_mutex);
-		pr_err("[H%d] %s handle was null\n", id, __func__);
+		osd_err("[H%d] handle was null\n", id);
 		return -EINVAL;
 	}
 
 	if (atomic_read(&handle->ref_cnt) <= 1) {
 		if (atomic_read(&handle->bind_cnt) > 0) {
 			mutex_unlock(&osd_dev->osd_list_mutex);
-			pr_err("[H%d] %s need detach first\n", id, __func__);
+			osd_err("[H%d] need detach first\n", id);
 			return -EFAULT;
 		}
 
 		list_del(&handle->node);
 		osd_buffer_destroy(osd_dev->ion_client, &handle->buffer);
+
+		if (handle->info.polygon_buf != NULL)
+			kfree(handle->info.polygon_buf);
 		kfree(handle);
 	} else {
 		atomic_dec(&handle->ref_cnt);
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	pr_info("[H%d] %s done\n", id, __func__);
+	osd_info("[H%d] done\n", id);
 
 	return ret;
 }
@@ -510,6 +537,25 @@ int32_t osd_get_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	return ret;
 }
 
+static int32_t osd_polygon_check_change(struct osd_handle_info *old_info,
+					struct osd_handle_info *new_info)
+{
+	int32_t i;
+
+	if (old_info->side_num != new_info->side_num) {
+		return 1;
+	}
+
+	for (i = 0; i < old_info->side_num; i++) {
+		if (old_info->point[i].x != new_info->point[i].x)
+			return 1;
+		if (old_info->point[i].y != new_info->point[i].y)
+			return 1;
+	}
+
+	return 0;
+}
+
 int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
@@ -517,6 +563,9 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	struct osd_handle *handle = NULL, *tmp_handle;
 	struct osd_dev *osd_dev;
 	int32_t need_replace = 0;
+	int32_t need_replace_polygon = 0;
+	void *polygon_buf = NULL;
+	void *polygon_buf_free = NULL;
 
 	osd_dev = osd_ctx->osd_dev;
 
@@ -526,7 +575,7 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		return -EFAULT;
 	}
 
-	if (osd_handle_info_check(&handle->info) < 0)
+	if (osd_handle_info_check(&handle_info) < 0)
 		return -EINVAL;
 
 	tmp_handle = kzalloc(sizeof(struct osd_handle), GFP_ATOMIC);
@@ -555,14 +604,19 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		ret = -EINVAL;
 		goto exit_free;
 	}
+	tmp_handle->info.fill_color = handle_info.fill_color;
+	tmp_handle->info.proc_type = handle_info.proc_type;
+	tmp_handle->info.yuv_bg_transparent = handle_info.yuv_bg_transparent;
+	tmp_handle->info.size.w = handle_info.size.w;
+	tmp_handle->info.size.h = handle_info.size.h;
 
 	if (handle_info.proc_type <= OSD_PROC_NV12) {
 		if ((tmp_handle->info.size.w != handle_info.size.w) ||
 			(tmp_handle->info.size.h != handle_info.size.h)) {
 			if (atomic_read(&tmp_handle->bind_cnt) == 0) {
-				tmp_handle->info.proc_type = handle_info.proc_type;
-				tmp_handle->info.size.w = handle_info.size.w;
-				tmp_handle->info.size.h = handle_info.size.h;
+				// tmp_handle->info.proc_type = handle_info.proc_type;
+				// tmp_handle->info.size.w = handle_info.size.w;
+				// tmp_handle->info.size.h = handle_info.size.h;
 
 				tmp_handle->buffer.size.w = handle_info.size.w;
 				tmp_handle->buffer.size.h = handle_info.size.h;
@@ -594,8 +648,40 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 				goto exit_free;
 			}
 		}
-		tmp_handle->info.fill_color = handle_info.fill_color;
-		tmp_handle->info.yuv_bg_transparent = handle_info.yuv_bg_transparent;
+		// tmp_handle->info.fill_color = handle_info.fill_color;
+		// tmp_handle->info.yuv_bg_transparent = handle_info.yuv_bg_transparent;
+	}
+
+	if (handle->info.proc_type == OSD_PROC_POLYGON) {
+		if (atomic_read(&tmp_handle->bind_cnt) == 0) {
+			// polygon_buf_temp = tmp_handle->info.polygon_buf;
+			// memcpy(&tmp_handle->info, &handle_info, sizeof(struct osd_handle_info));
+			// tmp_handle->info.polygon_buf = polygon_buf_temp;
+			if (osd_polygon_check_change(&tmp_handle->info, &handle_info)) {
+				tmp_handle->info.side_num = handle_info.side_num;
+				memcpy(&tmp_handle->info.point[0], &handle_info.point[0], OSD_POLYGON_MAX_SIDE * sizeof(struct osd_point));
+				polygon_buf_free = tmp_handle->info.polygon_buf;
+				polygon_buf = kzalloc(2 * handle->info.size.h * sizeof(uint32_t), GFP_ATOMIC);
+				if (polygon_buf == NULL) {
+					osd_err("kzalloc polygon buffer is fail\n");
+					ret = -ENOMEM;
+					goto exit_buffer_destroy;
+				}
+				tmp_handle->info.polygon_buf = (uint32_t *)polygon_buf;
+				need_replace_polygon = 1;
+			}
+			ret = copy_from_user(tmp_handle->info.polygon_buf, (void __user *)handle_info.polygon_buf,
+						2 * handle_info.size.h * sizeof(uint32_t));
+			if (ret) {
+				osd_err("copy_from_user failed!\n");
+				goto exit_free_polygon;
+			}
+		} else {
+			osd_err("[H%d] already bind, cannot modify size\n",
+				tmp_handle->info.handle_id);
+			ret = -EINVAL;
+			goto exit_buffer_destroy;
+		}
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
@@ -607,12 +693,14 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		goto exit_buffer_destroy;
 	}
 
-	if (need_replace == 1) {
+	if (need_replace == 1 || need_replace_polygon == 1) {
 		list_replace(&handle->node, &tmp_handle->node);
 
 		osd_buffer_destroy(osd_dev->ion_client, &handle->buffer);
 		kfree(handle);
 		handle = NULL;
+		if (polygon_buf_free)
+			kfree(polygon_buf_free);
 	} else {
 		memcpy(&handle->info, &tmp_handle->info, sizeof(struct osd_handle_info));
 		if (atomic_read(&handle->bind_cnt) > 0) {
@@ -626,6 +714,9 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	osd_debug("[H%d] done\n", handle_info.handle_id);
 
 	return ret;
+exit_free_polygon:
+	if (polygon_buf_free)
+		kfree(polygon_buf_free);
 exit_buffer_destroy:
 	if (tmp_handle != NULL) {
 		osd_buffer_destroy(osd_dev->ion_client, &tmp_handle->buffer);
@@ -680,6 +771,7 @@ int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		}
 		buffer_info.paddr = single_buf->paddr;
 		buffer_info.vaddr = single_buf->vaddr;
+		buffer_info.share_id = single_buf->share_id;
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
@@ -758,7 +850,6 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	struct osd_handle *handle;
 	struct osd_subdev *subdev;
 	int32_t buf_index = -1;
-	void *polygon_buf = NULL;
 	struct osd_single_buffer *single_buf, *vga_buf;
 
 	bind = kzalloc(sizeof(struct osd_bind), GFP_ATOMIC);
@@ -785,22 +876,6 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	osd_dev = osd_ctx->osd_dev;
 	subdev = &osd_dev->subdev[bind->bind_info.chn_id][bind->bind_info.ctx_id];
 
-	if (bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) {
-		polygon_buf = kzalloc(2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t), GFP_ATOMIC);
-		if (polygon_buf == NULL) {
-			osd_err("kzalloc polygon buffer is fail\n");
-			ret = -ENOMEM;
-			goto exit_free_bind;
-		}
-		ret = copy_from_user(polygon_buf, (void __user *)bind->bind_info.polygon_buf,
-				2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t));
-		if (ret) {
-			osd_err("copy_from_user failed!\n");
-			goto exit_free_polygon;
-		}
-		bind->bind_info.polygon_buf = (uint32_t *)polygon_buf;
-	}
-
 	mutex_lock(&subdev->bind_mutex);
 	tmp_bind = osd_find_bind_node(subdev, bind->bind_info.handle_id,
 					bind->bind_info.buf_layer);
@@ -811,7 +886,7 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 			bind->bind_info.ctx_id, atomic_read(&tmp_bind->ref_cnt));
 		mutex_unlock(&subdev->bind_mutex);
 		ret = -EINVAL;
-		goto exit_free_polygon;
+		goto exit_free_bind;
 	}
 
 	mutex_lock(&osd_dev->osd_list_mutex);
@@ -823,7 +898,7 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 			bind->bind_info.handle_id, bind->bind_info.chn_id,
 			bind->bind_info.ctx_id);
 		ret = -EINVAL;
-		goto exit_free_polygon;
+		goto exit_free_bind;
 	}
 
 	mutex_lock(&bind->proc_info.proc_mutex);
@@ -844,13 +919,13 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 			if (ret < 0) {
 				mutex_unlock(&osd_dev->osd_list_mutex);
 				mutex_unlock(&subdev->bind_mutex);
-				goto exit_free_polygon;
+				goto exit_free_bind;
 			}
 			buf_index = handle_find_buffer(handle, OSD_BUF_PROCESS, &single_buf, 0);
 			if (buf_index < 0) {
 				mutex_unlock(&osd_dev->osd_list_mutex);
 				mutex_unlock(&subdev->bind_mutex);
-				goto exit_free_polygon;
+				goto exit_free_bind;
 			}
 			vga_buf = &handle->buffer.vga_buf[buf_index];
 			osd_vga4_to_sw(g_osd_color.color_map, single_buf->vaddr, vga_buf->vaddr,
@@ -883,10 +958,6 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		bind->bind_info.ctx_id);
 
 	return ret;
-
-exit_free_polygon:
-	if (polygon_buf != NULL)
-		kfree(polygon_buf);
 
 exit_free_bind:
 	if (bind != NULL)
@@ -944,10 +1015,6 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		}
 		mutex_unlock(&osd_dev->osd_list_mutex);
 
-		if (bind->bind_info.polygon_buf != NULL) {
-			kfree(bind->bind_info.polygon_buf);
-			bind->bind_info.polygon_buf = NULL;
-		}
 		kfree(bind);
 		bind = NULL;
 	} else {
@@ -1013,25 +1080,6 @@ static int32_t osd_vga4_check_need_sw_process(struct osd_bind_info *old_info,
 	return 0;
 }
 
-static int32_t osd_polygon_check_change(struct osd_bind_info *old_info,
-					struct osd_bind_info *new_info)
-{
-	int32_t i;
-
-	if (old_info->side_num != new_info->side_num) {
-		return 1;
-	}
-
-	for (i = 0; i < old_info->side_num; i++) {
-		if (old_info->point[i].x != new_info->point[i].x)
-			return 1;
-		if (old_info->point[i].y != new_info->point[i].y)
-			return 1;
-	}
-
-	return 0;
-}
-
 static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
@@ -1042,7 +1090,7 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	struct osd_subdev *subdev;
 	int32_t buf_index = -1;
 	struct osd_single_buffer *single_buf, *vga_buf;
-	uint32_t *polygon_buf = NULL;
+	// uint32_t *polygon_buf = NULL;
 
 	ret = copy_from_user((void *)&bind_info, (void __user *)arg, sizeof(struct osd_bind_info));
 	if (ret) {
@@ -1074,25 +1122,26 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 			bind_info.handle_id);
 		return -EINVAL;
 	}
-	if ((bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) &&
-		(osd_polygon_check_change(&bind->bind_info, &bind_info))) {
-		polygon_buf = kzalloc(2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t), GFP_ATOMIC);
-		if (polygon_buf == NULL) {
-			mutex_unlock(&osd_dev->osd_list_mutex);
-			mutex_unlock(&subdev->bind_mutex);
-			osd_err("kzalloc failed\n");
-			return -ENOMEM;
-		}
-		ret = copy_from_user((void *)polygon_buf,
-				(void __user *)bind_info.polygon_buf,
-				2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t));
-		if (ret) {
-			mutex_unlock(&osd_dev->osd_list_mutex);
-			mutex_unlock(&subdev->bind_mutex);
-			osd_err("copy_from_user failed\n");
-			goto exit_free;
-		}
-	}
+	// todo: move to set attr
+	// if ((bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) &&
+	// 	(osd_polygon_check_change(&bind->bind_info, &bind_info))) {
+	// 	polygon_buf = kzalloc(2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t), GFP_ATOMIC);
+	// 	if (polygon_buf == NULL) {
+	// 		mutex_unlock(&osd_dev->osd_list_mutex);
+	// 		mutex_unlock(&subdev->bind_mutex);
+	// 		osd_err("kzalloc failed\n");
+	// 		return -ENOMEM;
+	// 	}
+	// 	ret = copy_from_user((void *)polygon_buf,
+	// 			(void __user *)bind_info.polygon_buf,
+	// 			2 * bind->bind_info.handle_info.size.h * sizeof(uint32_t));
+	// 	if (ret) {
+	// 		mutex_unlock(&osd_dev->osd_list_mutex);
+	// 		mutex_unlock(&subdev->bind_mutex);
+	// 		osd_err("copy_from_user failed\n");
+	// 		goto exit_free;
+	// 	}
+	// }
 	if ((bind->proc_info.proc_type == OSD_PROC_HW_VGA4) &&
 		(osd_vga4_check_need_sw_process(&bind->bind_info, &bind_info))) {
 		if ((handle->buffer.vga_buf[0].state == OSD_BUF_NULL) ||
@@ -1127,12 +1176,12 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	if (polygon_buf != NULL) {
-		if (bind->bind_info.polygon_buf != NULL)
-			kfree(bind->bind_info.polygon_buf);
-	} else {
-		polygon_buf = bind->bind_info.polygon_buf;
-	}
+	// if (polygon_buf != NULL) {
+	// 	if (bind->bind_info.polygon_buf != NULL)
+	// 		kfree(bind->bind_info.polygon_buf);
+	// } else {
+	// 	polygon_buf = bind->bind_info.polygon_buf;
+	// }
 
 	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4)
 		&& (bind->bind_info.osd_level == 0)) {
@@ -1141,7 +1190,7 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	}
 
 	memcpy(&bind->bind_info, &bind_info, sizeof(struct osd_bind_info));
-	bind->bind_info.polygon_buf = polygon_buf;
+	// bind->bind_info.polygon_buf = polygon_buf;
 	atomic_set(&bind->need_update, 1);
 	kthread_queue_work(&osd_dev->worker, &osd_dev->work);
 	mutex_unlock(&subdev->bind_mutex);
@@ -1152,10 +1201,10 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 
 	return ret;
 exit_free:
-	if (polygon_buf != NULL) {
-		kfree(polygon_buf);
-		polygon_buf = NULL;
-	}
+	// if (polygon_buf != NULL) {
+	// 	kfree(polygon_buf);
+	// 	polygon_buf = NULL;
+	// }
 
 	return ret;
 }
@@ -1366,8 +1415,8 @@ void osd_set_process_handle_info(struct osd_process_info *process_info,
 		process_info->width = handle->info.size.w;
 		process_info->height = handle->info.size.h;
 	}
-	switch (process_info->proc_type)
-	{
+
+	switch (process_info->proc_type) {
 	case OSD_PROC_HW_VGA4:
 	case OSD_PROC_NV12:
 		if (process_info->proc_type == OSD_PROC_HW_VGA4) {
@@ -1396,6 +1445,9 @@ void osd_set_process_handle_info(struct osd_process_info *process_info,
 				handle->info.handle_id);
 		}
 		break;
+	// case OSD_PROC_POLYGON:
+	// 	process_info->polygon_buf = handle->info.polygon_buf;
+	// 	break;
 	default:
 		break;
 	}
@@ -1744,7 +1796,7 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 			bind->proc_info.image_width = vio_frame->vbuf.group_info.info[0].buf_attr.width;
 			bind->proc_info.image_height = vio_frame->vbuf.group_info.info[0].buf_attr.height;
 			bind->proc_info.tar_y_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[0]);
-			bind->proc_info.tar_uv_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[0]);
+			bind->proc_info.tar_uv_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[1]);
 
 			if (bind->proc_info.proc_type != OSD_PROC_HW_VGA4) {
 				osd_process_addr_inc(&bind->proc_info);
@@ -1853,11 +1905,11 @@ static void osd_subdev_clear(struct osd_dev *osd_dev)
 			while (!list_empty(&subdev->bind_list)) {
 				bind = list_first_entry(&subdev->bind_list, struct osd_bind, node);
 				list_del(&bind->node);
-				if (bind->bind_info.polygon_buf != NULL) {
-					kfree(bind->bind_info.polygon_buf);
-					bind->bind_info.polygon_buf = NULL;
-				}
-				kfree(bind);
+				// if (bind->bind_info.polygon_buf != NULL) {
+				// 	kfree(bind->bind_info.polygon_buf);
+				// 	bind->bind_info.polygon_buf = NULL;
+				// }
+				// kfree(bind);
 			}
 			mutex_unlock(&subdev->bind_mutex);
 

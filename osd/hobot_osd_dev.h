@@ -168,6 +168,11 @@ enum osd_task_state {
 struct osd_handle_info {
 	uint32_t handle_id;
 
+	// for polygon
+	uint32_t side_num;
+	struct osd_point point[OSD_POLYGON_MAX_SIDE];
+	uint32_t *polygon_buf;
+
 	struct osd_size size;
 	uint32_t fill_color;
 	// when enable and a pixel yuv color is key color, it will use origin image
@@ -181,6 +186,7 @@ struct osd_handle_info {
 
 struct osd_buffer_info {
 	int32_t handle_id;
+	uint32_t share_id;
 	// ping-pong index
 	int32_t index;
 	struct osd_size size;
@@ -193,6 +199,7 @@ struct osd_bind_info {
 	int32_t chn_id;
 	int32_t ctx_id;
 	int32_t handle_id;
+	struct osd_handle_info handle_info;
 
 	uint8_t show_en;
 	uint8_t invert_en;
@@ -200,16 +207,7 @@ struct osd_bind_info {
 	uint32_t osd_level;
 	// for pym buffer, osd in which layer
 	int32_t buf_layer;
-
 	struct osd_point start_point;
-
-	// for polygon
-	uint32_t side_num;
-	struct osd_point point[OSD_POLYGON_MAX_SIDE];
-	uint32_t *polygon_buf;
-
-	// rect, polygon, mosaic attribute will be set when attach
-	struct osd_handle_info handle_info;
 };
 
 struct osd_sta_info {

@@ -184,9 +184,10 @@ int32_t osd_process_info_check(struct osd_process_info *proc_info,
 		*crop_height = 0;
 	}
 	if (proc_info->image_width > (proc_info->start_x + proc_info->width)) {
-		*crop_width = ALIGN_DOWN(proc_info->width, 16);
+		*crop_width = (ALIGN(proc_info->width, 16) > proc_info->image_width) ? ALIGN_DOWN(proc_info->width, 16) : ALIGN(proc_info->width, 16);
 	} else if (proc_info->image_width > proc_info->start_x) {
-		*crop_width = ALIGN_DOWN((proc_info->image_width - proc_info->start_x), 16);
+		*crop_width = proc_info->image_width - proc_info->start_x;
+		*crop_width = (ALIGN(*crop_width, 16) > proc_info->image_width) ? ALIGN_DOWN(*crop_width, 16) : ALIGN(*crop_width, 16);
 	} else {
 		*crop_width = 0;
 	}
