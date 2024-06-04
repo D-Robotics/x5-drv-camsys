@@ -71,6 +71,12 @@ config HOBOT_VTRACE
 	help
 	   Drivers for the HOBOT Vtrace Driver
 
+config HOBOT_OSD
+	tristate "HOBOT OSD Drivers"
+	default n
+	help
+	   Drivers for the HOBOT OSD Driver
+
 config HOBOT_VSI_CAM
 	tristate "VSI CAM Drivers"
 	default n

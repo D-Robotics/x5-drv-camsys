@@ -262,7 +262,7 @@ static enum osd_process_type osd_hw_check_limit(struct osd_subdev *subdev,
 						struct osd_handle *handle, struct osd_bind *bind)
 {
 	// todo : for test, use sw first 
-	if ((subdev->chn_id >= 0) ||
+	if ((subdev->chn_id > OSD_VSE_US) ||
 		(subdev->osd_hw_cfg == NULL) ||
 		(bind->bind_info.show_en == 0) || (bind->bind_info.osd_level > 0)||
 		(bind->bind_info.start_point.y < subdev->osd_hw_limit_y) ||

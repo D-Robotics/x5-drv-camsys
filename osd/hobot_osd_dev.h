@@ -26,7 +26,7 @@
 #define OSD_NAM			"osd"
 #define OSD_MAX_DEVICE		1
 #define OSD_HANDLE_MAX		256
-#define OSD_HW_PROC_NUM		3
+#define OSD_HW_PROC_NUM		4
 #define OSD_COLOR_NUM		15
 #define OSD_LEVEL_NUM		4
 #define MAX_STA_BIN_NUM		4
@@ -56,7 +56,7 @@
 #define OSD_IOC_COLOR_MAP               _IOWR(OSD_IOC_MAGIC, 13, struct osd_color_map)
 #define OSD_IOC_PROC_BUF                _IOW(OSD_IOC_MAGIC, 14, struct osd_proc_buf_info)
 
-#define MAX_OSD_NUM 3
+#define MAX_OSD_NUM 4
 #define MAX_STA_NUM 8
 #define MAX_OSD_STA_LEVEL_NUM 3
 #define MAX_OSD_COLOR_NUM 16
@@ -86,7 +86,7 @@ struct osd_color_map {
 
 // vse hw osd cfg
 // todo: fix to vse hw cfg
-struct vse_osd_cfg{
+struct vse_osd_cfg {
 	bool osd_box_update;
 	struct osd_box osd_box[MAX_OSD_NUM];
 	bool osd_buf_update;
