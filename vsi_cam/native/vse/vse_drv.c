@@ -135,6 +135,10 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 
 	if (vctx->id == VNODE_ID_CAP) {
 		pr_info("%s set vse state to CLOSED\n", __func__);
+		if (!inst->dev) {
+			pr_err("%s:inst->dev null\n", __func__);
+			return -EINVAL;
+		}
 		rc = vse_close(&inst->dev->vse_dev, vctx->ctx_id);
 		if (rc < 0) {
 			pr_err("%s failed to call vse_close(err=%d).\n", __func__, rc);
