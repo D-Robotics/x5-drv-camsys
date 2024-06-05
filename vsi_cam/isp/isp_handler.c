@@ -463,6 +463,12 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					sch.mp_buf.size = 0;
 				} else {
 					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+					/**
+					 * Here, rdma_busy must be set as true to avoid the block of mp buffer
+					 * config is executed for multiple times before mi frame done comes in
+					 * hardware stream mode.
+					 */
+					isp->rdma_busy = true;
 				}
 			} else if (ctx->is_src_online_mode) {
 				sch.id = isp->next_mi_irq_ctx;
