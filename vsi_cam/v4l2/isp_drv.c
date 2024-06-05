@@ -485,7 +485,6 @@ static int isp_v4l_probe(struct platform_device *pdev)
 	struct isp_v4l_device *v4l_dev;
 	struct isp_v4l_instance *insts;
 	u32 i;
-	s32 ret;
 	int rc;
 
 	v4l_dev = devm_kzalloc(dev, sizeof(*v4l_dev), GFP_KERNEL);
@@ -566,15 +565,14 @@ static int isp_v4l_probe(struct platform_device *pdev)
 #endif
 
 	pm_runtime_set_active(dev);
-	pm_runtime_enable(dev);
-	ret = pm_runtime_get_sync(dev);
-	if (ret < 0) {
+	rc = pm_runtime_get_sync(dev);
+	if (rc < 0) {
 		pm_runtime_disable(dev);
 		return rc;
 	}
 
 	rc = isp_runtime_resume(dev);
-		if (rc) {
+	if (rc) {
 		dev_err(dev, "failed to call isp_runtime_resume (err=%d)\n", rc);
 		return rc;
 	}
@@ -609,6 +607,16 @@ static int isp_v4l_remove(struct platform_device *pdev)
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}
 
+	isp_reset(isp_dev);
+
+	rc = isp_runtime_suspend(dev);
+	if (rc < 0)
+		return rc;
+
+	rc = pm_runtime_put_sync(dev);
+	if (rc < 0)
+		return rc;
+
 	rc = isp_remove(pdev, &v4l_dev->isp_dev);
 	if (rc < 0) {
 		dev_err(dev, "failed to call isp_remove (err=%d)\n", rc);
@@ -619,8 +627,6 @@ static int isp_v4l_remove(struct platform_device *pdev)
 	isp_debugfs_remo(&v4l_dev->isp_dev);
 #endif
 
-	pm_runtime_put_sync(dev);
-	pm_runtime_disable(dev);
 	dev_dbg(dev, "VS ISP driver (v4l) removed\n");
 	return 0;
 }
