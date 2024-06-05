@@ -9,10 +9,12 @@
 # new
 ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vin_node/
 ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vpf/
+ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/osd/
 ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/mipi/
 ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vsi_cam/include
 ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vsi_cam/native
 ccflags-y += -I$(srctree)/drivers/osal/linux/inc/
+ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vsi_cam/native/vse
 ccflags-y += -D X5_CHIP
 
 # isc

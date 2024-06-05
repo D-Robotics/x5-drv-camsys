@@ -622,9 +622,31 @@ static bool vse_is_completed(struct cam_buf_ctx *ctx)
 	return rc;
 }
 
+static bool vse_osd_update(struct cam_buf_ctx *buf_ctx)
+{
+	struct vio_subdev *subdev = NULL;
+	struct vse_nat_instance *vse_ins = NULL;
+	struct vse_nat_device *nat_dev;
+	bool ret;
+
+	subdev = (struct vio_subdev *)buf_ctx;
+	vse_ins = container_of(subdev, struct vse_nat_instance, vdev);
+	nat_dev = vse_ins->dev;
+	if (((struct osd_interface_ops *)nat_dev->osd_cops->cops)->frame_process
+		&& atomic_read(&vse_ins->osd_info.need_sw_osd)) {
+		((struct osd_interface_ops *)nat_dev->osd_cops->cops)->frame_process(&vse_ins->osd_info);
+		ret = true;
+	} else {
+		ret = false;
+	}
+
+	return ret;
+}
+
 static const struct cam_online_ops vse_online_ops = {
 	.trigger = vse_trigger,
 	.is_completed = vse_is_completed,
+	.osd_update = vse_osd_update,
 };
 
 static ssize_t vse_stat_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -692,6 +714,31 @@ static ssize_t vse_stat_show(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR(stat, 0444, vse_stat_show, NULL);
 
+static void empty_osd_frame_process(struct vio_osd_info *osd_info)
+{
+	pr_info("%s\n", __func__);
+}
+
+static void empty_osd_set_info(uint32_t chn_id, uint32_t ctx_id, struct vio_osd_info *info)
+{
+	pr_info("%s\n", __func__);
+}
+
+struct osd_interface_ops empty_osd_cb_ops = {
+	.frame_process = empty_osd_frame_process,
+	.osd_set_info = empty_osd_set_info,
+};
+
+static void vse_return_frame(struct vio_osd_info *osd_info, struct vio_frame *frame)
+{
+	struct vse_nat_instance *vse_ctx = NULL;
+
+	vse_ctx = container_of(osd_info, struct vse_nat_instance, osd_info);
+	vio_frame_done(&vse_ctx->vdev);
+
+	pr_debug("%s frame done, %d %d\n", __func__, osd_info->chn_id, osd_info->ctx_id);
+}
+
 // struct vse_nat_device *g_nat_dev;
 // void (*get_osd_info)(int32_t inst_id, int32_t ochn_id)
 // {
@@ -708,6 +755,7 @@ static int vse_nat_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct vse_nat_device *nat_dev;
+	struct vio_osd_info *osd_info;
 	char name[64];
 	u32 i, j;
 	s32 ret;
@@ -746,10 +794,10 @@ static int vse_nat_probe(struct platform_device *pdev)
 			nat_dev->cap_instance[j][i].vdev.pingpong_ring = 1;
 			nat_dev->cap_instance[j][i].dev = nat_dev;
 			nat_dev->cap_instance[j][i].id = i;
-			// osd_info = &nat_dev->cap_instance[j][i].osd_info;
-			// osd_info->chn_id = j;
-			// osd_info->inst_id = i;
-			// osd_info->return_frame = xx_frame_done;
+			osd_info = &nat_dev->cap_instance[j][i].osd_info;
+			osd_info->chn_id = j;
+			osd_info->ctx_id = i;
+			osd_info->return_frame = vse_return_frame;
 		}
 		nat_dev->src_instance[i].vdev.vnode = &nat_dev->vnode[i];
 		nat_dev->src_instance[i].dev = nat_dev;
@@ -792,6 +840,13 @@ static int vse_nat_probe(struct platform_device *pdev)
 
 	add_online_ops(VSE_MODULE, &vse_online_ops);
 	platform_set_drvdata(pdev, nat_dev);
+
+	nat_dev->osd_cops = (struct vio_callback_ops *)vio_get_callback_ops(&empty_osd_cb_ops, VSE_MODULE, COPS_0);
+	for (i = VSE_DOWN_SCALE_4K; i < VSE_OCHN_MAX; i++) {
+		for (j = 0; j < VIO_MAX_STREAM; j++) {
+			((struct osd_interface_ops *)nat_dev->osd_cops->cops)->osd_set_info(i, j, &nat_dev->cap_instance[i][j].osd_info);
+		}
+	}
 
 	ret = device_create_file(dev, &dev_attr_stat);
 	if (ret < 0)

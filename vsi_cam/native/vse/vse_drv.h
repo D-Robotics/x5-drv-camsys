@@ -6,6 +6,7 @@
 #include "vse_api.h"
 
 #include "vse.h"
+#include "hobot_osd_dev.h"
 
 #define SRC_INDEX  0
 #define CAP_INDEX_1ST 1
@@ -39,7 +40,8 @@ struct vse_nat_instance {
 	vse_ichn_attr_t ichn_attr;
 	vse_ochn_attr_t ochn_attr;
 	u8 online_mode;
-	// struct vio_osd_info osd_info;
+	struct vio_osd_info osd_info;
+	struct vse_osd_cfg osd_hw_cfg;
 };
 
 struct vse_nat_device {
@@ -49,6 +51,7 @@ struct vse_nat_device {
 	struct vse_nat_instance src_instance[VIO_MAX_STREAM];
 	struct vse_nat_instance cap_instance[VSE_OUT_CHNL_MAX][VIO_MAX_STREAM];
 	struct vpf_device vps_dev[VSE_NODE_MAX_DEVICE];
+	struct vio_callback_ops *osd_cops;
 };
 
 // static struct vse_interface_ops vse_cb_ops {

@@ -155,8 +155,10 @@ static inline void frame_done(struct vse_irq_ctx *ctx)
 
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
-			cam_qbuf_irq(ctx->src_ctx[i], ctx->src_buf[i], true);
-			ctx->src_buf[i] = NULL;
+			if (!cam_osd_update(ctx->src_ctx[i])) {
+				cam_qbuf_irq(ctx->src_ctx[i], ctx->src_buf[i], true);
+				ctx->src_buf[i] = NULL;
+			}
 		}
 	}
 

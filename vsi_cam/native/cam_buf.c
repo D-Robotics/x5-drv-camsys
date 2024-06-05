@@ -198,3 +198,23 @@ void cam_set_stat_info(struct cam_buf_ctx *buf_ctx, u32 type)
 		vio_set_stat_info(vnode->flow_id, vnode->id, STAT_FE,
 				  vnode->frameid.frame_id);
 }
+
+bool cam_osd_update(struct cam_buf_ctx *buf_ctx)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)buf_ctx;
+	struct vio_node *vnode;
+	const struct cam_online_ops *ops = NULL;
+
+	if (unlikely(!subdev))
+		return false;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode && vnode->id < MODULE_NUM) {
+		ops = get_online_ops(vnode->id);
+		if (ops && ops->osd_update)
+			return ops->osd_update(buf_ctx);
+	}
+
+	return false;
+}

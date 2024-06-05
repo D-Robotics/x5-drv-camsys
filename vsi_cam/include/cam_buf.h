@@ -45,4 +45,6 @@ void cam_drop(struct cam_buf_ctx *buf_ctx);
 
 void cam_set_stat_info(struct cam_buf_ctx *buf_ctx, u32 type);
 
+bool cam_osd_update(struct cam_buf_ctx *buf_ctx);
+
 #endif /* _CAM_BUF_H_ */
