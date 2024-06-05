@@ -122,8 +122,8 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 	struct vse_nat_instance *inst;
 	int rc = 0;
 
-	if (!vctx) {
-		pr_err("%s:vctx null\n", __func__);
+	if (!vctx || !vctx->vdev) {
+		pr_err("%s:vctx or vctx->vdev null\n", __func__);
 		return -EINVAL;
 	}
 
