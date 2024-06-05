@@ -462,6 +462,8 @@ static inline void isp_set_state_safety(struct isp_device *isp, u32 inst, int st
 	ins = &isp->insts[inst];
 	mutex_lock(&isp->set_state_lock);
 	ins->state = state;
+	if (isp->mode == STRM_WORK_MODE)
+		goto _exit;
 	if (state == CAM_STATE_STARTED) {
 		for (i = 0; i < isp->num_insts; i++) {
 			if (i == inst)
@@ -478,6 +480,7 @@ static inline void isp_set_state_safety(struct isp_device *isp, u32 inst, int st
 		if (!state_check)
 			isp_reset_mcm_sch(isp);
 	}
+_exit:
 	mutex_unlock(&isp->set_state_lock);
 }
 
@@ -502,16 +505,50 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 			}
 		}
 
-		if (ins->online_mcm && ins->stream_idx > -1) {
-			struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
-								   struct ibuf, entry);
-			if (!ib)
+		if (isp->mode == STRM_WORK_MODE) {
+			struct isp_irq_ctx *ctx;
+			unsigned long flags;
+			struct cam_list_node *node = NULL;
+
+			spin_lock_irqsave(&ins->lock, flags);
+			ctx = &ins->ctx;
+			rc = new_frame(ctx);
+			spin_unlock_irqrestore(&ins->lock, flags);
+			if (rc) {
 				return -ENOMEM;
-			phys_addr = ib->buf.addr;
-			isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
-			ins->mcm_ib = ib;
-			list_del(&ib->entry);
+			} else {
+				node = list_first_entry_or_null(ctx->src_buf_list2,
+								struct cam_list_node, entry);
+				if (node) {
+					list_del(&node->entry);
+					list_add_tail(&node->entry, ctx->src_buf_list3);
+					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+					isp->error = 0;
+					isp->rdma_busy = true;
+				} else {
+					// for SIF stream to ISP online to VSE without ISP ddr output
+					if (ctx->is_src_online_mode) {
+						isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
+						isp->error = 0;
+						isp->rdma_busy = true;
+					} else {
+						return -EINVAL;
+					}
+				}
+			}
+		} else {
+			if (ins->online_mcm && ins->stream_idx > -1) {
+				struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
+									   struct ibuf, entry);
+				if (!ib)
+					return -ENOMEM;
+				phys_addr = ib->buf.addr;
+				isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
+				ins->mcm_ib = ib;
+				list_del(&ib->entry);
+			}
 		}
+
 		state = CAM_STATE_STARTED;
 		refcount_inc(&isp->set_state_refcnt);
 

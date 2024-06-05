@@ -468,12 +468,26 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					 * config is executed for multiple times before mi frame done comes in
 					 * hardware stream mode.
 					 */
+					isp->error = 0;
 					isp->rdma_busy = true;
+					goto _post;
 				}
 			} else if (ctx->is_src_online_mode) {
-				sch.id = isp->next_mi_irq_ctx;
-				sch.mp_buf.addr = 0;
-				sch.mp_buf.size = 0;
+				if (isp->mode != STRM_WORK_MODE) {
+					sch.id = isp->next_mi_irq_ctx;
+					sch.mp_buf.addr = 0;
+					sch.mp_buf.size = 0;
+				} else {
+					isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
+					isp->error = 0;
+					isp->rdma_busy = true;
+					goto _post;
+				}
+			} else {
+				pr_err("fail to configure mp buffer!\n");
+				isp->error = 1;
+				isp->rdma_busy = false;
+				goto _post;
 			}
 			if (isp->mode != STRM_WORK_MODE) {
 #ifdef WITH_LEGACY_ISP
