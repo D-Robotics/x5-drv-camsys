@@ -3483,7 +3483,8 @@ static void mipi_host_ipi_overflow_handle(struct mipi_host_s *host, uint32_t ipi
 		/* do nothing */
 		break;
 	}
-	mhost_putreg(host, REG_MIPI_HOST_IPI_SOFTRSTN, MIPI_HOST_ALLE_SOFTRSTN);
+	/* maybe not needed ? */
+	//mhost_putreg(host, REG_MIPI_HOST_IPI_SOFTRSTN, MIPI_HOST_ALLE_SOFTRSTN);
 }
 
 static uint32_t mipi_host_subirq_func(struct mipi_hdev_s *hdev, const struct mipi_host_ireg_s *ireg)
@@ -3915,7 +3916,9 @@ static int32_t mipi_host_start(struct mipi_hdev_s *hdev)
 static int32_t mipi_host_stop(struct mipi_hdev_s *hdev)
 {
 	struct mipi_host_s *host = &hdev->host;
+	mipi_host_cfg_t *cfg = &host->cfg;
 	void __iomem *iomem = host->iomem;
+	int32_t i = 0;
 
 	if ((host->cfg.ppi_pg != 0U) && (MIPI_VERSION_GE(iomem, MIPI_IP_VERSION_1P5) != 0))
 		(void)mipi_host_enable_ppi_pg(hdev, &host->cfg, 0);
@@ -3932,6 +3935,23 @@ static int32_t mipi_host_stop(struct mipi_hdev_s *hdev)
 		(void)mipi_csi_stl_stop(&hdev->host.stl);
 	}
 #endif
+
+	/* In x5 start stop loop testing, incomplete frames often occur.
+	 * These data should be cleared when stopping, otherwise ipi overflow maybe occur.
+	 * */
+	for (i = 0; i < MIPIHOST_CHANNEL_NUM; i++) {
+		if (i >= (int32_t)cfg->channel_num) {
+			continue;
+		} else {
+			mipi_host_ipi_overflow_handle(host, i);
+		}
+	}
+
+	/*maybe not needed ?*/
+	/*Release DWC_mipi_csi2_host from reset*/
+	mhost_putreg(host, REG_MIPI_HOST_CSI2_RESETN, MIPI_HOST_CSI2_RESETN);
+	osal_udelay(100);
+	mhost_putreg(host, REG_MIPI_HOST_CSI2_RESETN, MIPI_HOST_CSI2_RAISE);
 
         return 0;
 }
