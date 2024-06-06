@@ -292,7 +292,7 @@ int32_t sensor_frame_end_stop_wait(struct sensor_device_s *sen)
 		sen_warn(dev, "%s %d fe %dms timeout\n", __func__, frame->fs.count, use_ms);
 	} else {
 		/* wait failed */
-		sen_err(dev, "%s %d fe %dms failed\n", __func__, frame->fs.count, use_ms);
+		sen_warn(dev, "%s %d fe %dms abort\n", __func__, frame->fs.count, use_ms);
 	}
 
 	return ret;
