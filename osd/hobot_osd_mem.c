@@ -155,8 +155,8 @@ void osd_single_buffer_destroy(struct ion_client *client, struct osd_single_buff
 		}
 		msleep(10);
 		if (!i) {
-			pr_err("osd one buffer paddr:0x%llx desroyed, but ref count is %d\n",
-			buf->paddr, atomic_read(&buf->ref_count));
+			osd_err("single buffer paddr: 0x%llx desroyed, but ref count is %d\n",
+				buf->paddr, atomic_read(&buf->ref_count));
 		}
 	}
 	spin_lock(&s_osd_buf_slock);
@@ -164,7 +164,7 @@ void osd_single_buffer_destroy(struct ion_client *client, struct osd_single_buff
 	spin_unlock(&s_osd_buf_slock);
 
 	if (buf->ion_handle != NULL) {
-		pr_debug("osd destroy buffer format:%d, paddr:0x%llx addr:%p length:%ld\n",
+		osd_debug("destroy buffer format: %d, paddr: 0x%llx addr: %p length: %ld\n",
 			buf->pixel_fmt, buf->paddr, buf->vaddr, buf->length);
 		ion_free(client, buf->ion_handle);
 		buf->ion_handle = NULL;
@@ -178,13 +178,17 @@ void osd_single_buffer_destroy(struct ion_client *client, struct osd_single_buff
 
 void ion_dcache_invalid(phys_addr_t paddr, size_t size)
 {
-	// dma_sync_single_for_cpu(NULL, paddr, size, DMA_FROM_DEVICE);
+	struct device dev = {0};
+
+	dma_sync_single_for_cpu(&dev, paddr, size, DMA_FROM_DEVICE);
 	// __inval_dcache_area(phys_to_virt(paddr), size);
 }
 
 void ion_dcache_flush(phys_addr_t paddr, size_t size)
 {
-	// dma_sync_single_for_device(NULL, paddr, size, DMA_TO_DEVICE);
+	struct device dev = {0};
+
+	dma_sync_single_for_device(&dev, paddr, size, DMA_TO_DEVICE);
 	// __flush_dcache_area(phys_to_virt(paddr), size);
 }
 
@@ -194,15 +198,17 @@ void osd_single_buffer_flush(struct osd_single_buffer *single_buffer)
 	ion_dcache_flush(single_buffer->paddr, single_buffer->length);
 }
 
-void osd_single_buffer_fill(struct osd_single_buffer *single_buffer, uint32_t color)
+void osd_single_buffer_fill(struct osd_single_buffer *single_buffer, uint32_t color, uint32_t alpha)
 {
 	uint32_t size = 0;
 	uint8_t y_color = 0, u_color = 0, v_color = 0;
 	uint8_t *addr = NULL;
 	int32_t i = 0;
+	uint8_t fill_color;
 
-	if (single_buffer->pixel_fmt == OSD_PIXEL_FORMAT_VGA4) {
-		memset(single_buffer->vaddr, (color << 4) | color, single_buffer->length);
+	if (single_buffer->pixel_fmt == OSD_PIXEL_FORMAT_VGA8) {
+		fill_color = (uint8_t)((alpha << 4) | (color & 0xF));
+		memset(single_buffer->vaddr, fill_color, single_buffer->length);
 	} else if (single_buffer->pixel_fmt == OSD_PIXEL_FORMAT_NV12) {
 		y_color = (color >> 16) & 0xff;
 		u_color = (color >> 8) & 0xff;
@@ -221,12 +227,12 @@ void osd_single_buffer_fill(struct osd_single_buffer *single_buffer, uint32_t co
 static uint32_t osd_get_buffer_length(uint32_t width, uint32_t height,
 					enum osd_pixel_format pixel_fmt)
 {
-	if (pixel_fmt == OSD_PIXEL_FORMAT_VGA4) {
-		return (width * height / 2);
+	if (pixel_fmt == OSD_PIXEL_FORMAT_VGA8) {
+		return (width * height);
 	} else if (pixel_fmt == OSD_PIXEL_FORMAT_NV12) {
-		return width * height * 3 / 2;
+		return (width * height * 3 / 2);
 	} else if (pixel_fmt == OSD_PIXEL_FORMAT_SW_VGA4) {
-		return width * height * 3;
+		return (width * height * 3);
 	} else if (pixel_fmt == OSD_PIXEL_FORMAT_POLYGON) {
 		return (2 * height * sizeof(uint32_t));
 	} else {
@@ -239,7 +245,8 @@ int32_t osd_buffer_create(struct ion_client *client, struct osd_buffer *osd_buff
 	int32_t i, ret = 0;
 
 	for (i = 0; i < OSD_PP_BUF; i++) {
-		if ((osd_buffer->buf[i].state == OSD_BUF_NULL) && (osd_buffer->buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
+		if ((osd_buffer->buf[i].state == OSD_BUF_NULL)
+			&& (osd_buffer->buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
 			osd_buffer->buf[i].length = osd_get_buffer_length(osd_buffer->size.w, osd_buffer->size.h, osd_buffer->buf[i].pixel_fmt);
 			ret = osd_single_buffer_create(client, &osd_buffer->buf[i]);
 			if (ret < 0)
@@ -270,12 +277,11 @@ int32_t osd_buffer_create_vga(struct ion_client *client, struct osd_buffer *osd_
 		if ((osd_buffer->vga_buf[i].state == OSD_BUF_NULL) &&
 			(osd_buffer->vga_buf[i].pixel_fmt != OSD_PIXEL_FORMAT_NULL)) {
 			length = osd_get_buffer_length(osd_buffer->size.w, osd_buffer->size.h,
-			osd_buffer->vga_buf[i].pixel_fmt);
+							osd_buffer->vga_buf[i].pixel_fmt);
 			osd_buffer->vga_buf[i].length = length;
 			ret = osd_single_buffer_create(client, &osd_buffer->vga_buf[i]);
-			if (ret < 0) {
+			if (ret < 0)
 				goto exit;
-			}
 			osd_buffer->vga_buf[i].state = osd_buffer->buf[i].state;
 		}
 	}
@@ -327,20 +333,20 @@ void osd_buffer_flush(struct osd_buffer *osd_buffer)
 	}
 }
 
-struct vio_frame *osd_get_frame(struct list_head *list, int32_t frame_index)
-{
-	struct vio_frame *frame, *temp;
+// struct vio_frame *osd_get_frame(struct list_head *list, int32_t frame_index)
+// {
+// 	struct vio_frame *frame, *temp;
 
-	list_for_each_entry_safe(frame, temp, list, list) {
-		if (frame->frameinfo.bufferindex == frame_index) {
-			list_del(&frame->list);
-			frame->state = FS_INVALID;
-			return frame;
-		}
-	}
+// 	list_for_each_entry_safe(frame, temp, list, list) {
+// 		if (frame->frameinfo.bufferindex == frame_index) {
+// 			list_del(&frame->list);
+// 			frame->state = FS_INVALID;
+// 			return frame;
+// 		}
+// 	}
 
-	return NULL;
-}
+// 	return NULL;
+// }
 
 // void osd_put_input_frame(struct list_head *list, struct vio_frame *frame)
 // {

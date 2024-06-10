@@ -27,9 +27,9 @@
 struct osd_color_map g_osd_color = {
 	.color_map_update = 0,
 	.color_map = {
-		0xff8080, 0x008080, 0x968080, 0x8DC01B, 0x952B15, 0xE10094, 0x545BA7,
-		0x9E26C4, 0x34AAB5, 0xD47A9E, 0x4C54FF, 0xD06057, 0x0FC574, 0x3A5E56,
-		0x2968C5
+		0x8080FF, 0x808000, 0x808082, 0x6BFF1D, 0x152C96, 0xFF554C,
+		0x01ABB3, 0xEBD469, 0x9501E2, 0xC241A2, 0x8D6432, 0xC7B89B,
+		0x73D012, 0x3D4B5E, 0xD06530, 0x808050
 	}
 };
 
@@ -65,13 +65,13 @@ static void osd_frame_process(struct vio_osd_info *osd_info)
 
 	osd_subdev = &osd_dev->subdev[osd_info->chn_id][osd_info->ctx_id];
 	if (osd_dev->task_state != OSD_TASK_START) {
-		pr_debug("osd task request stop, exit\n");
+		osd_debug("task request stop, exit\n");
 		goto exit;
 	}
 
 	vse_ctx = container_of(osd_info, struct vse_nat_instance, osd_info);
 	if (!vse_ctx) {
-		pr_err("get vse ctx fail\n");
+		osd_err("get vse ctx fail\n");
 		goto exit;
 	}
 
@@ -82,12 +82,12 @@ static void osd_frame_process(struct vio_osd_info *osd_info)
 
 	ret = osd_queue_push(&osd_subdev->queue, frame);
 	if (ret) {
-		pr_err("osd push queue failed\n");
+		osd_err("push queue failed\n");
 		goto exit;
 	}
 	atomic_inc(&osd_subdev->osd_info->frame_count);
 	if (!kthread_queue_work(&osd_dev->worker, &osd_subdev->work)) {
-		pr_err("kthread_queue_work failed\n");
+		osd_err("kthread_queue_work failed\n");
 		goto exit;
 	}
 
@@ -102,17 +102,16 @@ static void osd_hw_set_roi_addr_config(struct osd_subdev *subdev)
 	uint32_t hw_cnt = 0;
 	struct vse_osd_cfg *osd_hw_cfg;
 
-	if (subdev->osd_hw_cfg == NULL) {
+	if (subdev->osd_hw_cfg == NULL)
 		return;
-	}
 
 	spin_lock(&subdev->osd_hw_cfg->osd_cfg_slock);
 	osd_hw_cfg = subdev->osd_hw_cfg;
 	list_for_each_entry_safe(bind, temp, &subdev->bind_list, node) {
-		if (hw_cnt >= OSD_HW_PROC_NUM) {
+		if (hw_cnt >= OSD_HW_PROC_NUM)
 			break;
-		}
-		if (bind->proc_info.proc_type == OSD_PROC_HW_VGA4) {
+
+		if (bind->proc_info.proc_type == OSD_PROC_HW_VGA8) {
 			osd_hw_cfg->osd_box[hw_cnt].osd_en = bind->proc_info.show_en;
 			osd_hw_cfg->osd_box[hw_cnt].overlay_mode = bind->proc_info.invert_en;
 			osd_hw_cfg->osd_box[hw_cnt].start_x = (uint16_t)bind->proc_info.start_x;
@@ -120,14 +119,15 @@ static void osd_hw_set_roi_addr_config(struct osd_subdev *subdev)
 			osd_hw_cfg->osd_box[hw_cnt].width = (uint16_t)bind->proc_info.width;
 			osd_hw_cfg->osd_box[hw_cnt].height = (uint16_t)bind->proc_info.height;
 
-			if (osd_hw_cfg->osd_buf[hw_cnt] != 0) {
+			if (osd_hw_cfg->osd_buf[hw_cnt] != 0)
 				osd_single_buffer_dec_by_paddr(osd_hw_cfg->osd_buf[hw_cnt]);
-			}
+
 			osd_hw_cfg->osd_buf[hw_cnt] = (uint32_t)bind->proc_info.src_paddr;
 			osd_single_buffer_inc_by_paddr(osd_hw_cfg->osd_buf[hw_cnt]);
-			pr_debug("[V%d][%d]osd hw set osd_en:%d mode:%d "
-				"x:%d y:%d w:%d h:%d paddr:0x%x \n",
-				subdev->chn_id, hw_cnt, osd_hw_cfg->osd_box[hw_cnt].osd_en,
+			osd_debug("[CHN%d][CTX%d] hw_cnt: %d, osd_en: %d, mode: %d "
+				"x: %d y: %d, w: %d h: %d, paddr: 0x%x\n",
+				subdev->chn_id, subdev->ctx_id, hw_cnt,
+				osd_hw_cfg->osd_box[hw_cnt].osd_en,
 				osd_hw_cfg->osd_box[hw_cnt].overlay_mode,
 				osd_hw_cfg->osd_box[hw_cnt].start_x,
 				osd_hw_cfg->osd_box[hw_cnt].start_y,
@@ -140,18 +140,20 @@ static void osd_hw_set_roi_addr_config(struct osd_subdev *subdev)
 
 	if (hw_cnt > 0) {
 		subdev->osd_hw_limit_y = osd_hw_cfg->osd_box[hw_cnt - 1].start_y +
-			osd_hw_cfg->osd_box[hw_cnt - 1].height;
+					osd_hw_cfg->osd_box[hw_cnt - 1].height;
 	} else {
 		subdev->osd_hw_limit_y = 0;
 	}
+
 	for (; hw_cnt < OSD_HW_PROC_NUM; hw_cnt++) {
 		memset(&osd_hw_cfg->osd_box[hw_cnt], 0, sizeof(struct osd_box));
 
-		if (osd_hw_cfg->osd_buf[hw_cnt] != 0) {
+		if (osd_hw_cfg->osd_buf[hw_cnt] != 0)
 			osd_single_buffer_dec_by_paddr(osd_hw_cfg->osd_buf[hw_cnt]);
-		}
+
 		osd_hw_cfg->osd_buf[hw_cnt] = 0;
 	}
+
 	osd_hw_cfg->osd_box_update = 1;
 	osd_hw_cfg->osd_buf_update = 1;
 	atomic_set(&subdev->osd_hw_need_update, 0);
@@ -194,9 +196,8 @@ static void osd_hw_set_color_map(struct osd_subdev *subdev)
 {
 	struct vse_osd_cfg  *osd_hw_cfg;
 
-	if ((subdev->chn_id >= OSD_CHN_MAX) || (subdev->osd_hw_cfg == NULL)) {
+	if ((subdev->chn_id >= OSD_CHN_MAX) || (subdev->osd_hw_cfg == NULL))
 		return;
-	}
 
 	spin_lock(&subdev->osd_hw_cfg->osd_cfg_slock);
 	osd_hw_cfg = subdev->osd_hw_cfg;
@@ -208,7 +209,7 @@ static void osd_hw_set_color_map(struct osd_subdev *subdev)
 }
 
 static void osd_set_process_bind_info(struct osd_process_info *process_info,
-				struct osd_bind_info *bind_info)
+					struct osd_bind_info *bind_info)
 {
 	process_info->show_en = bind_info->show_en;
 	process_info->invert_en = bind_info->invert_en;
@@ -223,9 +224,9 @@ static void osd_set_process_bind_info(struct osd_process_info *process_info,
 		process_info->height = bind_info->handle_info.size.h;
 		process_info->polygon_buf = bind_info->handle_info.polygon_buf;
 	}
-	if (process_info->proc_type == OSD_PROC_HW_VGA4) {
+
+	if (process_info->proc_type == OSD_PROC_HW_VGA8)
 		atomic_set(&process_info->subdev->osd_hw_need_update, 1);
-	}
 }
 
 static void osd_set_process_info_workfunc(struct kthread_work *work)
@@ -255,8 +256,8 @@ static void osd_set_process_info_workfunc(struct kthread_work *work)
 				mutex_lock(&osd_dev->osd_list_mutex);
 				handle = osd_find_handle_node(osd_dev, handle_id);
 				if (handle == NULL) {
-					pr_err("[V%d][H%d] attached, but handle was destroyed!\n",
-						subdev->chn_id, handle_id);
+					osd_err("[H%d][CHN%d] attached, but handle was destroyed!\n",
+						handle_id, subdev->chn_id);
 				} else {
 					osd_set_process_handle_info(&bind->proc_info, handle);
 				}
@@ -292,11 +293,12 @@ static int32_t hb_osd_suspend(struct device *dev)
 	int32_t ret = 0;
 	struct osd_dev *osd_dev;
 
-	pr_info("%s\n", __func__);
 	osd_dev = dev_get_drvdata(dev);
 	if (atomic_read(&osd_dev->open_cnt) > 0) {
 		osd_stop_worker(osd_dev);
 	}
+
+	osd_info("done\n");
 
 	return ret;
 }
@@ -306,11 +308,12 @@ static int32_t hb_osd_resume(struct device *dev)
 	int32_t ret = 0;
 	struct osd_dev *osd_dev;
 
-	pr_info("%s\n", __func__);
 	osd_dev = dev_get_drvdata(dev);
 	if (atomic_read(&osd_dev->open_cnt) > 0) {
 		ret = osd_start_worker(g_osd_dev);
 	}
+
+	osd_info("done\n");
 
 	return ret;
 }
@@ -319,7 +322,7 @@ static int32_t hb_osd_runtime_suspend(struct device *dev)
 {
 	int32_t ret = 0;
 
-	pr_info("%s\n", __func__);
+	osd_info("done\n");
 
 	return ret;
 }
@@ -328,7 +331,7 @@ static int32_t hb_osd_runtime_resume(struct device *dev)
 {
 	int32_t ret = 0;
 
-	pr_info("%s\n", __func__);
+	osd_info("done\n");
 
 	return ret;
 }

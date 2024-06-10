@@ -175,6 +175,7 @@ struct osd_handle_info {
 
 	struct osd_size size;
 	uint32_t fill_color;
+	uint32_t alpha;
 	// when enable and a pixel yuv color is key color, it will use origin image
 	// 31-24: 0/1  enable/diable
 	// 23-16: y value in yuv
@@ -322,7 +323,7 @@ struct osd_dev {
 	struct mutex osd_mutex;
 };
 
-#define osd_fmt(fmt) "[HOBOT_OSD] (%s) " fmt
+#define osd_fmt(fmt) "[HOBOT_OSD](%s) " fmt
 #define osd_pr_warp(p_func_, str, fmt, ...) do { \
 		p_func_(str osd_fmt(fmt), __func__, ##__VA_ARGS__); \
 	} while(0)

@@ -175,6 +175,7 @@ static int32_t osd_handle_info_check(struct osd_handle_info *handle_info)
 		handle_info->handle_id, handle_info->fill_color,
 		handle_info->yuv_bg_transparent, handle_info->proc_type,
 		handle_info->size.w, handle_info->size.h);
+	//todo: Add polygon check and print
 
 	if (handle_info->handle_id >= OSD_HANDLE_MAX) {
 		osd_err("handle id: %d exceed %d!\n", handle_info->handle_id, OSD_HANDLE_MAX);
@@ -261,17 +262,17 @@ static void handle_update_buffer(struct osd_handle *handle, int32_t index)
 static enum osd_process_type osd_hw_check_limit(struct osd_subdev *subdev,
 						struct osd_handle *handle, struct osd_bind *bind)
 {
-	// todo : for test, use sw first 
-	if ((subdev->chn_id > OSD_VSE_US) ||
-		(subdev->osd_hw_cfg == NULL) ||
+	if ((subdev->osd_hw_cfg == NULL) ||
+		// 1 ||
+		subdev->chn_id == 3 ||
 		(bind->bind_info.show_en == 0) || (bind->bind_info.osd_level > 0)||
 		(bind->bind_info.start_point.y < subdev->osd_hw_limit_y) ||
 		(atomic_read(&subdev->osd_hw_cnt) >= OSD_HW_PROC_NUM)) {
-		return OSD_PROC_VGA4;
+		return OSD_PROC_VGA8;
 	} else {
 		subdev->osd_hw_limit_y = bind->bind_info.start_point.y + handle->info.size.h;
 		atomic_inc(&subdev->osd_hw_cnt);
-		return OSD_PROC_HW_VGA4;
+		return OSD_PROC_HW_VGA8;
 	}
 }
 
@@ -288,7 +289,7 @@ static void osd_sw_set_process_flag(struct osd_subdev *subdev)
 
 	if (!list_empty(&subdev->bind_list)) {
 		list_for_each_entry_safe(bind, temp, &subdev->bind_list, node) {
-			if (bind && bind->proc_info.proc_type != OSD_PROC_HW_VGA4) {
+			if (bind && bind->proc_info.proc_type != OSD_PROC_HW_VGA8) {
 				atomic_set(&osd_info->need_sw_osd, 1);
 				return;
 			} else {
@@ -322,7 +323,7 @@ void osd_process_addr_inc(struct osd_process_info *proc_info)
 {
 	switch (proc_info->proc_type)
 	{
-	case OSD_PROC_VGA4:
+	case OSD_PROC_VGA8:
 		osd_single_buffer_inc_by_addr(proc_info->src_vga_addr);
 		break;
 	case OSD_PROC_NV12:
@@ -337,7 +338,7 @@ void osd_process_addr_dec(struct osd_process_info *proc_info)
 {
 	switch (proc_info->proc_type)
 	{
-	case OSD_PROC_VGA4:
+	case OSD_PROC_VGA8:
 		osd_single_buffer_dec_by_addr(proc_info->src_vga_addr);
 		break;
 	case OSD_PROC_NV12:
@@ -349,7 +350,7 @@ void osd_process_addr_dec(struct osd_process_info *proc_info)
 }
 
 /* Ioctl ops */
-int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
 	struct osd_handle *handle, *tmp_handle;
@@ -378,7 +379,8 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	if (handle->info.proc_type <= OSD_PROC_NV12) {
 		handle->buffer.size.w = handle->info.size.w;
 		handle->buffer.size.h = handle->info.size.h;
-		handle->buffer.buf[0].pixel_fmt = (handle->info.proc_type == OSD_PROC_VGA4) ? OSD_PIXEL_FORMAT_VGA4 : OSD_PIXEL_FORMAT_NV12;
+		handle->buffer.buf[0].pixel_fmt = (handle->info.proc_type == OSD_PROC_VGA8) ?
+						OSD_PIXEL_FORMAT_VGA8 : OSD_PIXEL_FORMAT_NV12;
 		handle->buffer.buf[1].pixel_fmt = handle->buffer.buf[0].pixel_fmt;
 
 		ret = osd_buffer_create(osd_dev->ion_client, &handle->buffer);
@@ -388,14 +390,16 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 			goto exit_free;
 		}
 		osd_single_buffer_fill(&handle->buffer.buf[0],
-			(handle->info.proc_type == OSD_PROC_VGA4) ?
+			(handle->info.proc_type == OSD_PROC_VGA8) ?
 			handle->info.fill_color :
-			g_osd_color.color_map[handle->info.fill_color]);
+			g_osd_color.color_map[handle->info.fill_color],
+			handle->info.alpha);
 		osd_single_buffer_flush(&handle->buffer.buf[0]);
 		osd_single_buffer_fill(&handle->buffer.buf[1],
-			(handle->info.proc_type == OSD_PROC_VGA4) ?
+			(handle->info.proc_type == OSD_PROC_VGA8) ?
 			handle->info.fill_color :
-			g_osd_color.color_map[handle->info.fill_color]);
+			g_osd_color.color_map[handle->info.fill_color],
+			handle->info.alpha);
 		osd_single_buffer_flush(&handle->buffer.buf[1]);
 	}
 
@@ -421,7 +425,7 @@ int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	mutex_lock(&osd_dev->osd_list_mutex);
 	tmp_handle = osd_find_handle_node(osd_dev, handle->info.handle_id);
 	if (tmp_handle != NULL) {
-		if (tmp_handle->info.proc_type != handle->info.proc_type)  {
+		if (tmp_handle->info.proc_type != handle->info.proc_type) {
 			osd_err("[H%d] proc_type: %d %d not match\n",
 				tmp_handle->info.handle_id,
 				tmp_handle->info.proc_type, handle->info.proc_type);
@@ -453,7 +457,7 @@ exit_free:
 	return ret;
 }
 
-int32_t osd_destroy_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_destroy_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	struct osd_handle *handle;
 	struct osd_dev *osd_dev;
@@ -502,7 +506,7 @@ int32_t osd_destroy_handle(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	return ret;
 }
 
-int32_t osd_get_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_get_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
 	struct osd_handle_info handle_info;
@@ -556,7 +560,7 @@ static int32_t osd_polygon_check_change(struct osd_handle_info *old_info,
 	return 0;
 }
 
-int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
 	struct osd_handle_info handle_info;
@@ -618,27 +622,30 @@ int32_t osd_set_attr(struct osd_video_ctx *osd_ctx, unsigned long arg)
 				// tmp_handle->info.size.w = handle_info.size.w;
 				// tmp_handle->info.size.h = handle_info.size.h;
 
+				//todo: new func: create and fill
 				tmp_handle->buffer.size.w = handle_info.size.w;
 				tmp_handle->buffer.size.h = handle_info.size.h;
 				tmp_handle->buffer.buf[0].pixel_fmt =
-					(handle_info.proc_type == OSD_PROC_VGA4) ?
-					OSD_PIXEL_FORMAT_VGA4 : OSD_PIXEL_FORMAT_NV12;
+					(handle_info.proc_type == OSD_PROC_VGA8) ?
+					OSD_PIXEL_FORMAT_VGA8 : OSD_PIXEL_FORMAT_NV12;
 				tmp_handle->buffer.buf[1].pixel_fmt =
-					(handle_info.proc_type == OSD_PROC_VGA4) ?
-					OSD_PIXEL_FORMAT_VGA4 : OSD_PIXEL_FORMAT_NV12;
+					(handle_info.proc_type == OSD_PROC_VGA8) ?
+					OSD_PIXEL_FORMAT_VGA8 : OSD_PIXEL_FORMAT_NV12;
 				ret = osd_buffer_create(osd_dev->ion_client, &tmp_handle->buffer);
 				if (ret < 0) {
 					goto exit_free;
 				}
 				osd_single_buffer_fill(&tmp_handle->buffer.buf[0],
-					(handle_info.proc_type == OSD_PROC_VGA4) ?
+					(handle_info.proc_type == OSD_PROC_VGA8) ?
 					handle_info.fill_color :
-					g_osd_color.color_map[handle_info.fill_color]);
+					g_osd_color.color_map[handle_info.fill_color],
+					handle_info.alpha);
 				osd_single_buffer_flush(&tmp_handle->buffer.buf[0]);
 				osd_single_buffer_fill(&tmp_handle->buffer.buf[1],
-					(handle_info.proc_type == OSD_PROC_VGA4) ?
+					(handle_info.proc_type == OSD_PROC_VGA8) ?
 					handle_info.fill_color :
-					g_osd_color.color_map[handle_info.fill_color]);
+					g_osd_color.color_map[handle_info.fill_color],
+					handle_info.alpha);
 				osd_single_buffer_flush(&tmp_handle->buffer.buf[1]);
 				need_replace = 1;
 			} else {
@@ -730,7 +737,7 @@ exit_free:
  	return ret;
 }
 
-int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
 	struct osd_buffer_info buffer_info;
@@ -781,12 +788,12 @@ int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		return -EFAULT;
 	}
 
-	osd_debug("[H%d] done\n", buffer_info.handle_id);
+	osd_info("[H%d] done\n", buffer_info.handle_id);
 
 	return ret;
 }
 
-int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
 	struct osd_buffer_info buffer_info;
@@ -842,7 +849,7 @@ int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	return ret;
 }
 
-int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
+static int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
 	int32_t ret = 0;
 	struct osd_dev *osd_dev;
@@ -904,13 +911,13 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	mutex_lock(&bind->proc_info.proc_mutex);
 	bind->proc_info.proc_type = (handle->info.proc_type >= OSD_PROC_RECT) ?
 				bind->bind_info.handle_info.proc_type : handle->info.proc_type;
-	if (bind->proc_info.proc_type == OSD_PROC_VGA4) {
+	if (bind->proc_info.proc_type == OSD_PROC_VGA8) {
 		bind->proc_info.proc_type = osd_hw_check_limit(subdev, handle, bind);
 	}
 	bind->proc_info.subdev = subdev;
 	mutex_unlock(&bind->proc_info.proc_mutex);
 
-	if (bind->proc_info.proc_type == OSD_PROC_VGA4) {
+	if (bind->proc_info.proc_type == OSD_PROC_VGA8) {
 		if ((handle->buffer.vga_buf[0].state == OSD_BUF_NULL) ||
 			(handle->buffer.vga_buf[1].state == OSD_BUF_NULL)) {
 			handle->buffer.vga_buf[0].pixel_fmt = OSD_PIXEL_FORMAT_SW_VGA4;
@@ -937,7 +944,7 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	atomic_inc(&handle->bind_cnt);
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4)
+	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA8)
 		&& (bind->bind_info.osd_level == 0)) {
 		// hw level: 0, sw level: 1-3
 		bind->bind_info.osd_level = 1;
@@ -945,7 +952,7 @@ int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	atomic_set(&bind->need_update, 1);
 
 	list_add_tail(&bind->node, &subdev->bind_list);
-	if (bind->proc_info.proc_type == OSD_PROC_HW_VGA4) {
+	if (bind->proc_info.proc_type == OSD_PROC_HW_VGA8) {
 		atomic_set(&subdev->osd_hw_need_update, 1);
 	}
 
@@ -996,7 +1003,7 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 	if (atomic_dec_return(&bind->ref_cnt) == 0) {
 		list_del(&bind->node);
-		if (bind->proc_info.proc_type == OSD_PROC_HW_VGA4) {
+		if (bind->proc_info.proc_type == OSD_PROC_HW_VGA8) {
 			atomic_set(&subdev->osd_hw_need_update, 1);
 			atomic_dec(&subdev->osd_hw_cnt);
 			kthread_queue_work(&osd_dev->worker, &osd_dev->work);
@@ -1061,7 +1068,7 @@ static int32_t osd_get_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	}
 	mutex_unlock(&subdev->bind_mutex);
 
-	osd_debug("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+	osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
 		bind_info.chn_id, bind_info.ctx_id);
 
 	return ret;
@@ -1142,7 +1149,7 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	// 		goto exit_free;
 	// 	}
 	// }
-	if ((bind->proc_info.proc_type == OSD_PROC_HW_VGA4) &&
+	if ((bind->proc_info.proc_type == OSD_PROC_HW_VGA8) &&
 		(osd_vga4_check_need_sw_process(&bind->bind_info, &bind_info))) {
 		if ((handle->buffer.vga_buf[0].state == OSD_BUF_NULL) ||
 			(handle->buffer.vga_buf[1].state == OSD_BUF_NULL)) {
@@ -1152,15 +1159,14 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 			if (ret < 0) {
 				mutex_unlock(&osd_dev->osd_list_mutex);
 				mutex_unlock(&subdev->bind_mutex);
-				goto exit_free;
+				return ret;
 			}
 			buf_index = handle_find_buffer(handle, OSD_BUF_PROCESS, &single_buf, 0);
 			if (buf_index < 0) {
 				osd_buffer_destroy_vga(osd_dev->ion_client, &handle->buffer);
 				mutex_unlock(&osd_dev->osd_list_mutex);
 				mutex_unlock(&subdev->bind_mutex);
-				ret = -EFAULT;
-				goto exit_free;
+				return -EFAULT;
 			}
 			vga_buf = &handle->buffer.vga_buf[buf_index];
 			osd_vga4_to_sw(g_osd_color.color_map, single_buf->vaddr, vga_buf->vaddr,
@@ -1169,7 +1175,7 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 		}
 
 		mutex_lock(&bind->proc_info.proc_mutex);
-		bind->proc_info.proc_type = OSD_PROC_VGA4;
+		bind->proc_info.proc_type = OSD_PROC_VGA8;
 		mutex_unlock(&bind->proc_info.proc_mutex);
 		atomic_set(&subdev->osd_hw_need_update, 1);
 		atomic_dec(&subdev->osd_hw_cnt);
@@ -1183,7 +1189,7 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	// 	polygon_buf = bind->bind_info.polygon_buf;
 	// }
 
-	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA4)
+	if ((bind->proc_info.proc_type != OSD_PROC_HW_VGA8)
 		&& (bind->bind_info.osd_level == 0)) {
 		// hw level: 0, sw level: 1-3
 		bind->bind_info.osd_level = 1;
@@ -1195,18 +1201,14 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	kthread_queue_work(&osd_dev->worker, &osd_dev->work);
 	mutex_unlock(&subdev->bind_mutex);
 
-	osd_debug("[H%d][CHN%d][CTX%d] done\n",
-		bind_info.handle_id, bind_info.chn_id,
-		bind_info.ctx_id);
+	osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+		bind_info.chn_id, bind_info.ctx_id);
 
 	return ret;
-exit_free:
 	// if (polygon_buf != NULL) {
 	// 	kfree(polygon_buf);
 	// 	polygon_buf = NULL;
 	// }
-
-	return ret;
 }
 
 static int32_t osd_set_sta(struct osd_video_ctx *osd_ctx, unsigned long arg)
@@ -1404,7 +1406,7 @@ static int32_t osd_set_color_map(struct osd_video_ctx *osd_ctx, unsigned long ar
 }
 
 void osd_set_process_handle_info(struct osd_process_info *process_info,
-					struct osd_handle *handle)
+				struct osd_handle *handle)
 {
 	struct osd_single_buffer *single_buf;
 	int32_t index;
@@ -1417,32 +1419,30 @@ void osd_set_process_handle_info(struct osd_process_info *process_info,
 	}
 
 	switch (process_info->proc_type) {
-	case OSD_PROC_HW_VGA4:
+	case OSD_PROC_HW_VGA8:
 	case OSD_PROC_NV12:
-		if (process_info->proc_type == OSD_PROC_HW_VGA4) {
-			if (process_info->subdev != NULL) {
+		if (process_info->proc_type == OSD_PROC_HW_VGA8) {
+			if (process_info->subdev != NULL)
 				atomic_set(&process_info->subdev->osd_hw_need_update, 1);
-			}
 		}
+
 		index = handle_find_buffer(handle, OSD_BUF_PROCESS, &single_buf, 0);
 		if (index >= 0) {
 			process_info->src_addr = single_buf->vaddr;
 			process_info->src_paddr = single_buf->paddr;
 		} else {
-			pr_err("[H%d] find process buffer failed\n",
-				handle->info.handle_id);
+			osd_err("[H%d] find process buffer failed\n", handle->info.handle_id);
 		}
-		if (process_info->proc_type == OSD_PROC_NV12) {
+
+		if (process_info->proc_type == OSD_PROC_NV12)
 			process_info->yuv_bg_transparent = handle->info.yuv_bg_transparent;
-		}
 		break;
-	case OSD_PROC_VGA4:
+	case OSD_PROC_VGA8:
 		index = handle_find_buffer(handle, OSD_BUF_PROCESS, &single_buf, 1);
 		if (index >= 0) {
 			process_info->src_vga_addr = single_buf->vaddr;
 		} else {
-			pr_err("[H%d] find process buffer failed\n",
-				handle->info.handle_id);
+			osd_err("[H%d] find process buffer failed\n", handle->info.handle_id);
 		}
 		break;
 	// case OSD_PROC_POLYGON:
@@ -1476,7 +1476,7 @@ static int32_t osd_proc_buf(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	switch (proc_buf.proc_type)
 	{
 	case OSD_PROC_NV12:
-	case OSD_PROC_VGA4:
+	case OSD_PROC_VGA8:
 		mutex_lock(&osd_dev->osd_list_mutex);
 		handle = osd_find_handle_node(osd_dev, proc_buf.handle_id);
 		if (handle == NULL) {
@@ -1488,7 +1488,7 @@ static int32_t osd_proc_buf(struct osd_video_ctx *osd_ctx, unsigned long arg)
 
 		if (proc_buf.proc_type == OSD_PROC_NV12) {
 			proc_info.yuv_bg_transparent = proc_buf.yuv_bg_transparent;
-		} else if (proc_buf.proc_type == OSD_PROC_VGA4) {
+		} else if (proc_buf.proc_type == OSD_PROC_VGA8) {
 			if ((handle->buffer.vga_buf[0].state == OSD_BUF_NULL) ||
 				(handle->buffer.vga_buf[1].state == OSD_BUF_NULL)) {
 				handle->buffer.size.w = handle->info.size.w;
@@ -1651,7 +1651,7 @@ int32_t osd_start_worker(struct osd_dev *osd_dev)
 	osd_dev->task = kthread_run(kthread_worker_fn, &osd_dev->worker, "osd_work");
 	if (IS_ERR(osd_dev->task)) {
 		mutex_unlock(&osd_dev->osd_mutex);
-		pr_err("failed to create buffer task, err(%ld)\n", PTR_ERR(osd_dev->task));
+		osd_err("failed to create buffer task, err: %ld\n", PTR_ERR(osd_dev->task));
 		ret = (int32_t)PTR_ERR(osd_dev->task);
 		goto exit;
 	}
@@ -1694,7 +1694,6 @@ static void osd_process_workfunc_done(struct osd_subdev *subdev)
 	struct osd_dev *osd_dev;
 	int32_t chn_id, ctx_id;
 	osal_time_t tmp_tv;
-	// struct vse_nat_instance *vse_ctx = NULL;
 
 	osd_dev = subdev->osd_dev;
 	chn_id = subdev->osd_info->chn_id;
@@ -1710,11 +1709,10 @@ static void osd_process_workfunc_done(struct osd_subdev *subdev)
 
 	osd_queue_done(&subdev->queue);
 
-	if (atomic_dec_return(&subdev->osd_info->frame_count) > 0) {
+	if (atomic_dec_return(&subdev->osd_info->frame_count) > 0)
 		kthread_queue_work(&osd_dev->worker, &subdev->work);
-	}
 
-	pr_info("[S%d][C%d] %s\n", chn_id, ctx_id, __func__);
+	osd_info("[CHN%d][CTX%d] done\n", chn_id, ctx_id);
 }
 
 static void osd_frame_process_workfunc(struct kthread_work *work)
@@ -1725,19 +1723,17 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 	struct osd_dev *osd_dev;
 	struct vio_frame *vio_frame;
 	struct osd_process_info *process_info;
-	// struct vse_nat_instance *vse_ctx;
 
 	subdev = container_of(work, struct osd_subdev, work);
 	osd_dev = subdev->osd_dev;
-	// vse_ctx = container_of(subdev->osd_info, struct vse_nat_instance, osd_info);
 
 	vio_frame = osd_queue_pop(&subdev->queue);
 	if (vio_frame == NULL) {
-		pr_err("pop frame fail\n");
+		osd_err("pop frame fail\n");
 		goto exit;
 	}
 
-	pr_debug("%s, frame:%d index:%d\n", __func__, vio_frame->frameinfo.frameid.frame_id,
+	osd_debug("frame id: %d, index: %d\n", vio_frame->frameinfo.frameid.frame_id,
 		vio_frame->frameinfo.bufferindex);
 
 	mutex_lock(&subdev->sta_mutex);
@@ -1746,7 +1742,7 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 		for (i = 0; i < MAX_STA_NUM; i++) {
 			if (osd_dev->task_state == OSD_TASK_REQUEST_STOP ||
 				osd_dev->task_state == OSD_TASK_STOP) {
-				pr_debug("osd task request stop, exit\n");
+				osd_debug("task request stop, exit\n");
 				break;
 			}
 			if (subdev->osd_sta.sta_box[i].sta_en) {
@@ -1780,7 +1776,7 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 	for (i = 0; i < OSD_LEVEL_NUM; i++) {
 		if (osd_dev->task_state == OSD_TASK_REQUEST_STOP ||
 			osd_dev->task_state == OSD_TASK_STOP) {
-			pr_debug("osd task request stop, exit\n");
+			osd_debug("task request stop, exit\n");
 			break;
 		}
 
@@ -1798,7 +1794,7 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 			bind->proc_info.tar_y_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[0]);
 			bind->proc_info.tar_uv_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[1]);
 
-			if (bind->proc_info.proc_type != OSD_PROC_HW_VGA4) {
+			if (bind->proc_info.proc_type != OSD_PROC_HW_VGA8) {
 				osd_process_addr_inc(&bind->proc_info);
 				osd_run_process(&bind->proc_info);
 				osd_process_addr_dec(&bind->proc_info);
@@ -1812,7 +1808,7 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 
 exit:
 	if (!subdev->osd_info && !subdev->osd_info->return_frame) {
-		pr_err("return frame func null\n");
+		osd_err("return frame func null\n");
 		return;
 	}
 	subdev->osd_info->return_frame(subdev->osd_info, (struct vio_frame *)vio_frame);

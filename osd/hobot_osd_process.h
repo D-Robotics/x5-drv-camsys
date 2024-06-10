@@ -12,8 +12,8 @@
 #include "osd_config.h"
 
 enum osd_process_type {
-	OSD_PROC_HW_VGA4 = 0,
-	OSD_PROC_VGA4,
+	OSD_PROC_HW_VGA8 = 0,
+	OSD_PROC_VGA8,
 	OSD_PROC_NV12,
 	OSD_PROC_RECT,
 	OSD_PROC_POLYGON,

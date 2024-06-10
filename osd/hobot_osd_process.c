@@ -34,36 +34,34 @@ extern struct osd_color_map g_osd_color;
 #define OSD_FILL_FF00 0xff00u
 
 /*
- *vga4:     pixel1  pixel0  pixel3  pixel2
+ * vga4:    alhpa0  color0  alpha1  color2
  *          |---1byte----|  |---1byte----|
  *
  * yuv420:y:pixel0  pixel1  pixel2  pixel3
  *          |1byte| |1byte| |1byte| |1byte|
  *          ...
- *       uv:pixel0  pixel1  pixel2  pixel3
+ *        uv:pixel0  pixel1  pixel2  pixel3
  *          pixel4  pixel5  pixel6  pixel7
  *          |---2byte----|  |---2byte----|
  *          ...
  *
- * buffer: xx 00 00 xx
- * or:     00 ff ff 00
- * use for transparent realization
+ * [or] use for alpha
  */
 int32_t osd_vga4_to_sw(uint32_t *color_map, uint8_t *src_addr,
 			uint8_t *tar_addr, uint32_t width, uint32_t height)
 {
 	uint8_t *vga_addr;
-	uint8_t color_index, high_color, low_color;
+	uint8_t color_alpha_index, color_index, alpha_index;
 	uint8_t *addr_y, *addr_y_or;
 	uint8_t *addr_uv, *addr_uv_or;
 	uint8_t *addr_y_offset, *addr_y_offset_or;
 	uint8_t *addr_uv_offset, *addr_uv_offset_or;
-	uint16_t color;
+	uint16_t color_vu;
 	osal_time_t time_now = { 0 };
 	osal_time_t time_next = { 0 };
 	uint64_t time_us;
 	uint32_t h, w, base_offset;
-	uint32_t *color_map_tmp;
+	uint32_t *color_map_tmp = NULL;
 
 	osal_time_get(&time_now);
 
@@ -79,57 +77,54 @@ int32_t osd_vga4_to_sw(uint32_t *color_map, uint8_t *src_addr,
 		color_map_tmp = color_map;
 	}
 
-	pr_debug("vga4-->yuv420 width:%d height:%d vga4 addr:%p"
-		" yuv420 addr:%p\n", width, height, src_addr, tar_addr);
+	osd_debug("vga4-->yuv420 width: %d, height: %d, vga4 addr: %p, yuv420 addr: %p\n",
+		width, height, src_addr, tar_addr);
 
 	memset((void *)addr_y, 0x00, (size_t)width * (size_t)height);
 	memset((void *)addr_uv, 0x00, ((size_t)width * (size_t)height) >> 1u);
-	memset((void *)addr_y_or, (int32_t)OSD_FILL_FF, (size_t)width * (size_t)height);
-	memset((void *)addr_uv_or, (int32_t)OSD_FILL_FF, ((size_t)width * (size_t)height) >> 1u);
+	memset((void *)addr_y_or, 0x00, (size_t)width * (size_t)height);
+	memset((void *)addr_uv_or, 0x00, ((size_t)width * (size_t)height) >> 1u);
 
 	for (h = 0; h < height; h++) {
 		base_offset = h * width;
-		for (w = 0; w < width; w += 2) {
-			color_index = vga_addr[(base_offset + w) >> 1u];
-			if (color_index != OSD_FILL_FF) {
-				high_color = color_index >> 4;
-				low_color = color_index & OSD_FILL_0F;
-				addr_y_offset = &addr_y[base_offset + w];
-				addr_uv_offset = &addr_uv[((h >> 1u) * width) + w];
-				addr_y_offset_or = &addr_y_or[base_offset + w];
-				addr_uv_offset_or = &addr_uv_or[((h >> 1u) * width) + w];
+		for (w = 0; w < width; w += 1) {
+			color_alpha_index = vga_addr[base_offset + w];
+			color_index = color_alpha_index & OSD_FILL_0F;
+			alpha_index = color_alpha_index >> 4;
 
-				if (high_color != OSD_FILL_0F) {
-					addr_y_offset[1] = (uint8_t)(color_map_tmp[high_color] >> OSD_UV_BITS);
-					color = (uint16_t)(color_map_tmp[high_color] & OSD_FILL_FFFF);
-					*(uint16_t *)addr_uv_offset = (uint16_t)((color << OSD_U_BITS) | (color >> OSD_V_BITS));
+			addr_y_offset = &addr_y[base_offset + w];
+			addr_uv_offset = &addr_uv[((h >> 1u) * width) + w];
+			addr_y_offset_or = &addr_y_or[base_offset + w];
+			addr_uv_offset_or = &addr_uv_or[((h >> 1u) * width) + w];
 
-					addr_y_offset_or[1] = 0x00;
-					addr_uv_offset_or[0] = 0x00;
-					addr_uv_offset_or[1] = 0x00;
-				}
-				if (low_color != OSD_FILL_0F) {
-					addr_y_offset[0] = (uint8_t)(color_map_tmp[low_color] >> OSD_UV_BITS);
-					color = (uint16_t)(color_map_tmp[low_color] & OSD_FILL_FFFF);
-					*(uint16_t *)addr_uv_offset = (uint16_t)((color << OSD_U_BITS) | (color >> OSD_V_BITS));
-
-					addr_y_offset_or[0] = 0x00;
-					addr_uv_offset_or[0] = 0x00;
-					addr_uv_offset_or[1] = 0x00;
-				}
+			addr_y_offset[0] = (uint8_t)(color_map_tmp[color_index] & OSD_FILL_FF);
+			if (w % 2 == 0) {
+				color_vu = (uint16_t)(color_map_tmp[color_index] >> 8);
+				*(uint16_t *)addr_uv_offset = color_vu;
 			}
+
+			// todo: remove it
+			if (alpha_index == 0xF)
+				alpha_index = 0xFF;
+			else
+				alpha_index = 0;
+
+			addr_y_offset_or[0] = alpha_index;
+			addr_uv_offset_or[0] = alpha_index;
+			addr_uv_offset_or[1] = alpha_index;
 		}
 	}
+
 	osal_time_get(&time_next);
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
-	pr_debug("osd software vga4 -> yuv420 cost %lldus\n",
-		time_us);
+
+	osd_debug("software vga4->yuv420 done, cost %lldus\n", time_us);
 
 	return 0;
 }
 
-int32_t osd_process_info_check(struct osd_process_info *proc_info,
+static int32_t osd_process_info_check(struct osd_process_info *proc_info,
 				uint32_t *crop_width, uint32_t *crop_height)
 {
 	if ((proc_info->subdev != NULL) &&
@@ -138,37 +133,36 @@ int32_t osd_process_info_check(struct osd_process_info *proc_info,
 	}
 	if ((__pa(proc_info->tar_y_addr) == 0) ||
 		(__pa(proc_info->tar_uv_addr) == 0)) {
-		pr_err("osd process type:%d tar_addr y:%lld uv:%lld error\n",
-			proc_info->proc_type,
-			__pa(proc_info->tar_y_addr), __pa(proc_info->tar_uv_addr));
+		osd_err("process type: %d, tar_addr y: %lld, uv:%lld error\n",
+			proc_info->proc_type, __pa(proc_info->tar_y_addr), __pa(proc_info->tar_uv_addr));
 		return -EINVAL;
 	}
 	if ((proc_info->tar_y_addr == NULL) || (proc_info->tar_uv_addr == NULL)) {
-		pr_err("osd process type:%d tar_addr y:%p uv:%p error\n",
+		osd_err("process type: %d, tar_addr y: %p, uv: %p error\n",
 			proc_info->proc_type, proc_info->tar_y_addr, proc_info->tar_uv_addr);
 		return -EINVAL;
-		}
+	}
 
 	switch (proc_info->proc_type) {
-	case OSD_PROC_HW_VGA4:
+	case OSD_PROC_HW_VGA8:
 	case OSD_PROC_NV12:
 		if (proc_info->src_addr == NULL) {
-			pr_err("osd process type:%d src_addr:%p error\n",
-			proc_info->proc_type, proc_info->src_addr);
+			osd_err("process type: %d, src_addr: %p error\n",
+				proc_info->proc_type, proc_info->src_addr);
 			return -EINVAL;
 		}
 		break;
-	case OSD_PROC_VGA4:
+	case OSD_PROC_VGA8:
 		if (proc_info->src_vga_addr == NULL) {
-			pr_err("osd process type:%d src_vga_addr:%p error\n",
-			proc_info->proc_type, proc_info->src_vga_addr);
+			osd_err("process type: %d, src_vga_addr: %p error\n",
+				proc_info->proc_type, proc_info->src_vga_addr);
 			return -EINVAL;
 		}
 		break;
 	case OSD_PROC_POLYGON:
 		if (proc_info->polygon_buf == NULL) {
-			pr_err("osd process type:%d polygon_buf:%p error\n",
-			proc_info->proc_type, proc_info->polygon_buf);
+			osd_err("process type: %d, polygon_buf: %p error\n",
+				proc_info->proc_type, proc_info->polygon_buf);
 			return -EINVAL;
 		}
 		break;
@@ -183,15 +177,20 @@ int32_t osd_process_info_check(struct osd_process_info *proc_info,
 	} else {
 		*crop_height = 0;
 	}
+
 	if (proc_info->image_width > (proc_info->start_x + proc_info->width)) {
-		*crop_width = (ALIGN(proc_info->width, 16) > proc_info->image_width) ? ALIGN_DOWN(proc_info->width, 16) : ALIGN(proc_info->width, 16);
+		*crop_width = (ALIGN(proc_info->width, 16) > proc_info->image_width) ?
+				ALIGN_DOWN(proc_info->width, 16) : ALIGN(proc_info->width, 16);
 	} else if (proc_info->image_width > proc_info->start_x) {
 		*crop_width = proc_info->image_width - proc_info->start_x;
-		*crop_width = (ALIGN(*crop_width, 16) > proc_info->image_width) ? ALIGN_DOWN(*crop_width, 16) : ALIGN(*crop_width, 16);
+		*crop_width = (ALIGN(*crop_width, 16) > proc_info->image_width) ?
+				ALIGN_DOWN(*crop_width, 16) : ALIGN(*crop_width, 16);
 	} else {
 		*crop_width = 0;
 	}
+
 	if ((*crop_width == 0) || (*crop_height == 0)) {
+		osd_err("crop width: %d or crop height: %d is zero\n", *crop_width, *crop_height);
 		return -EINVAL;
 	}
 
@@ -203,17 +202,16 @@ void osd_process_vga4_workfunc(struct osd_process_info *proc_info)
 	uint8_t *tar_y_addr, *tar_uv_addr;
 	uint8_t *src_y_addr, *src_y_or_addr, *src_uv_addr, *src_uv_or_addr;
 	uint32_t offset;
-	osal_time_t time_now = { 0 };
-	osal_time_t time_next = { 0 };
+	osal_time_t time_now = {0};
+	osal_time_t time_next = {0};
 	uint64_t time_us;
 	uint32_t crop_width, crop_height;
 	volatile uint32_t cache_height;
 	uint8_t * volatile cache_y_addr;
 	uint8_t * volatile cache_uv_addr;
 
-	if (osd_process_info_check(proc_info, &crop_width, &crop_height) < 0) {
+	if (osd_process_info_check(proc_info, &crop_width, &crop_height) < 0)
 		return;
-	}
 
 	osal_time_get(&time_now);
 
@@ -222,20 +220,24 @@ void osd_process_vga4_workfunc(struct osd_process_info *proc_info)
 	src_uv_addr = src_y_addr + offset;
 	src_y_or_addr = src_uv_addr + (offset / 2);
 	src_uv_or_addr = src_y_or_addr + offset;
+
 	offset = proc_info->start_y * proc_info->image_width;
 	tar_y_addr = proc_info->tar_y_addr + offset + proc_info->start_x;
 	tar_uv_addr = proc_info->tar_uv_addr + offset / 2 + proc_info->start_x;
+
 	cache_height = crop_height;
 	cache_y_addr = tar_y_addr;
 	cache_uv_addr = tar_uv_addr;
 
 	kernel_neon_begin();
 	asm volatile (
+	"MOV    w27, #0xff                                            \n"
+	"DUP    v8.8B, w27                                          \n"
 	"CBZ    %[invert_en], vga4_loop_h                           \n"
 	"MOV    w26, #0xff                                          \n"
 	"DUP    v4.16B, w26                                         \n"
 	"vga4_loop_h:                                               \n"
-		// process uv if (h % 2 == 1)
+	// process uv if (h % 2 == 1)
 	"AND    x19, %[crop_height], #1                             \n"
 	"MOV    x20, %[tar_y_addr]                                  \n"
 	"MOV    x21, %[tar_uv_addr]                                 \n"
@@ -247,41 +249,69 @@ void osd_process_vga4_workfunc(struct osd_process_info *proc_info)
 	"MOV    x26, #0                                             \n"
 	"vga4_loop_w:"
 	// proccess y
-	"LD1    {v0.16B}, [x20]                                     \n"
-	"LD1    {v1.16B}, [x22]                                     \n"
-	"LD1    {v2.16B}, [x24]                                     \n"
-	"AND    v0.16B, v2.16B, v0.16B                              \n"
+	"LD1    {v0.8B}, [x20]                                      \n"
+	"LD1    {v1.8B}, [x22]                                      \n"
+	"LD1    {v2.8B}, [x24]                                      \n"
+	// "SMULL  v5.8H, v0.8B, v2.8B                                 \n"  // y0 = y0*a/16
+	// "AND    v0.8B, v2.8B, v0.8B                              \n"
 
 	"CBZ    %[invert_en], vga4_y_normal_process                 \n"
-	"SUB    v3.16B, v4.16B, v2.16B                              \n"
-	"SUB    v1.16B, v3.16B, v1.16B                              \n"
+	"SUB    v3.8B, v4.8B, v2.8B                                 \n"
+	"SUB    v1.8B, v3.8B, v1.8B                                 \n"
 	"vga4_y_normal_process:"
-	"ADD    v0.16B, v0.16B, v1.16B                              \n"
+	// "SUB    v2.8B, v8.8B, v2.8B                                 \n"  // y1 = y1*(15-a)/16
+	// "SMULL  v6.8H, v1.8B, v2.8B                                 \n"
+
+	// "ADD    v7.8H, v5.8H, v6.8H                                 \n"
+	// "USHR   v7.8H, v7.8H, #4                                    \n"
+	// "UQXTN  v0.8B, v7.8H                                        \n"
+	// todo : donnot use alpha temp
+	// "CBZ    %[not_transparent], vga4_transparent_y_process      \n"
+	// "vga4_transparent_y_process:"
+	"SUB    v9.8B, v8.8B, v2.8B                                 \n"
+	"AND    v0.8B, v0.8B, v9.8B                                 \n"
+	"AND    v1.8B, v1.8B, v2.8B                                 \n"
+	"ADD    v0.8B, v0.8B, v1.8B                                 \n"
+
 	// "vga4_y_start_st:"
 	// neon process 16 bytes once
-	"ST1    {v0.16B}, [x20], #16                                \n"
-	"ADD    x22, x22, #16                                       \n"
-	"ADD    x24, x24, #16                                       \n"
+	"ST1    {v0.8B}, [x20], #8                                  \n"
+	"ADD    x22, x22, #8                                        \n"
+	"ADD    x24, x24, #8                                        \n"
 
 	// proccess uv
 	"CBZ    x19, vga4_skip_uv_process                           \n"
-	"LD1    {v0.16B}, [x21]                                     \n"
-	"LD1    {v1.16B}, [x23]                                     \n"
-	"LD1    {v2.16B}, [x25]                                     \n"
-	"AND    v0.16B, v2.16B, v0.16B                              \n"
+	"LD1    {v0.8B}, [x21]                                      \n"
+	"LD1    {v1.8B}, [x23]                                      \n"
+	"LD1    {v2.8B}, [x25]                                      \n"
+	// "SMULL  v5.8H, v0.8B, v2.8B                                 \n"  // uv0 = uv0*a/15
+	// "AND    v0.8B, v2.8B, v0.8B                              \n"
 
 	"CBZ    %[invert_en], vga4_uv_normal_process                \n"
-	"SUB    v3.16B, v4.16B, v2.16B                              \n"
-	"SUB    v1.16B, v3.16B, v1.16B                              \n"
+	"SUB    v3.8B, v4.8B, v2.8B                                 \n"
+	"SUB    v1.8B, v3.8B, v1.8B                                 \n"
 	"vga4_uv_normal_process:"
-	"ADD    v0.16B, v0.16B, v1.16B                              \n"
+	// "SUB    v2.8B, v8.8B, v2.8B                                 \n"  // y1 = y1*(15-a)/16
+	// "SMULL  v6.8H, v1.8B, v2.8B                                 \n"
+
+	// "ADD    v7.8H, v5.8H, v6.8H                                 \n"
+	// "USHR   v7.8H, v7.8H, #4                                    \n"
+	// "UQXTN  v0.8B, v7.8H                                        \n"
+	// todo : donnot use alpha temp
+	// "CBZ    %[not_transparent], vga4_transparent_uv_process     \n"
+	// "vga4_transparent_uv_process:"
+	"SUB    v9.8B, v8.8B, v2.8B                                 \n"
+	"AND    v0.8B, v0.8B, v9.8B                                 \n"
+	"AND    v1.8B, v1.8B, v2.8B                                 \n"
+	"ADD    v0.8B, v0.8B, v1.8B                                 \n"
+
 	// neon process 16 bytes once
-	"ST1    {v0.16B}, [x21], #16                                \n"
-	"ADD    x23, x23, #16                                       \n"
-	"ADD    x25, x25, #16                                       \n"
+	"ST1    {v0.8B}, [x21], #8                                  \n"
+	"ADD    x23, x23, #8                                        \n"
+	"ADD    x25, x25, #8                                        \n"
 	"vga4_skip_uv_process:                                      \n"
 
-	"ADD    x26, x26, #16                                       \n"
+	"ADD    x26, x26, #8                                        \n"
 	"CMP    x26, %[crop_width]                                  \n"
 	"B.LT   vga4_loop_w                                         \n"
 	"vga4_loop_w_done:                                          \n"
@@ -314,22 +344,22 @@ void osd_process_vga4_workfunc(struct osd_process_info *proc_info)
 		[crop_width]"r"(crop_width),
 		[crop_height]"r"(crop_height),
 		[invert_en]"r"(proc_info->invert_en)
-	: "cc", "memory", "v0", "v1", "v2", "v3", "v4",
-		"x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26"    // Clobber List
+	: "cc", "memory", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9",
+		"x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27"    // Clobber List
 	);
 	kernel_neon_end();
 
-	if (__pa(cache_y_addr) != 0) {
+	if (__pa(cache_y_addr) != 0)
 		ion_dcache_flush(__pa(cache_y_addr), proc_info->image_width * cache_height);
-	}
-	if (__pa(cache_uv_addr) != 0) {
+
+	if (__pa(cache_uv_addr) != 0)
 		ion_dcache_flush(__pa(cache_uv_addr), proc_info->image_width * cache_height / 2);
-	}
 
 	osal_time_get(&time_next);
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
-	pr_debug("osd vga4 process, show:%d invert:%d level:%d, "
+
+	osd_debug("vga4 process, show:%d invert:%d level:%d, "
 		"frame_id:%d buf_index:%d image w:%d h:%d, "
 		"x:%d y:%d w:%d h:%d src: y_addr:%p %p uv_addr:%p %p, "
 		"image y:%p uv:%p, cost %lldus\n",
@@ -522,11 +552,12 @@ void osd_process_rect_workfunc(struct osd_process_info *proc_info)
 		proc_info->start_y * proc_info->image_width + proc_info->start_x;
 	tar_uv_addr = proc_info->tar_uv_addr +
 		proc_info->start_y * proc_info->image_width / 2 + proc_info->start_x;
+
 	yuv_color = g_osd_color.color_map[proc_info->fill_color & OSD_FILL_0F];
-	y_color = (yuv_color >> OSD_UV_BITS) & OSD_FILL_FF;
-	uv_color = yuv_color & OSD_FILL_FFFF;
+	y_color = yuv_color & OSD_FILL_FF;
+	uv_color = yuv_color >> OSD_U8_BITS;
 	// uint16 store, need invert
-	uv_color = (uint16_t)(((uv_color & OSD_FILL_FF) << 8) | ((uv_color & OSD_FILL_FF00) >> 8));
+	// uv_color = (uint16_t)(((uv_color & OSD_FILL_FF) << 8) | ((uv_color & OSD_FILL_FF00) >> 8));
 	if (proc_info->invert_en == 1u) {
 		y_color = (uint8_t)(OSD_FILL_FF - y_color);
 		uv_color = (uint16_t)(OSD_FILL_FFFF - uv_color);
@@ -538,7 +569,7 @@ void osd_process_rect_workfunc(struct osd_process_info *proc_info)
 	kernel_neon_begin();
 	asm volatile (
 	"DUP    v0.16B, %w[y_color]                             \n"
-	"DUP    V1.16B, %w[uv_color]                            \n"
+	"DUP    V1.8H, %w[uv_color]                            \n"
 
 	"rect_loop_h:                                           \n"
 	// process uv if (h % 2 == 1)
@@ -552,7 +583,7 @@ void osd_process_rect_workfunc(struct osd_process_info *proc_info)
 	"ST1    {v0.16B}, [x20], #16                            \n"
 	// proccess uv
 	"CBZ    x19, rect_skip_uv_process                       \n"
-	"ST1    {v1.16B}, [x21], #16                            \n"
+	"ST1    {v1.8H}, [x21], #16                            \n"
 	"rect_skip_uv_process:                                  \n"
 
 	// neon process 16 bytes once
@@ -634,11 +665,12 @@ void osd_process_polygon_workfunc(struct osd_process_info *proc_info)
 		proc_info->start_y * proc_info->image_width + proc_info->start_x;
 	tar_uv_addr = proc_info->tar_uv_addr +
 		proc_info->start_y * proc_info->image_width / 2 + proc_info->start_x;
+
 	yuv_color = g_osd_color.color_map[proc_info->fill_color & OSD_FILL_0F];
-	y_color = (yuv_color >> OSD_UV_BITS) & OSD_FILL_FF;
-	uv_color = yuv_color & OSD_FILL_FFFF;
+	y_color = yuv_color & OSD_FILL_FF;
+	uv_color = yuv_color >> OSD_U8_BITS;
 	// uint16 store, need invert
-	uv_color = (uint16_t)(((uv_color & OSD_FILL_FF) << 8) | ((uv_color & OSD_FILL_FF00) >> 8));
+	// uv_color = (uint16_t)(((uv_color & OSD_FILL_FF) << 8) | ((uv_color & OSD_FILL_FF00) >> 8));
 	if (proc_info->invert_en == 1u) {
 		y_color = (uint8_t)(OSD_FILL_FF - y_color);
 		uv_color = (uint16_t)(OSD_FILL_FFFF - uv_color);
@@ -962,7 +994,7 @@ void osd_run_process(struct osd_process_info *process_info)
 {
 	switch (process_info->proc_type)
 	{
-	case OSD_PROC_VGA4:
+	case OSD_PROC_VGA8:
 		osd_process_vga4_workfunc(process_info);
 		break;
 	case OSD_PROC_NV12:

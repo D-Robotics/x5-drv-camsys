@@ -27,7 +27,7 @@ enum osd_buf_state {
 
 enum osd_pixel_format {
 	OSD_PIXEL_FORMAT_NULL,
-	OSD_PIXEL_FORMAT_VGA4,
+	OSD_PIXEL_FORMAT_VGA8,
 	OSD_PIXEL_FORMAT_NV12,
 	OSD_PIXEL_FORMAT_SW_VGA4,
 	OSD_PIXEL_FORMAT_POLYGON,
@@ -63,7 +63,7 @@ void osd_single_buffer_dec_by_paddr(uint64_t paddr);
 int32_t osd_single_buffer_create(struct ion_client *client, struct osd_single_buffer *one_buffer);
 void osd_single_buffer_destroy(struct ion_client *client, struct osd_single_buffer *buf);
 void osd_single_buffer_flush(struct osd_single_buffer *single_buffer);
-void osd_single_buffer_fill(struct osd_single_buffer *one_buffer, uint32_t color);
+void osd_single_buffer_fill(struct osd_single_buffer *single_buffer, uint32_t color, uint32_t alpha);
 
 int32_t osd_buffer_create(struct ion_client *client, struct osd_buffer *osd_buffer);
 int32_t osd_buffer_create_vga(struct ion_client *client, struct osd_buffer *osd_buffer);
@@ -71,8 +71,8 @@ void osd_buffer_destroy(struct ion_client *client, struct osd_buffer *osd_buffer
 void osd_buffer_destroy_vga(struct ion_client *client, struct osd_buffer *osd_buffer);
 void osd_buffer_flush(struct osd_buffer *osd_buffer);
 
-struct vio_frame *osd_get_frame(struct list_head *list, int32_t frame_index);
-void osd_put_input_frame(struct list_head *list, struct vio_frame *frame);
-struct vio_frame *osd_get_input_frame(struct list_head *list);
+// struct vio_frame *osd_get_frame(struct list_head *list, int32_t frame_index);
+// void osd_put_input_frame(struct list_head *list, struct vio_frame *frame);
+// struct vio_frame *osd_get_input_frame(struct list_head *list);
 
 #endif // __HOBOT_OSD_MEM_H__
