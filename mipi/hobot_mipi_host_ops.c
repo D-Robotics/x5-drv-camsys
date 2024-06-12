@@ -3483,8 +3483,7 @@ static void mipi_host_ipi_overflow_handle(struct mipi_host_s *host, uint32_t ipi
 		/* do nothing */
 		break;
 	}
-	/* maybe not needed ? */
-	//mhost_putreg(host, REG_MIPI_HOST_IPI_SOFTRSTN, MIPI_HOST_ALLE_SOFTRSTN);
+	mhost_putreg(host, REG_MIPI_HOST_IPI_SOFTRSTN, MIPI_HOST_ALLE_SOFTRSTN);
 }
 
 static uint32_t mipi_host_subirq_func(struct mipi_hdev_s *hdev, const struct mipi_host_ireg_s *ireg)
@@ -3946,12 +3945,6 @@ static int32_t mipi_host_stop(struct mipi_hdev_s *hdev)
 			mipi_host_ipi_overflow_handle(host, i);
 		}
 	}
-
-	/*maybe not needed ?*/
-	/*Release DWC_mipi_csi2_host from reset*/
-	mhost_putreg(host, REG_MIPI_HOST_CSI2_RESETN, MIPI_HOST_CSI2_RESETN);
-	osal_udelay(100);
-	mhost_putreg(host, REG_MIPI_HOST_CSI2_RESETN, MIPI_HOST_CSI2_RAISE);
 
         return 0;
 }
