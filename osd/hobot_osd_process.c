@@ -14,6 +14,7 @@
 #include "hobot_osd_dev.h"
 
 extern struct osd_color_map g_osd_color;
+extern struct osd_alpha_map g_osd_alpha;
 
 #define OSD_U8_BITS 8u
 #define OSD_U16_BITS 16u

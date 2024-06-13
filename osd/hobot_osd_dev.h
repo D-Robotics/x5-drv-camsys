@@ -30,7 +30,7 @@
 #define OSD_COLOR_NUM		15
 #define OSD_LEVEL_NUM		4
 #define MAX_STA_BIN_NUM		4
-#define OSD_TASK_PRIORITY	34
+#define OSD_TASK_PRIORITY	20
 #define OSD_COPS_MAGIC		0x1234
 #define OSD_CHN_NAME {"osd_vse_ds0 ",\
 		"osd_vse_ds1",\
@@ -81,7 +81,12 @@ struct osd_sta_box {
 
 struct osd_color_map {
 	u8 color_map_update;
-	u32 color_map[MAX_OSD_COLOR_NUM];	//colour map buffer addr
+	u32 color_map[MAX_OSD_COLOR_NUM];	// colour map buffer addr
+};
+
+struct osd_alpha_map {
+	u8 alpha_map_update;
+	u32 alpha_map[MAX_OSD_COLOR_NUM];	// alpha map buffer addr
 };
 
 // vse hw osd cfg

@@ -33,6 +33,14 @@ struct osd_color_map g_osd_color = {
 	}
 };
 
+struct osd_alpha_map g_osd_alpha = {
+	.alpha_map_update = 0,
+	.alpha_map = {
+		0xff, 0xe0, 0xd0, 0xc0, 0xb0, 0xa0, 0x90, 0x80,
+		0x70, 0x60, 0x50, 0x40, 0x30, 0x20, 0x10, 0x00
+	}
+};
+
 uint32_t g_osd_fps[OSD_CHN_MAX][VIO_MAX_STREAM] = {0, };
 uint32_t g_osd_idx[OSD_CHN_MAX][VIO_MAX_STREAM] = {0, };
 uint32_t g_osd_fps_lasttime[OSD_CHN_MAX][VIO_MAX_STREAM] = {0, };
@@ -69,6 +77,11 @@ static void osd_frame_process(struct vio_osd_info *osd_info)
 		goto exit;
 	}
 
+	if (atomic_read(&osd_subdev->osd_info->frame_count) > 1) {
+		osd_warn("more than 2 frame osd has not process\n");
+		goto exit;
+	}
+
 	vse_ctx = container_of(osd_info, struct vse_nat_instance, osd_info);
 	if (!vse_ctx) {
 		osd_err("get vse ctx fail\n");
@@ -80,14 +93,20 @@ static void osd_frame_process(struct vio_osd_info *osd_info)
 	frame = peek_frame(framemgr, FS_PROCESS);
 	vio_x_barrier_irqr(framemgr, flags);
 
-	ret = osd_queue_push(&osd_subdev->queue, frame);
-	if (ret) {
-		osd_err("push queue failed\n");
-		goto exit;
-	}
-	atomic_inc(&osd_subdev->osd_info->frame_count);
-	if (!kthread_queue_work(&osd_dev->worker, &osd_subdev->work)) {
-		osd_err("kthread_queue_work failed\n");
+	if (frame != NULL) {
+		ret = osd_queue_push(&osd_subdev->queue, frame);
+		if (ret) {
+			osd_err("push queue failed\n");
+			goto exit;
+		}
+		atomic_inc(&osd_subdev->osd_info->frame_count);
+		// if (!kthread_queue_work(&osd_dev->worker, &osd_subdev->work)) {
+		// 	osd_err("kthread_queue_work failed\n");
+		// 	goto exit;
+		// }
+		kthread_queue_work(&osd_dev->worker, &osd_subdev->work);
+	} else {
+		osd_err("frame null\n");
 		goto exit;
 	}
 

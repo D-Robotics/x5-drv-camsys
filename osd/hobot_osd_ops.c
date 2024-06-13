@@ -114,8 +114,7 @@ int32_t osd_queue_done(struct osd_frame_queue *queue)
 
 	if (!queue) {
 		pr_err("input queue null\n");
-		rc = -EINVAL;
-		goto exit;
+		return -EINVAL;
 	}
 
 	spin_lock_irqsave(&queue->lock, flags);
@@ -264,7 +263,7 @@ static enum osd_process_type osd_hw_check_limit(struct osd_subdev *subdev,
 {
 	if ((subdev->osd_hw_cfg == NULL) ||
 		// 1 ||
-		subdev->chn_id == 3 ||
+		subdev->chn_id == OSD_VSE_DS4 ||
 		(bind->bind_info.show_en == 0) || (bind->bind_info.osd_level > 0)||
 		(bind->bind_info.start_point.y < subdev->osd_hw_limit_y) ||
 		(atomic_read(&subdev->osd_hw_cnt) >= OSD_HW_PROC_NUM)) {
@@ -1644,7 +1643,7 @@ long hb_osd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 int32_t osd_start_worker(struct osd_dev *osd_dev)
 {
 	int32_t ret = 0;
-	// struct sched_attr param = {0};
+	struct sched_attr param = {0};
 
 	mutex_lock(&osd_dev->osd_mutex);
 
@@ -1656,14 +1655,14 @@ int32_t osd_start_worker(struct osd_dev *osd_dev)
 		goto exit;
 	}
 
-	// param.sched_priority = OSD_TASK_PRIORITY;
-	// param.sched_policy = SCHED_FIFO;
-	// ret = sched_setattr_nocheck(osd_dev->task, &param);
-	// if (ret) {
-	// 	mutex_unlock(&osd_dev->osd_mutex);
-	// 	pr_err("sched_setattr_nocheck is fail(%d)", ret);
-	// 	goto exit;
-	// }
+	param.sched_priority = OSD_TASK_PRIORITY;
+	param.sched_policy = SCHED_FIFO;
+	ret = sched_setattr_nocheck(osd_dev->task, &param);
+	if (ret) {
+		mutex_unlock(&osd_dev->osd_mutex);
+		pr_err("sched_setattr_nocheck is fail(%d)", ret);
+		goto exit;
+	}
 
 	osd_dev->task_state = OSD_TASK_START;
 	mutex_unlock(&osd_dev->osd_mutex);
@@ -1711,8 +1710,6 @@ static void osd_process_workfunc_done(struct osd_subdev *subdev)
 
 	if (atomic_dec_return(&subdev->osd_info->frame_count) > 0)
 		kthread_queue_work(&osd_dev->worker, &subdev->work);
-
-	osd_info("[CHN%d][CTX%d] done\n", chn_id, ctx_id);
 }
 
 static void osd_frame_process_workfunc(struct kthread_work *work)
@@ -1733,8 +1730,8 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 		goto exit;
 	}
 
-	osd_debug("frame id: %d, index: %d\n", vio_frame->frameinfo.frameid.frame_id,
-		vio_frame->frameinfo.bufferindex);
+	// osd_debug("frame id: %d, index: %d\n", vio_frame->frameinfo.frameid.frame_id,
+	// 	vio_frame->frameinfo.bufferindex);
 
 	mutex_lock(&subdev->sta_mutex);
 	if (subdev->osd_sta.sta_state == OSD_STA_REQUEST) {
@@ -1761,7 +1758,7 @@ static void osd_frame_process_workfunc(struct kthread_work *work)
 				process_info->image_width = vio_frame->vbuf.group_info.info[0].buf_attr.width;
 				process_info->image_height = vio_frame->vbuf.group_info.info[0].buf_attr.height;
 				process_info->tar_y_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[0]);
-				process_info->tar_uv_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[0]);
+				process_info->tar_uv_addr = __va(vio_frame->vbuf.group_info.info[0].paddr[1]);
 				process_info->proc_type = OSD_PROC_STA;
 
 				osd_run_process(process_info);
@@ -1901,11 +1898,11 @@ static void osd_subdev_clear(struct osd_dev *osd_dev)
 			while (!list_empty(&subdev->bind_list)) {
 				bind = list_first_entry(&subdev->bind_list, struct osd_bind, node);
 				list_del(&bind->node);
-				// if (bind->bind_info.polygon_buf != NULL) {
-				// 	kfree(bind->bind_info.polygon_buf);
-				// 	bind->bind_info.polygon_buf = NULL;
-				// }
-				// kfree(bind);
+				if (bind->proc_info.polygon_buf != NULL) {
+					kfree(bind->proc_info.polygon_buf);
+					bind->proc_info.polygon_buf = NULL;
+				}
+				kfree(bind);
 			}
 			mutex_unlock(&subdev->bind_mutex);
 
@@ -1914,10 +1911,15 @@ static void osd_subdev_clear(struct osd_dev *osd_dev)
 			mutex_unlock(&subdev->sta_mutex);
 
 			spin_lock_irqsave(&subdev->frame_slock, flags);
-			frame = osd_queue_pop(&subdev->queue);
-			if (frame)
-				subdev->osd_info->return_frame(subdev->osd_info, frame);
-
+			while (!list_empty(&subdev->queue.incoming_list)) {
+				frame = osd_queue_pop(&subdev->queue);
+				if (frame) {
+					subdev->osd_info->return_frame(subdev->osd_info, frame);
+				} else {
+					osd_err("pop fail\n");
+					break;
+				}
+			}
 			spin_unlock_irqrestore(&subdev->frame_slock, flags);
 
 			g_osd_fps[i][j] = 0;
