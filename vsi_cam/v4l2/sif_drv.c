@@ -41,7 +41,7 @@ static int sif_link_setup(struct media_entity *entity,
 	struct v4l2_subdev *sd;
 	struct sif_v4l_instance *sif;
 	struct media_pad *pad;
-	struct cam_buf_ctx *buf_ctx;
+	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
 	int rc = 0;
 
@@ -77,11 +77,11 @@ static int sif_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_buf_ctx_init(buf_ctx, sd->dev, (void *)local, false);
+		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local, false);
 		if (rc < 0)
 			return rc;
 	} else {
-		cam_buf_ctx_release(buf_ctx);
+		cam_ctx_release(buf_ctx);
 	}
 	return rc;
 }
@@ -329,7 +329,7 @@ static int sif_async_bound(struct subdev_node *sn)
 
 	while (i < sif->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
-		cam_buf_ctx_release(&ins->buf_ctx);
+		cam_ctx_release(&ins->buf_ctx);
 
 		if (ins != sif) {
 			rc = v4l2_device_register_subdev(sn->sd.v4l2_dev,
@@ -450,7 +450,7 @@ static int sif_v4l_remove(struct platform_device *pdev)
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
 
 	for (i = 0; i < v4l_dev->sif_dev.num_insts; i++) {
-		cam_buf_ctx_release(&v4l_dev->insts[i].buf_ctx);
+		cam_ctx_release(&v4l_dev->insts[i].buf_ctx);
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}
 

@@ -21,7 +21,7 @@
 
 struct gdc_irq_ctx {
 	struct cam_buf *sink_buf, *src_buf;
-	struct cam_buf_ctx *sink_ctx, *src_ctx;
+	struct cam_ctx *sink_ctx, *src_ctx;
 };
 
 struct gdc_format_cap {

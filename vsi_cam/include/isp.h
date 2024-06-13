@@ -29,7 +29,7 @@
 struct isp_irq_ctx {
 	bool is_sink_online_mode, is_src_online_mode, ddr_en;
 	struct cam_buf *sink_buf, *src_buf;
-	struct cam_buf_ctx *sink_ctx, *src_ctx, *stat_ctx;
+	struct cam_ctx *sink_ctx, *src_ctx, *stat_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
 };
 
@@ -101,7 +101,7 @@ struct isp_device {
 	enum cam_error error;
 	bool rdma_busy;
 	bool unit_test;
-	enum work_mode mode;
+	enum isp_work_mode mode;
 	struct mutex open_lock; /* lock for open_cnt */
 	struct mutex set_input_lock; /* lock for set_input */
 	struct mutex set_state_lock; /* lock for set_state */

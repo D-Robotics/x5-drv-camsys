@@ -4,7 +4,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
 
-#include "cam_buf.h"
+#include "cam_ctx.h"
 #include "dw230_vse_regs.h"
 #include "isc.h"
 #include "vse_uapi.h"
@@ -226,6 +226,19 @@ struct vse_irq_ctx *get_next_irq_ctx(struct vse_device *vse)
 	// u32 id = vse->next_irq_ctx;
 	int rc;
 
+	if (vse->mode == VSE_SCM_MODE) {
+		inst = &vse->insts[0];
+		if (inst->state != CAM_STATE_STARTED)
+			return NULL;
+		spin_lock_irqsave(&inst->lock, flags);
+		ctx = &inst->ctx;
+		rc = new_frame(ctx);
+		spin_unlock_irqrestore(&inst->lock, flags);
+		if (!rc)
+			return ctx;
+		return NULL;
+	}
+
 	for (;;) {
 		rc = pop_job(vse->jq, &job);
 		if (rc < 0) {
@@ -242,6 +255,8 @@ struct vse_irq_ctx *get_next_irq_ctx(struct vse_device *vse)
 		}
 
 		inst = &vse->insts[job.irq_ctx_index];
+		if (inst->state != CAM_STATE_STARTED)
+			continue;
 		spin_lock_irqsave(&inst->lock, flags);
 		ctx = &inst->ctx;
 		rc = new_frame(ctx);
@@ -268,7 +283,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 	struct vse_instance *inst;
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
-	u32 value, id;
+	u32 value, i;
 
 	value = vse_read(vse, VSE_MI_MIS);
 	pr_debug("+mi mis:0x%x\n", value);
@@ -276,9 +291,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		vse_write(vse, VSE_MI_ICR, value);
 
 	if (value & BIT(13)) {
-		id = vse->next_irq_ctx;
-
-		inst = &vse->insts[id];
+		inst = &vse->insts[vse->next_irq_ctx];
 		spin_lock_irqsave(&inst->lock, flags);
 		frame_done(&inst->ctx);
 		spin_unlock_irqrestore(&inst->lock, flags);
@@ -293,6 +306,14 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		if (!ctx) {
 			vse->is_completed = true;
 			vse->error = 1;
+		} else if (vse->mode == VSE_SCM_MODE) {
+			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
+				if (ctx->src_buf[i]) {
+					phys_addr_t phys_addr = get_phys_addr(ctx->src_buf[i], 0);
+
+					vse_set_mi_buffer(vse, i, phys_addr, &inst->ofmt[i]);
+				}
+			}
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}

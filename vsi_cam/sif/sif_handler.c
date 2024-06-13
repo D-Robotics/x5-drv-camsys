@@ -4,7 +4,7 @@
 
 #include <linux/interrupt.h>
 
-#include "cam_buf.h"
+#include "cam_ctx.h"
 #include "isc.h"
 #include "sif_uapi.h"
 #include "sif_regs.h"

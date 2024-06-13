@@ -147,7 +147,7 @@ static int vse_link_setup(struct media_entity *entity,
 	struct v4l2_subdev *sd;
 	struct vse_v4l_instance *vse;
 	struct media_pad *pad;
-	struct cam_buf_ctx *buf_ctx;
+	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
 	int rc = 0;
 	int index = -1;
@@ -190,14 +190,14 @@ static int vse_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_buf_ctx_init(buf_ctx, sd->dev, (void *)local,
+		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local,
 				      has_internal_buf);
 		if (rc < 0)
 			return rc;
 		if (index >= 0)
 			vse->is_out_chnl_connected[index] = true;
 	} else {
-		cam_buf_ctx_release(buf_ctx);
+		cam_ctx_release(buf_ctx);
 		if (index >= 0)
 			vse->is_out_chnl_connected[index] = false;
 	}
@@ -409,7 +409,7 @@ static void fill_irq_ctx(struct vse_v4l_instance *vse, struct vse_irq_ctx *ctx)
 	}
 }
 
-static int vse_queue_setup(struct cam_buf_ctx *ctx,
+static int vse_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
@@ -666,9 +666,9 @@ static int vse_async_bound(struct subdev_node *sn)
 
 	while (i < vse->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
-		cam_buf_ctx_release(&ins->sink_ctx);
+		cam_ctx_release(&ins->sink_ctx);
 		for (j = 0; j < VSE_OUT_CHNL_MAX; j++)
-			cam_buf_ctx_release(&ins->src_ctx[j]);
+			cam_ctx_release(&ins->src_ctx[j]);
 
 		if (ins != vse) {
 			rc = v4l2_device_register_subdev
@@ -803,9 +803,9 @@ static int vse_v4l_remove(struct platform_device *pdev)
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
 
 	for (i = 0; i < v4l_dev->vse_dev.num_insts; i++) {
-		cam_buf_ctx_release(&v4l_dev->insts[i].sink_ctx);
+		cam_ctx_release(&v4l_dev->insts[i].sink_ctx);
 		for (j = 0; j < VSE_OUT_CHNL_MAX; j++)
-			cam_buf_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
+			cam_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}
 

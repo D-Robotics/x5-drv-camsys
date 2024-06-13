@@ -30,7 +30,7 @@ static int gdc_link_setup(struct media_entity *entity,
 	struct v4l2_subdev *sd;
 	struct gdc_v4l_instance *gdc;
 	struct media_pad *pad;
-	struct cam_buf_ctx *buf_ctx;
+	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
 	int rc = 0;
 	bool has_internal_buf = false;
@@ -72,12 +72,12 @@ static int gdc_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_buf_ctx_init(buf_ctx, sd->dev, (void *)local,
+		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local,
 				      has_internal_buf);
 		if (rc < 0)
 			return rc;
 	} else {
-		cam_buf_ctx_release(buf_ctx);
+		cam_ctx_release(buf_ctx);
 	}
 	return rc;
 }
@@ -252,7 +252,7 @@ static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
 		ctx->src_ctx = &gdc->src_ctx;
 }
 
-static int gdc_queue_setup(struct cam_buf_ctx *ctx,
+static int gdc_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
@@ -427,8 +427,8 @@ static int gdc_async_bound(struct subdev_node *sn)
 
 	while (i < gdc->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
-		cam_buf_ctx_release(&ins->sink_ctx);
-		cam_buf_ctx_release(&ins->src_ctx);
+		cam_ctx_release(&ins->sink_ctx);
+		cam_ctx_release(&ins->src_ctx);
 
 		if (ins != gdc) {
 			rc = v4l2_device_register_subdev
@@ -553,8 +553,8 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
 
 	for (i = 0; i < v4l_dev->gdc_dev.num_insts; i++) {
-		cam_buf_ctx_release(&v4l_dev->insts[i].sink_ctx);
-		cam_buf_ctx_release(&v4l_dev->insts[i].src_ctx);
+		cam_ctx_release(&v4l_dev->insts[i].sink_ctx);
+		cam_ctx_release(&v4l_dev->insts[i].src_ctx);
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}
 

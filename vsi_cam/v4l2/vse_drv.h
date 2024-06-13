@@ -8,8 +8,8 @@
 struct vse_v4l_instance {
 	struct subdev_node node;
 	struct vse_device *dev;
-	struct cam_buf_ctx sink_ctx;
-	struct cam_buf_ctx src_ctx[VSE_OUT_CHNL_MAX];
+	struct cam_ctx sink_ctx;
+	struct cam_ctx src_ctx[VSE_OUT_CHNL_MAX];
 	struct media_pad *src_pads[VSE_OUT_CHNL_MAX];
 	bool is_out_chnl_connected[VSE_OUT_CHNL_MAX];
 	struct vse_format ifmt;

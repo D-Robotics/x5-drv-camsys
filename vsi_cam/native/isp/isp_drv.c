@@ -8,6 +8,7 @@
 #include "hobot_dev_vin_node.h"
 #include "vin_node_config.h"
 
+#include "cam_ctx.h"
 #include "hbn_isp_api.h"
 #include "isp_drv.h"
 
@@ -77,15 +78,21 @@ static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
 
-	if (vdev) {
-		if (vdev->id == VNODE_ID_SRC)
-			vdev->prev = remote_vdev;
-	}
-	if (vdev->id == VNODE_ID_CAP) {
+	if (!vdev)
+		return bind_type;
+
+	if (vdev->id == VNODE_ID_SRC) {
+		vdev->prev = remote_vdev;
+	} else if (vdev->id == VNODE_ID_CAP) {
 		vdev->chn_attr.format = MEM_PIX_FMT_NV12;
 		vdev->chn_attr.height = inst->attr.crop.h;
 		vdev->chn_attr.width = inst->attr.crop.w;
 		vdev->chn_attr.wstride = inst->attr.crop.w;
+		vdev->next = remote_vdev;
+		if (inst->dev->isp_dev.mode == ISP_STRM_MODE)
+			cam_next_set_mode((struct cam_ctx *)vdev, CAM_SIMPLEX_MODE);
+		else
+			cam_next_set_mode((struct cam_ctx *)vdev, CAM_MULTIPLEX_MODE);
 	}
 
 	if (online_mode)
@@ -347,16 +354,16 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 
 	dev = inst->dev;
 	if (inst->attr.input_mode == MCM_MODE) {
-		dev->isp_dev.mode = MCM_WORK_MODE;
+		dev->isp_dev.mode = ISP_MCM_MODE;
 		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 1;
 	} else if (inst->attr.input_mode == DDR_MODE) {
 		/** handling frame buffer from previous IP modules,
 		 *  we treat it as MCM work mode too.
 		 */
-		dev->isp_dev.mode = MCM_WORK_MODE;
+		dev->isp_dev.mode = ISP_MCM_MODE;
 		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 0;
 	} else {
-		dev->isp_dev.mode = STRM_WORK_MODE;
+		dev->isp_dev.mode = ISP_STRM_MODE;
 		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 0;
 		dev->isp_dev.cur_mi_irq_ctx = 0;
 		dev->isp_dev.next_mi_irq_ctx = 0;
@@ -535,11 +542,11 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 
 		inst->ctx.is_sink_online_mode = !!src_inst->online_mode;
 		inst->ctx.is_src_online_mode = !!inst->online_mode;
-		inst->ctx.src_ctx = (struct cam_buf_ctx *)vctx->vdev;
+		inst->ctx.src_ctx = (struct cam_ctx *)vctx->vdev;
 		inst->ctx.ddr_en = inst->ochn_attr.ddr_en;
 		if (!inst->ctx.is_sink_online_mode)
-			inst->ctx.sink_ctx = (struct cam_buf_ctx *)&src_inst->vdev;
-		inst->ctx.stat_ctx = (struct cam_buf_ctx *)&src_inst->vdev;
+			inst->ctx.sink_ctx = (struct cam_ctx *)&src_inst->vdev;
+		inst->ctx.stat_ctx = (struct cam_ctx *)&src_inst->vdev;
 		rc = isp_set_ctx(&dev->isp_dev, vctx->ctx_id, &inst->ctx);
 		if (rc < 0) {
 			pr_err("%s failed to call isp_set_ctx (rc=%d)!\n", __func__, rc);

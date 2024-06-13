@@ -14,6 +14,8 @@
 #define SIF_FMT_MAX (4)
 #define SIF_RES_MAX (3)
 
+#define SIF_EBD_HSIZE_ALIGN (16)
+
 #define sif_write(sif, offset, value) \
 	__raw_writel(value, (sif)->base + (offset))
 
@@ -69,10 +71,10 @@ enum pps_trigger_source {
 };
 
 struct sif_irq_ctx {
-	struct cam_buf_ctx *sink_ctx;
-	struct cam_buf_ctx *buf_ctx;
+	struct cam_ctx *sink_ctx;
+	struct cam_ctx *buf_ctx;
 	struct cam_buf *buf;
-	struct cam_buf_ctx *emb_buf_ctx;
+	struct cam_ctx *emb_buf_ctx;
 	struct cam_buf *emb_buf;
 };
 

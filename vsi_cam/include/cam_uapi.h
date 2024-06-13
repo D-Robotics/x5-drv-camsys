@@ -72,7 +72,7 @@ struct cam_res_cap {
 
 struct cam_format_cap {
 	__u32 format;
-	__u8  index;
+	__u8 index;
 	struct cam_res_cap res;
 };
 
@@ -109,6 +109,11 @@ struct cam_input {
 			__u8 bayer_format;
 		} sens;
 	};
+};
+
+enum cam_work_mode {
+	CAM_SIMPLEX_MODE,
+	CAM_MULTIPLEX_MODE,
 };
 
 struct cam_reg {

@@ -22,7 +22,7 @@ static int cam_queue_setup(struct vb2_queue *vq,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
-	struct cam_buf_ctx *cbc = (struct cam_buf_ctx *)vq->drv_priv;
+	struct cam_ctx *cbc = (struct cam_ctx *)vq->drv_priv;
 	struct local_buf_ctx *lbc = (struct local_buf_ctx *)cbc->priv;
 
 	if (lbc->ops && lbc->ops->queue_setup)
@@ -34,7 +34,7 @@ static int cam_queue_setup(struct vb2_queue *vq,
 static void cam_buf_queue(struct vb2_buffer *vb)
 {
 	struct cam_buf *buf = vb2_buf_to_cam_buf(vb);
-	struct cam_buf_ctx *cbc = (struct cam_buf_ctx *)vb->vb2_queue->drv_priv;
+	struct cam_ctx *cbc = (struct cam_ctx *)vb->vb2_queue->drv_priv;
 	struct local_buf_ctx *lbc = (struct local_buf_ctx *)cbc->priv;
 
 	list_add_tail(&buf->entry, &lbc->queued_list);
@@ -47,7 +47,7 @@ static int cam_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 static void cam_stop_streaming(struct vb2_queue *vq)
 {
-	struct cam_buf_ctx *cbc = (struct cam_buf_ctx *)vq->drv_priv;
+	struct cam_ctx *cbc = (struct cam_ctx *)vq->drv_priv;
 	struct local_buf_ctx *lbc = (struct local_buf_ctx *)cbc->priv;
 	struct cam_buf *buf, *node;
 	struct vb2_buffer *vb;
@@ -108,7 +108,7 @@ static void destroy_local_buf_ctx(struct local_buf_ctx *ctx)
 	kfree(ctx);
 }
 
-int cam_reqbufs(struct cam_buf_ctx *ctx, unsigned int num,
+int cam_reqbufs(struct cam_ctx *ctx, unsigned int num,
 		struct cam_buf_ops *ops)
 {
 	struct local_buf_ctx *lbc;
@@ -154,7 +154,7 @@ _err:
 	return rc;
 }
 
-static inline int cam_remote_qbuf(struct cam_buf_ctx *ctx, struct cam_buf *buf)
+static inline int cam_remote_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
 {
 	struct video_device *vdev;
 	struct v4l2_subdev *sd;
@@ -184,7 +184,7 @@ static inline int cam_remote_qbuf(struct cam_buf_ctx *ctx, struct cam_buf *buf)
 	return vctx->qbuf(vctx, buf);
 }
 
-static inline int cam_local_qbuf(struct cam_buf_ctx *ctx, struct cam_buf *buf)
+static inline int cam_local_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
 {
 	struct local_buf_ctx *lbc;
 	unsigned long flags;
@@ -200,7 +200,7 @@ static inline int cam_local_qbuf(struct cam_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-int cam_qbuf_irq(struct cam_buf_ctx *ctx, struct cam_buf *buf, bool remote)
+int cam_qbuf_irq(struct cam_ctx *ctx, struct cam_buf *buf, bool remote)
 {
 	int rc;
 
@@ -211,7 +211,7 @@ int cam_qbuf_irq(struct cam_buf_ctx *ctx, struct cam_buf *buf, bool remote)
 	return rc;
 }
 
-static inline struct cam_buf *cam_remote_dqbuf(struct cam_buf_ctx *ctx)
+static inline struct cam_buf *cam_remote_dqbuf(struct cam_ctx *ctx)
 {
 	struct video_device *vdev;
 	struct v4l2_subdev *sd;
@@ -241,7 +241,7 @@ static inline struct cam_buf *cam_remote_dqbuf(struct cam_buf_ctx *ctx)
 	return vctx->dqbuf(vctx);
 }
 
-static inline struct cam_buf *cam_local_dqbuf(struct cam_buf_ctx *ctx)
+static inline struct cam_buf *cam_local_dqbuf(struct cam_ctx *ctx)
 {
 	struct local_buf_ctx *lbc;
 	struct cam_buf *buf;
@@ -260,7 +260,7 @@ static inline struct cam_buf *cam_local_dqbuf(struct cam_buf_ctx *ctx)
 	return buf;
 }
 
-struct cam_buf *cam_dqbuf_irq(struct cam_buf_ctx *ctx, bool remote)
+struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 {
 	struct cam_buf *buf;
 
@@ -271,7 +271,7 @@ struct cam_buf *cam_dqbuf_irq(struct cam_buf_ctx *ctx, bool remote)
 	return buf;
 }
 
-struct cam_buf *cam_acqbuf_irq(struct cam_buf_ctx *ctx)
+struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx)
 {
 	struct local_buf_ctx *lbc = ctx->priv;
 	struct cam_buf *buf;
@@ -286,62 +286,7 @@ struct cam_buf *cam_acqbuf_irq(struct cam_buf_ctx *ctx)
 	return buf;
 }
 
-int cam_trigger(struct cam_buf_ctx *ctx)
-{
-	struct v4l2_subdev *sd;
-	struct media_pad *pad;
-	struct v4l2_buf_ctx *vctx = NULL;
-
-	if (!ctx || !ctx->pad)
-		return -EINVAL;
-
-	pad = media_pad_remote_pad_first(ctx->pad);
-	if (!pad)
-		return -EINVAL;
-
-	if (is_media_entity_v4l2_video_device(pad->entity)) {
-		return -EINVAL;
-	} else if (is_media_entity_v4l2_subdev(pad->entity)) {
-		sd = media_entity_to_v4l2_subdev(pad->entity);
-		if (sd)
-			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
-	}
-
-	if (!vctx)
-		return -EINVAL;
-
-	vctx->trigger(vctx);
-	return 0;
-}
-
-bool cam_is_completed(struct cam_buf_ctx *ctx)
-{
-	struct v4l2_subdev *sd;
-	struct media_pad *pad;
-	struct v4l2_buf_ctx *vctx = NULL;
-
-	if (!ctx || !ctx->pad)
-		return true;
-
-	pad = media_pad_remote_pad_first(ctx->pad);
-	if (!pad)
-		return true;
-
-	if (is_media_entity_v4l2_video_device(pad->entity)) {
-		return true;
-	} else if (is_media_entity_v4l2_subdev(pad->entity)) {
-		sd = media_entity_to_v4l2_subdev(pad->entity);
-		if (sd)
-			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
-	}
-
-	if (!vctx)
-		return true;
-
-	return vctx->is_completed(vctx);
-}
-
-int cam_qbuf(struct cam_buf_ctx *ctx, struct cam_buf *buf)
+int cam_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
 {
 	struct local_buf_ctx *lbc;
 	unsigned long flags;
@@ -357,7 +302,7 @@ int cam_qbuf(struct cam_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-struct cam_buf *cam_dqbuf(struct cam_buf_ctx *ctx)
+struct cam_buf *cam_dqbuf(struct cam_ctx *ctx)
 {
 	struct local_buf_ctx *lbc;
 	struct cam_buf *buf;
@@ -376,7 +321,7 @@ struct cam_buf *cam_dqbuf(struct cam_buf_ctx *ctx)
 	return buf;
 }
 
-int cam_buf_ctx_init(struct cam_buf_ctx *ctx, struct device *dev, void *data,
+int cam_buf_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
 		     bool has_internal_buf)
 {
 	struct local_buf_ctx *lbc;
@@ -398,7 +343,7 @@ int cam_buf_ctx_init(struct cam_buf_ctx *ctx, struct device *dev, void *data,
 	return 0;
 }
 
-void cam_buf_ctx_release(struct cam_buf_ctx *ctx)
+void cam_buf_ctx_release(struct cam_ctx *ctx)
 {
 	struct local_buf_ctx *lbc;
 
@@ -423,28 +368,6 @@ phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane)
 			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, plane);
 }
 
-void sif_set_frame_des(struct cam_buf_ctx *buf_ctx, void *data)
+void cam_drop(struct cam_ctx *ctx)
 {
-}
-
-void sif_get_frame_des(struct cam_buf_ctx *buf_ctx)
-{
-}
-
-void cam_drop(struct cam_buf_ctx *buf_ctx)
-{
-}
-
-void cam_set_stat_info(struct cam_buf_ctx *buf_ctx, u32 type)
-{
-}
-
-bool cam_osd_update(struct cam_buf_ctx *buf_ctx)
-{
-	return false;
-}
-
-int cam_osd_set_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
-{
-	return 0;
 }

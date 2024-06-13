@@ -10,7 +10,7 @@
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
-#include "cam_buf.h"
+#include "cam_ctx.h"
 #include "isc.h"
 #include "isp_uapi.h"
 
@@ -462,7 +462,7 @@ static inline void isp_set_state_safety(struct isp_device *isp, u32 inst, int st
 	ins = &isp->insts[inst];
 	mutex_lock(&isp->set_state_lock);
 	ins->state = state;
-	if (isp->mode == STRM_WORK_MODE)
+	if (isp->mode == ISP_STRM_MODE)
 		goto _exit;
 	if (state == CAM_STATE_STARTED) {
 		for (i = 0; i < isp->num_insts; i++) {
@@ -505,7 +505,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 			}
 		}
 
-		if (isp->mode == STRM_WORK_MODE) {
+		if (isp->mode == ISP_STRM_MODE) {
 			struct isp_irq_ctx *ctx;
 			unsigned long flags;
 			struct cam_list_node *node = NULL;
@@ -553,7 +553,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int enable)
 		refcount_inc(&isp->set_state_refcnt);
 
 		//trigger vse
-		if (ins->ctx.is_src_online_mode && isp->mode == STRM_WORK_MODE) {
+		if (ins->ctx.is_src_online_mode && isp->mode == ISP_STRM_MODE) {
 			pr_debug("%s isp%d trigger vse...\n", __func__, inst);
 			cam_trigger(ins->ctx.src_ctx);
 		}
@@ -631,7 +631,7 @@ int isp_add_job(struct isp_device *isp, u32 inst)
 	struct irq_job job = { inst };
 	int rc;
 
-	if (isp->mode == STRM_WORK_MODE)
+	if (isp->mode == ISP_STRM_MODE)
 		return -EFAULT;
 
 	rc = push_job(isp->jq, &job);

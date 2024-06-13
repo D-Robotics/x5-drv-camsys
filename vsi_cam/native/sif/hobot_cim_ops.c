@@ -16,7 +16,6 @@
 #include "cam_uapi.h"
 #include "sif.h"
 #include "csi.h"
-#include "sif_regs.h"
 /**
  * Purpose: point to cim device struct
  * Range: 1-5
@@ -638,13 +637,13 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	osal_atomic_set(&cim->backup_fcount[ipi_index], 0);
 	osal_atomic_set(&cim->sensor_fcount[ipi_index], 0);
 
-	ctx.sink_ctx = (struct cam_buf_ctx *)vnode->ich_subdev[VIN_MAIN_FRAME];
+	ctx.sink_ctx = (struct cam_ctx *)vnode->ich_subdev[VIN_MAIN_FRAME];
 	if (cim_priv_attr->ddr_en) {
-		ctx.buf_ctx = (struct cam_buf_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
+		ctx.buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
 		ctx.buf = NULL;
 	}
 	if (cim_priv_attr->embeded_en) {
-		ctx.emb_buf_ctx = (struct cam_buf_ctx *)vnode->och_subdev[VIN_EMB];
+		ctx.emb_buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_EMB];
 		ctx.emb_buf = NULL;
 	}
 	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx);

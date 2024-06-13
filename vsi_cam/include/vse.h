@@ -31,7 +31,7 @@ struct vse_irq_ctx {
 	bool is_sink_online_mode;
 	struct vse_stitching stitches[VSE_OUT_CHNL_MAX];
 	struct cam_buf *sink_buf, *src_buf[VSE_OUT_CHNL_MAX];
-	struct cam_buf_ctx *sink_ctx, *src_ctx[VSE_OUT_CHNL_MAX], *stat_ctx;
+	struct cam_ctx *sink_ctx, *src_ctx[VSE_OUT_CHNL_MAX], *stat_ctx;
 	struct vse_fps_rate *fps;
 };
 
@@ -55,7 +55,7 @@ struct vse_instance {
 	struct vse_cmd_buf *cmd_buf_va;
 	struct mem_buf cmd_buf;
 	struct mem_buf osd[VSE_OUT_CHNL_MAX][4];
-	struct vse_mcm_sch sch;
+	struct vse_sch sch;
 	struct vse_fps_rate fps[VSE_OUT_CHNL_MAX];
 	enum vse_src source;
 	enum cam_state state;
@@ -78,6 +78,7 @@ struct vse_device {
 	bool is_completed;
 	struct mutex open_lock; /* lock for open_cnt */
 	refcount_t open_cnt;
+	enum vse_work_mode mode;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_file;
@@ -103,7 +104,7 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info);
 int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf);
 int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl);
-int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_buf_ctx *ctx);
+int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx);
 int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_add_job(struct vse_device *vse, u32 inst);
 int vse_open(struct vse_device *vse, u32 inst);

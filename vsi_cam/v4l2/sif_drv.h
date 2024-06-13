@@ -8,7 +8,7 @@
 struct sif_v4l_instance {
 	struct subdev_node node;
 	struct sif_device *dev;
-	struct cam_buf_ctx buf_ctx;
+	struct cam_ctx buf_ctx;
 	struct v4l2_subdev_format out_fmt;
 	u32 out_pixelformat;
 	u32 id;

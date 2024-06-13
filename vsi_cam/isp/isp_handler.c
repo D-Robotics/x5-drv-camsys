@@ -5,7 +5,7 @@
 #include <linux/clk.h>
 #include <linux/interrupt.h>
 
-#include "cam_buf.h"
+#include "cam_ctx.h"
 #include "isc.h"
 #include "isp8000_regs.h"
 #include "isp_uapi.h"
@@ -120,7 +120,7 @@ static s32 handle_get_func(struct isp_device *isp, struct isp_msg *msg)
 
 	memset(&msg->func, 0, sizeof(msg->func));
 	msg->func.work_mode = isp->mode;
-	if (msg->func.work_mode == MCM_WORK_MODE) {
+	if (msg->func.work_mode == ISP_MCM_MODE) {
 		msg->func.mcm.online = ins->online_mcm ? 1 : 0;
 		msg->func.mcm.stream_idx = ins->stream_idx;
 	}
@@ -222,7 +222,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 	int rc;
 	struct ibuf *mcm_ib;
 
-	if (isp->mode == STRM_WORK_MODE) {
+	if (isp->mode == ISP_STRM_MODE) {
 		inst = &isp->insts[0];
 		if (inst->state != CAM_STATE_STARTED)
 			return NULL;
@@ -232,9 +232,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 		spin_unlock_irqrestore(&inst->lock, flags);
 		if (!rc)
 			return ctx;
-		else
-			return NULL;
-
+		return NULL;
 	}
 
 	for (;;) {
@@ -337,7 +335,7 @@ static inline int get_cur_mi_ctx_irq(struct isp_device *isp, u32 *inst)
 {
 	int rc = 0;
 
-	if (isp->mode == STRM_WORK_MODE)
+	if (isp->mode == ISP_STRM_MODE)
 		*inst = 0;
 	else
 		rc = isp_get_mcm_sch(isp, inst);
@@ -415,7 +413,6 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 
 		if (!isp->rdma_busy) {
 			// handle mcm_wr frame end intr
-			bool is_completed = true;
 			struct cam_list_node *node = NULL;
 
 			ctx = get_next_irq_ctx(isp);
@@ -424,22 +421,24 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				goto _post;
 			}
 
-			if (ctx->is_src_online_mode) {
-				is_completed = cam_is_completed(ctx->src_ctx);
-				pr_debug("isp:%d->%d,vse:%d\n", isp->cur_mi_irq_ctx,
-					 isp->next_mi_irq_ctx, is_completed);
-			} else {
-				pr_debug("isp:%d->%d\n", isp->cur_mi_irq_ctx, isp->next_mi_irq_ctx);
-			}
+#ifdef WITH_LEGACY_VSE
+			{
+				bool is_completed = true;
 
-			if (isp->mode == STRM_WORK_MODE) {
-				if (!is_completed) {
-					goto _post;
-				} else if (ctx->is_src_online_mode) {
-					pr_debug("cam_trigger\n");
-					cam_trigger(ctx->src_ctx);
+				if (ctx->is_src_online_mode) {
+					is_completed = cam_is_completed(ctx->src_ctx);
+					pr_debug("isp:%d->%d,vse:%d\n", isp->cur_mi_irq_ctx,
+						 isp->next_mi_irq_ctx, is_completed);
+				} else {
+					pr_debug("isp:%d->%d\n", isp->cur_mi_irq_ctx, isp->next_mi_irq_ctx);
 				}
+
+				if (!is_completed)
+					goto _post;
+				else if (ctx->is_src_online_mode)
+					cam_trigger(ctx->src_ctx);
 			}
+#endif
 
 			ins = &isp->insts[isp->next_mi_irq_ctx];
 			if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
@@ -457,7 +456,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			if (node)
 #endif
 			{
-				if (isp->mode != STRM_WORK_MODE) {
+				if (isp->mode != ISP_STRM_MODE) {
 					sch.id = isp->next_mi_irq_ctx;
 					sch.mp_buf.addr = get_phys_addr(node->data, 0);
 					sch.mp_buf.size = 0;
@@ -473,7 +472,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					goto _post;
 				}
 			} else if (ctx->is_src_online_mode) {
-				if (isp->mode != STRM_WORK_MODE) {
+				if (isp->mode != ISP_STRM_MODE) {
 					sch.id = isp->next_mi_irq_ctx;
 					sch.mp_buf.addr = 0;
 					sch.mp_buf.size = 0;
@@ -489,7 +488,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				isp->rdma_busy = false;
 				goto _post;
 			}
-			if (isp->mode != STRM_WORK_MODE) {
+			if (isp->mode != ISP_STRM_MODE) {
 #ifdef WITH_LEGACY_ISP
 				u32 count, size;
 

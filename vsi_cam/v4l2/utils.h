@@ -4,7 +4,7 @@
 #include <media/v4l2-subdev.h>
 #include <media/videobuf2-v4l2.h>
 
-#include "cam_buf.h"
+#include "cam_ctx.h"
 
 #define CSI_DT_NAME     "snps,designware-csi"
 #define SIF_DT_NAME     "verisilicon,sif"
@@ -32,7 +32,7 @@ struct cam_buf {
 	struct list_head entry;
 };
 
-struct cam_buf_ctx {
+struct cam_ctx {
 	struct media_pad *pad;
 	void *priv;
 };

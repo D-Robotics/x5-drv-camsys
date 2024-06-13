@@ -7,7 +7,6 @@
 
 #define SIF_EBD_PRE_TOTAL(x) ((x) & 0xffff)
 #define SIF_EBD_POST_TOTAL(x) (((x) & 0xffff) << 16)
-#define SIF_EBD_HSIZE_ALIGN (16)
 #define SIF_EBD_HSIZE(x) (((x) & 0x1fff) - 1)
 #define SIF_EBD_VSIZE(x) ((((x) & 0x1fff) - 1) << 16)
 #define SIF_EBD_PRE_HSTRIDE(x) (((x) & 0xffff) - 1)

@@ -10,7 +10,7 @@
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
-#include "cam_buf.h"
+#include "cam_ctx.h"
 #include "dw230_vse_regs.h"
 #include "isc.h"
 #include "vse_uapi.h"
@@ -120,6 +120,7 @@ int vse_server_trigger(struct vse_device *vse, u32 inst)
 	msg.inst = inst;
 	msg.channel = -1;
 	memcpy(&msg.sch, &ins->sch, sizeof(msg.sch));
+	msg.sch.work_mode = vse->mode;
 	return vse_post(vse, &msg, false);
 }
 
@@ -266,7 +267,6 @@ static void vse_start(struct vse_device *vse, struct cam_format *fmt)
 		vse_write(vse, VSE_OSDn_CTRL(base), 0x0000047f);
 	}
 }
-#endif
 
 void vse_set_cmd(struct vse_device *vse, u32 inst)
 {
@@ -283,23 +283,17 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	ins = &vse->insts[inst];
 	ctx = &ins->ctx;
 
-#ifdef WITH_LEGACY_VSE
 	if (ins->cmd_buf_va && ins->cmd_buf_va->ready) {
 		for (i = 0; i < ins->cmd_buf_va->num; i++)
 			vse_write(vse, ins->cmd_buf_va->regs[i].offset, ins->cmd_buf_va->regs[i].value);
 	}
-#endif
 
 	if (ctx->sink_buf) {
 		phys_addr = get_phys_addr(ctx->sink_buf, 0);
-#ifdef WITH_LEGACY_VSE
 		vse_set_rdma_buffer(vse, phys_addr, &ins->ifmt);
-#else
-		ins->sch.rdma_buf.addr = phys_addr;
-#endif
 	}
+
 	ins->sch.ochn_en_mask = 0;
-#ifdef WITH_LEGACY_VSE
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		struct vse_stitching *stitch = &ctx->stitches[i];
 
@@ -308,35 +302,56 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 			vse_set_stitch_buffer(vse, i, stitch, phys_addr, &ins->ofmt[i]);
 		}
 	}
-#endif
+
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i] && !ctx->stitches[i].enabled) {
 			phys_addr = get_phys_addr(ctx->src_buf[i], 0);
-#ifdef WITH_LEGACY_VSE
 			vse_set_mi_buffer(vse, i, phys_addr, &ins->ofmt[i]);
-#else
-			ins->sch.mp_buf[i].addr = phys_addr;
-			pr_debug("vse chn%d mp addr:%x\n", i, (u32)ins->sch.mp_buf[i].addr);
-			ins->sch.ochn_en_mask |= BIT(i);
-#endif
 		}
 	}
-#ifdef WITH_LEGACY_VSE
 	vse_start(vse, &ins->ifmt);
+}
 #else
+void vse_set_cmd(struct vse_device *vse, u32 inst)
+{
+	struct vse_irq_ctx *ctx;
+	struct vse_instance *ins;
+	phys_addr_t phys_addr = {0};
+	u32 i;
+
+	if(!vse)
+		return;
+
+	vse->error = 0;
+	vse->is_completed = false;
+	ins = &vse->insts[inst];
+	ctx = &ins->ctx;
+
+	if (ctx->sink_buf) {
+		phys_addr = get_phys_addr(ctx->sink_buf, 0);
+		ins->sch.rdma_buf.addr = phys_addr;
+	}
+	ins->sch.ochn_en_mask = 0;
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-		// set osd cfg for each channel
-		if (ctx->src_buf[i])
+		if (ctx->src_buf[i]) {
+			phys_addr = get_phys_addr(ctx->src_buf[i], 0);
+			pr_debug("vse chn%d mp addr:%x\n", i, (u32)phys_addr);
+			ins->sch.mp_buf[i].addr = phys_addr;
+			ins->sch.ochn_en_mask |= BIT(i);
+			// set osd cfg for each channel
 			cam_osd_set_cfg(ctx->src_ctx[i], i);
+		}
 	}
 	vse_server_trigger(vse, inst);
-#endif
 	pr_debug("inst %d\n", inst);
 }
+#endif
 
 int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32 total_cnt)
 {
+	struct vse_instance *ins;
 	struct vse_msg msg;
+	int rc;
 
 	if (!vse || inst >= vse->num_insts)
 		return -EINVAL;
@@ -344,6 +359,7 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 	if (cur_cnt < total_cnt)
 		return 0;
 
+	ins = &vse->insts[inst];
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = inst;
 	msg.channel = -1;
@@ -351,7 +367,11 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 		msg.state = CAM_STATE_STARTED;
 	else
 		msg.state = CAM_STATE_STOPPED;
-	return vse_post(vse, &msg, true);
+	rc = vse_post(vse, &msg, true);
+	if (rc < 0)
+		return rc;
+	ins->state = msg.state;
+	return 0;
 }
 
 int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info) {
@@ -396,7 +416,7 @@ int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_t
 	return vse_post(vse, &msg, false);
 }
 
-int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_buf_ctx *ctx)
+int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx)
 {
 	struct vse_instance *ins;
 	unsigned long flags;

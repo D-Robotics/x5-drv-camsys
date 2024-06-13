@@ -5,7 +5,7 @@
 #include <linux/platform_device.h>
 #include <linux/timekeeping.h>
 
-#include "cam_online_ops.h"
+#include "cam_ops.h"
 #include "vse_drv.h"
 
 #define VSE_DT_NAME     "verisilicon,vse"
@@ -309,11 +309,11 @@ static s32 vse_video_streamon(struct vio_video_ctx *vctx)
 		memset(&ctx, 0, sizeof(ctx));
 		ctx.is_sink_online_mode = inst->online_mode ? true : false;
 		pr_info("%s ctx.is_sink_online_mode=%d\n", __func__, ctx.is_sink_online_mode);
-		ctx.sink_ctx = (struct cam_buf_ctx *)vnode->ich_subdev[0];
-		ctx.stat_ctx = (struct cam_buf_ctx *)vnode->ich_subdev[0];
+		ctx.sink_ctx = (struct cam_ctx *)vnode->ich_subdev[0];
+		ctx.stat_ctx = (struct cam_ctx *)vnode->ich_subdev[0];
 		for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 			if (inst->dev->cap_instance[i][vctx->ctx_id].ochn_attr.chn_en)
-				ctx.src_ctx[i] = (struct cam_buf_ctx *)(vnode->och_subdev[i]);
+				ctx.src_ctx[i] = (struct cam_ctx *)(vnode->och_subdev[i]);
 		}
 
 		rc = vse_set_ctx(&inst->dev->vse_dev, vctx->ctx_id, &ctx);
@@ -602,7 +602,7 @@ static struct vio_common_ops vse_vops = {
 	.video_get_struct_size = vse_video_get_struct_size,
 };
 
-static int vse_trigger(struct cam_buf_ctx *ctx)
+static int vse_trigger(struct cam_ctx *ctx)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	struct vse_nat_instance *inst;
@@ -613,7 +613,7 @@ static int vse_trigger(struct cam_buf_ctx *ctx)
 	return 0;
 }
 
-static bool vse_is_completed(struct cam_buf_ctx *ctx)
+static bool vse_is_completed(struct cam_ctx *ctx)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	struct vse_nat_instance *inst;
@@ -625,14 +625,14 @@ static bool vse_is_completed(struct cam_buf_ctx *ctx)
 	return rc;
 }
 
-static bool vse_osd_update(struct cam_buf_ctx *buf_ctx)
+static bool vse_osd_update(struct cam_ctx *ctx)
 {
 	struct vio_subdev *subdev = NULL;
 	struct vse_nat_instance *vse_ins = NULL;
 	struct vse_nat_device *nat_dev;
 	bool ret;
 
-	subdev = (struct vio_subdev *)buf_ctx;
+	subdev = (struct vio_subdev *)ctx;
 	vse_ins = container_of(subdev, struct vse_nat_instance, vdev);
 	nat_dev = vse_ins->dev;
 	if (((struct osd_interface_ops *)nat_dev->osd_cops->cops)->frame_process
@@ -646,7 +646,7 @@ static bool vse_osd_update(struct cam_buf_ctx *buf_ctx)
 	return ret;
 }
 
-static int vse_set_osd_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
+static int vse_set_osd_cfg(struct cam_ctx *ctx, u32 ochn_id)
 {
 	struct vio_subdev *subdev = NULL;
 	struct vse_nat_instance *vse_ins = NULL;
@@ -655,7 +655,7 @@ static int vse_set_osd_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
 	int ret = 0;
 	int i = 0;
 
-	subdev = (struct vio_subdev *)buf_ctx;
+	subdev = (struct vio_subdev *)ctx;
 	vse_ins = container_of(subdev, struct vse_nat_instance, vdev);
 	osd_hw_cfg = &vse_ins->osd_hw_cfg;
 
@@ -698,11 +698,36 @@ static int vse_set_osd_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
 	return ret;
 }
 
-static const struct cam_online_ops vse_online_ops = {
+static int vse_set_mode(struct cam_ctx *ctx, u32 mode)
+{
+	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
+	struct vse_nat_instance *ins =
+			container_of(vdev, struct vse_nat_instance, vdev);
+	struct vse_msg msg;
+
+	if (!vdev)
+		return -EINVAL;
+
+	if (mode == CAM_SIMPLEX_MODE)
+		ins->dev->vse_dev.mode = VSE_SCM_MODE;
+	else if (mode == CAM_MULTIPLEX_MODE)
+		ins->dev->vse_dev.mode = VSE_MCM_MODE;
+	else
+		return -EINVAL;
+
+	msg.id = VSE_MSG_MODE_CHANGED;
+	msg.inst = ins->id;
+	msg.channel = -1;
+	msg.mode = ins->dev->vse_dev.mode;
+	return vse_post(&ins->dev->vse_dev, &msg, true);
+}
+
+static const struct cam_ops vse_ops = {
 	.trigger = vse_trigger,
 	.is_completed = vse_is_completed,
 	.osd_update = vse_osd_update,
 	.osd_set_cfg = vse_set_osd_cfg,
+	.set_mode = vse_set_mode,
 };
 
 static ssize_t vse_stat_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -894,7 +919,7 @@ static int vse_nat_probe(struct platform_device *pdev)
 		}
 	}
 
-	add_online_ops(VSE_MODULE, &vse_online_ops);
+	add_ops(VSE_MODULE, &vse_ops);
 	platform_set_drvdata(pdev, nat_dev);
 
 	nat_dev->osd_cops = (struct vio_callback_ops *)vio_get_callback_ops(&empty_osd_cb_ops, VSE_MODULE, COPS_0);

@@ -8,7 +8,7 @@
 struct gdc_v4l_instance {
 	struct subdev_node node;
 	struct gdc_device *dev;
-	struct cam_buf_ctx sink_ctx, src_ctx;
+	struct cam_ctx sink_ctx, src_ctx;
 	u32 out_pixelformat;
 	u32 id;
 	int enabled;

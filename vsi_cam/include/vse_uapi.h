@@ -23,13 +23,14 @@
 #define VSE_MSG_OSD_INFO        (0x6 << 8)
 #define VSE_MSG_OSD_SCH         (0x7 << 8)
 #define VSE_MSG_LOAD_LUT        (0x8 << 8)
+#define VSE_MSG_MODE_CHANGED    (0x9 << 8)
 
 #define VSE_OUT_CHNL_MAX (6)
 
 struct vse_fmt_cap {
 	__u32 format;
-	__u8  index;
-	__u8  res_num;
+	__u8 index;
+	__u8 res_num;
 	struct cam_res_cap res[VSE_OUT_CHNL_MAX];
 };
 
@@ -54,8 +55,8 @@ struct vse_format {
 };
 
 struct vse_osd_info {
-	__u8  roiId;
-	__u8  roiEnable;
+	__u8 roiId;
+	__u8 roiEnable;
 	__u32 roiHsize;
 	__u32 roiVsize;
 	__u32 roiStartX;
@@ -81,10 +82,11 @@ struct vse_osd_buf {
 	__u8 id;
 };
 
-struct vse_mcm_sch {
+struct vse_sch {
 	__u32 id;
 	__u32 source;
 	__u32 ochn_en_mask;
+	__u32 work_mode;
 	struct mem_buf rdma_buf;
 	struct mem_buf mp_buf[VSE_OUT_CHNL_MAX];
 };
@@ -102,6 +104,11 @@ enum vse_src {
 	VSE_SRC_RESV,
 	VSE_SRC_RDMA,
 	VSE_SRC_MAX,
+};
+
+enum vse_work_mode {
+	VSE_MCM_MODE,
+	VSE_SCM_MODE,
 };
 
 struct vse_msg {
@@ -123,7 +130,8 @@ struct vse_msg {
 		struct vse_osd_buf osd;
 		__u32 state;  /* enum cam_state */
 		__u32 source; /* enum vse_src */
-		struct vse_mcm_sch sch;
+		__u32 mode;   /* enum vse_work_mode */
+		struct vse_sch sch;
 		struct vse_cascade cascade;
 		struct cam_clk clk;
 		struct cam_log log;

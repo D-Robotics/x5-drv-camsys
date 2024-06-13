@@ -60,10 +60,10 @@ struct isp_ctrl_ext {
 	__u8 dir;
 };
 
-enum work_mode {
-	STRM_WORK_MODE,
-	MCM_WORK_MODE,
-	RDMA_WORK_MODE,
+enum isp_work_mode {
+	ISP_STRM_MODE,
+	ISP_MCM_MODE,
+	ISP_RDMA_MODE,
 };
 
 struct isp_func {
