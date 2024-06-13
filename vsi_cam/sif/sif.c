@@ -307,6 +307,8 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	u32 irq_val;
 
 	sif = &dev->insts[inst];
+	sif->hsize_err_count_pre = 0;
+	sif->vsize_err_count_pre = 0;
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));

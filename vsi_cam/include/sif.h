@@ -93,6 +93,8 @@ struct sif_instance {
 	u32 frameid_cnt;
 	u32 size_err_cnt;
 	u32 ipi_base;
+	u32 hsize_err_count_pre;
+	u32 vsize_err_count_pre;
 };
 
 struct sif_device {

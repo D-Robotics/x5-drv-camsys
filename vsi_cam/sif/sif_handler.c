@@ -144,11 +144,31 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 	if (ins->fmt.format == CAM_FMT_NV12)
 		return;
 
-	cam_drop(ins->ctx.sink_ctx);
 	// Need to get error size before clear state.
 	val = sif_read(sif, SIF_IPI_ERR_SIZE(inst));
-	dev_err(sif->dev,"sif frame size error, hsize error:0x%x vsize error:0x%x for inst:%d\n",
-			SIF_HSIZE_ERR(val), SIF_VSIZE_ERR(val), inst);
+	dev_err(sif->dev,"sif frame size incorrect, hsize count:0x%x vsize count:0x%x for inst:%d\n",
+		SIF_HSIZE_ERR(val), SIF_VSIZE_ERR(val), inst);
+
+	if (ins->hsize_err_count_pre != SIF_HSIZE_ERR(val)
+	    && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
+		// meet Hsize error drop frame.
+		cam_drop(ins->ctx.buf_ctx);
+		cam_drop(ins->ctx.sink_ctx);
+	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
+		   && ins->vsize_err_count_pre != SIF_VSIZE_ERR(val)) {
+		// when hsync is more than exception, post warning.
+		// otherwise, do nothing since where won't be dma done.
+		if (SIF_VSIZE_ERR(val) > ins->fmt.height)
+			dev_err(sif->dev,"WARNING:Reviced more hsync than expect,check configuration!\n");
+	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
+		   && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
+		// corner case, drop frame for safety.
+		cam_drop(ins->ctx.buf_ctx);
+		cam_drop(ins->ctx.sink_ctx);
+	}
+
+	ins->hsize_err_count_pre = SIF_HSIZE_ERR(val);
+	ins->vsize_err_count_pre = SIF_VSIZE_ERR(val);
 	ins->size_err_cnt++;
 }
 
