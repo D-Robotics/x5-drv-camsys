@@ -89,7 +89,7 @@ static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 		vdev->chn_attr.width = inst->attr.crop.w;
 		vdev->chn_attr.wstride = inst->attr.crop.w;
 		vdev->next = remote_vdev;
-		if (inst->dev->isp_dev.mode == ISP_STRM_MODE)
+		if (inst->dev->isp_dev.mode == ISP_STRM_MODE && online_mode)
 			cam_next_set_mode((struct cam_ctx *)vdev, CAM_SIMPLEX_MODE);
 		else
 			cam_next_set_mode((struct cam_ctx *)vdev, CAM_MULTIPLEX_MODE);
