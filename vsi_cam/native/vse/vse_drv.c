@@ -139,15 +139,18 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 			pr_err("%s:inst->dev null\n", __func__);
 			return -EINVAL;
 		}
+
 		rc = vse_close(&inst->dev->vse_dev, vctx->ctx_id);
 		if (rc < 0) {
 			pr_err("%s failed to call vse_close(err=%d).\n", __func__, rc);
 			return rc;
 		}
 	}
+
 	memset(&inst->attr, 0, sizeof(inst->attr));
 	memset(&inst->ichn_attr, 0, sizeof(inst->ichn_attr));
 	memset(&inst->ochn_attr, 0, sizeof(inst->ochn_attr));
+
 	return rc;
 }
 
@@ -643,10 +646,63 @@ static bool vse_osd_update(struct cam_buf_ctx *buf_ctx)
 	return ret;
 }
 
+static int vse_set_osd_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
+{
+	struct vio_subdev *subdev = NULL;
+	struct vse_nat_instance *vse_ins = NULL;
+	struct vse_osd_cfg *osd_hw_cfg = NULL;
+	struct vse_osd_info osd_info;
+	int ret = 0;
+	int i = 0;
+
+	subdev = (struct vio_subdev *)buf_ctx;
+	vse_ins = container_of(subdev, struct vse_nat_instance, vdev);
+	osd_hw_cfg = &vse_ins->osd_hw_cfg;
+
+	if (osd_hw_cfg->osd_box_update) {
+		for (i = 0; i < MAX_OSD_NUM; i++) {
+			memset(&osd_info, 0, sizeof(struct vse_osd_info));
+			osd_info.roiId = i;
+			osd_info.roiEnable = osd_hw_cfg->osd_box[i].osd_en;
+			osd_info.roiStartX = osd_hw_cfg->osd_box[i].start_x;
+			osd_info.roiStartY = osd_hw_cfg->osd_box[i].start_y;
+			osd_info.roiHsize  = osd_hw_cfg->osd_box[i].width;
+			osd_info.roiVsize  = osd_hw_cfg->osd_box[i].height;
+			ret |= vse_set_osd_info(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, &osd_info);
+		}
+		osd_hw_cfg->osd_box_update = false;
+	}
+
+	if (osd_hw_cfg->osd_buf_update) {
+		for (i = 0; i < MAX_OSD_NUM; i++) {
+			struct vse_osd_buf osd_buf;
+			memset(&osd_buf, 0, sizeof(struct vse_osd_buf));
+			osd_buf.id  = i;
+			osd_buf.buf.addr = osd_hw_cfg->osd_buf[i];
+			// osd_buf.buf.size = osd_hw_cfg->osd_buf[i];
+			ret |= vse_set_osd_buf(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, &osd_buf);
+		}
+		osd_hw_cfg->osd_buf_update = false;
+	}
+
+	if (osd_hw_cfg->color_map.color_map_update) {
+		struct vse_lut_tbl tbl;
+		memset(&tbl, 0, sizeof(struct vse_lut_tbl));
+		//TODO1: yuv color map sync with x5 osd
+		//TODO2: config alpya lut table, depended on x5 osd
+		memcpy(tbl.rgb_data, osd_hw_cfg->color_map.color_map, sizeof(osd_hw_cfg->color_map.color_map));
+		ret |= vse_set_osd_lut(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, &tbl);
+		osd_hw_cfg->color_map.color_map_update = false;
+	}
+
+	return ret;
+}
+
 static const struct cam_online_ops vse_online_ops = {
 	.trigger = vse_trigger,
 	.is_completed = vse_is_completed,
 	.osd_update = vse_osd_update,
+	.osd_set_cfg = vse_set_osd_cfg,
 };
 
 static ssize_t vse_stat_show(struct device *dev, struct device_attribute *attr, char *buf)

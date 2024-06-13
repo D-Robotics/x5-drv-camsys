@@ -218,3 +218,25 @@ bool cam_osd_update(struct cam_buf_ctx *buf_ctx)
 
 	return false;
 }
+
+
+int cam_osd_set_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)buf_ctx;
+	struct vio_node *vnode;
+	const struct cam_online_ops *ops = NULL;
+	int ret = 0;
+
+	if (unlikely(!subdev))
+		return -EINVAL;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode && vnode->id < MODULE_NUM) {
+		ops = get_online_ops(vnode->id);
+		if (ops && ops->osd_set_cfg)
+			ret = ops->osd_set_cfg(buf_ctx, ochn_id);
+	}
+
+	return ret;
+}

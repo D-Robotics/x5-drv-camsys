@@ -443,3 +443,8 @@ bool cam_osd_update(struct cam_buf_ctx *buf_ctx)
 {
 	return false;
 }
+
+int cam_osd_set_cfg(struct cam_buf_ctx *buf_ctx, u32 ochn_id)
+{
+	return 0;
+}

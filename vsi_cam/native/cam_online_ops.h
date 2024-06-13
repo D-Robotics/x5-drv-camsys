@@ -9,6 +9,7 @@ struct cam_online_ops {
 	bool (*is_completed)(struct cam_buf_ctx *ctx);
 	int (*trigger)(struct cam_buf_ctx *ctx);
 	bool (*osd_update)(struct cam_buf_ctx *ctx);
+	int (*osd_set_cfg)(struct cam_buf_ctx *ctx, u32 ochn_id);
 };
 
 int add_online_ops(u32 id, const struct cam_online_ops *ops);

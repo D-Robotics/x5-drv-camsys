@@ -324,6 +324,11 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 #ifdef WITH_LEGACY_VSE
 	vse_start(vse, &ins->ifmt);
 #else
+	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
+		// set osd cfg for each channel
+		if (ctx->src_buf[i])
+			cam_osd_set_cfg(ctx->src_ctx[i], i);
+	}
 	vse_server_trigger(vse, inst);
 #endif
 	pr_debug("inst %d\n", inst);
@@ -347,6 +352,48 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 	else
 		msg.state = CAM_STATE_STOPPED;
 	return vse_post(vse, &msg, true);
+}
+
+int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info) {
+	struct vse_msg msg;
+
+	if (!vse || inst >= vse->num_insts)
+		return -EINVAL;
+
+	msg.id = VSE_MSG_OSD_INFO;
+	msg.inst = inst;
+	msg.channel = chnl;
+	memcpy(&msg.osd_info, info, sizeof(struct vse_osd_info));
+
+	return vse_post(vse, &msg, false);
+}
+
+int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf) {
+	struct vse_msg msg;
+
+	if (!vse || inst >= vse->num_insts)
+		return -EINVAL;
+
+	msg.id = VSE_MSG_OSD_SCH;
+	msg.inst = inst;
+	msg.channel = chnl;
+	memcpy(&msg.osd, osd_buf, sizeof(struct vse_osd_buf));
+
+	return vse_post(vse, &msg, false);
+}
+
+int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl) {
+	struct vse_msg msg;
+
+	if (!vse || inst >= vse->num_insts)
+		return -EINVAL;
+
+	msg.id = VSE_MSG_LOAD_LUT;
+	msg.inst = inst;
+	msg.channel = chnl;
+	memcpy(&msg.lut_tbl, lut_tbl, sizeof(struct vse_lut_tbl));
+
+	return vse_post(vse, &msg, false);
 }
 
 int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_buf_ctx *ctx)

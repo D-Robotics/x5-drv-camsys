@@ -8,6 +8,8 @@
 #include "cam_uapi.h"
 #include "mem_helper_uapi.h"
 
+#define LUT_NUM 64
+
 #define VSE_UID(n) cam_fourcc('v', 's', 'e', (n) + '0')
 
 #define VSE_MSG_ALLOC_CMD_BUF (0x1)
@@ -18,6 +20,9 @@
 #define VSE_MSG_MCM_SCH         (0x3 << 8)
 #define VSE_MSG_CASCADE_UPDATE  (0x4 << 8)
 #define VSE_MSG_SKIP_FRAME      (0x5 << 8)
+#define VSE_MSG_OSD_INFO        (0x6 << 8)
+#define VSE_MSG_OSD_SCH         (0x7 << 8)
+#define VSE_MSG_LOAD_LUT        (0x8 << 8)
 
 #define VSE_OUT_CHNL_MAX (6)
 
@@ -46,6 +51,20 @@ struct vse_format {
 			__u32 scale_type; /* enum scale_type */
 		} out;
 	};
+};
+
+struct vse_osd_info {
+	__u8  roiId;
+	__u8  roiEnable;
+	__u32 roiHsize;
+	__u32 roiVsize;
+	__u32 roiStartX;
+	__u32 roiStartY;
+};
+
+struct vse_lut_tbl {
+	__u32 alpha_data[LUT_NUM];
+	__u32 rgb_data[LUT_NUM];
 };
 
 struct vse_cmd_buf {
@@ -98,9 +117,11 @@ struct vse_msg {
 			__u32 stat;
 		} irq;
 		struct vse_format fmt;
+		struct vse_osd_info osd_info;
+		struct vse_lut_tbl lut_tbl;
 		struct mem_buf cmd;
 		struct vse_osd_buf osd;
-		__u32 state; /* enum cam_state */
+		__u32 state;  /* enum cam_state */
 		__u32 source; /* enum vse_src */
 		struct vse_mcm_sch sch;
 		struct vse_cascade cascade;
