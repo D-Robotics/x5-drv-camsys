@@ -115,9 +115,9 @@ static void isp_frame_work(struct vio_node *vnode)
 	vdev = vnode->ich_subdev[0];
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
 
-	rc = isp_set_schedule_offline(&inst->dev->isp_dev, vnode->ctx_id);
+	rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id, false);
 	if (rc)
-		pr_err("%s: failed to call isp_set_schedule_offline.\n", __func__);
+		pr_err("%s: failed to call isp_add_job.\n", __func__);
 
 	vio_set_hw_free(vnode);
 	osal_clear_bit(VIO_NODE_SHOT, &vnode->state);

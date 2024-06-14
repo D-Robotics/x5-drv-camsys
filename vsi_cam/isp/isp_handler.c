@@ -244,13 +244,15 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 
 		id = job.irq_ctx_index;
 		inst = &isp->insts[id];
-		if (inst->state != CAM_STATE_STARTED || !inst->online_mcm)
+		if (inst->state != CAM_STATE_STARTED)
 			continue;
-		mcm_ib = list_first_entry_or_null(&isp->ibm[id].list2,
-							struct ibuf, entry);
-		if (!mcm_ib) {
-			pr_warn("%s no mcm buf available!\n", __func__);
-			continue;
+		if (inst->online_mcm) {
+			mcm_ib = list_first_entry_or_null(&isp->ibm[id].list2,
+								struct ibuf, entry);
+			if (!mcm_ib) {
+				pr_warn("%s no mcm buf available!\n", __func__);
+				continue;
+			}
 		}
 		spin_lock_irqsave(&inst->lock, flags);
 		ctx = &inst->ctx;
@@ -327,7 +329,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path)
 #else
 	isp->in_counts[inst]++;
 #endif
-	isp_add_job(isp, inst);
+	isp_add_job(isp, inst, true);
 	return 0;
 }
 
@@ -428,6 +430,10 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 #endif
 
 			ins = &isp->insts[isp->next_mi_irq_ctx];
+			if (isp->mode == ISP_MCM_MODE && !ins->online_mcm) {
+				isp_set_schedule_offline(isp, isp->next_mi_irq_ctx, true);
+				goto _post;
+			}
 			if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
 				node = list_first_entry_or_null(ctx->src_buf_list2,
 								struct cam_list_node, entry);

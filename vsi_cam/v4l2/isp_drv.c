@@ -105,7 +105,7 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	if (rc < 0)
 		return rc;
 
-	return isp_set_schedule_offline(isp->dev, isp->id);
+	return isp_add_job(isp->dev, isp->id, false);
 }
 
 static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx)
