@@ -331,17 +331,6 @@ static inline int handle_mcm(struct isp_device *isp, u32 path)
 	return 0;
 }
 
-static inline int get_cur_mi_ctx_irq(struct isp_device *isp, u32 *inst)
-{
-	int rc = 0;
-
-	if (isp->mode == ISP_STRM_MODE)
-		*inst = 0;
-	else
-		rc = isp_get_mcm_sch(isp, inst);
-	return rc;
-}
-
 irqreturn_t mi_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -385,9 +374,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			handle_mcm(isp, 3);
 
 		if (miv2_mis & 0x1) {
-			isp->rdma_busy = false;
-			isp->error = 1;
-			rc = get_cur_mi_ctx_irq(isp, &cur_mi_irq_ctx);
+			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
 			if (rc) {
 				pr_err("fail to get currect isp instance id!\n");
 			} else {
@@ -395,17 +382,19 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				isp->cur_mi_irq_ctx = cur_mi_irq_ctx;
 				// handle isp frame end intr
 				ins = &isp->insts[isp->cur_mi_irq_ctx];
-				frame_done(&ins->ctx);
-				if (ins->online_mcm) {
-					struct ibuf *ib;
+				if (ins->state == CAM_STATE_STARTED) {
+					frame_done(&ins->ctx);
+					if (ins->online_mcm) {
+						struct ibuf *ib;
 
-					ib = list_first_entry_or_null
-							(&isp->ibm[isp->cur_mi_irq_ctx].list3,
-							struct ibuf, entry);
-					if (ib) {
-						list_del(&ib->entry);
-						list_add_tail(&ib->entry,
-							&isp->ibm[isp->cur_mi_irq_ctx].list1);
+						ib = list_first_entry_or_null
+								(&isp->ibm[isp->cur_mi_irq_ctx].list3,
+								struct ibuf, entry);
+						if (ib) {
+							list_del(&ib->entry);
+							list_add_tail(&ib->entry,
+								&isp->ibm[isp->cur_mi_irq_ctx].list1);
+						}
 					}
 				}
 			}
@@ -416,10 +405,8 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			struct cam_list_node *node = NULL;
 
 			ctx = get_next_irq_ctx(isp);
-			if (!ctx) {
-				isp->error = 1;
+			if (!ctx)
 				goto _post;
-			}
 
 #ifdef WITH_LEGACY_VSE
 			{
@@ -462,13 +449,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					sch.mp_buf.size = 0;
 				} else {
 					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
-					/**
-					 * Here, rdma_busy must be set as true to avoid the block of mp buffer
-					 * config is executed for multiple times before mi frame done comes in
-					 * hardware stream mode.
-					 */
-					isp->error = 0;
-					isp->rdma_busy = true;
+					isp_set_schedule(isp, &sch, false);
 					goto _post;
 				}
 			} else if (ctx->is_src_online_mode) {
@@ -478,14 +459,11 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					sch.mp_buf.size = 0;
 				} else {
 					isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
-					isp->error = 0;
-					isp->rdma_busy = true;
+					isp_set_schedule(isp, &sch, false);
 					goto _post;
 				}
 			} else {
 				pr_err("fail to configure mp buffer!\n");
-				isp->error = 1;
-				isp->rdma_busy = false;
 				goto _post;
 			}
 			if (isp->mode != ISP_STRM_MODE) {
@@ -512,18 +490,14 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					list_del(&mcm_ib->entry);
 					list_add_tail(&mcm_ib->entry,
 							&isp->ibm[isp->next_mi_irq_ctx].list3);
-					isp_set_mcm_sch(isp, &sch);
+					isp_set_schedule(isp, &sch, true);
 				}
 #endif
-				isp->error = 0;
-				isp->rdma_busy = true;
 			} else if (ctx->sink_buf) {
 				isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
-				isp->error = 0;
-				isp->rdma_busy = true;
+				isp_set_schedule(isp, &sch, false);
 			} else if (ctx->sink_ctx) {
-				isp->error = 1;
-				isp->rdma_busy = false;
+				// TODO:
 			}
 		}
 	}
@@ -539,6 +513,13 @@ _post:
 		msg.irq.stat.mi_mis.miv2_mis3 = miv2_mis3;
 		msg.irq.stat.mi_mis.mi_mis_hdr1 = mi_mis_hdr1;
 		isp_post(isp, &msg, false);
+
+		if (miv2_mis & 0x1) {
+			memset(&msg, 0, sizeof(msg));
+			msg.id = ISP_MSG_FRAME_DONE;
+			msg.inst = cur_mi_irq_ctx;
+			isp_post(isp, &msg, false);
+		}
 	}
 	pr_debug("-\n");
 

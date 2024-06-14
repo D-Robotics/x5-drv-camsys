@@ -105,7 +105,7 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	if (rc < 0)
 		return rc;
 
-	return isp_set_mcm_sch_offline(isp->dev, isp->id);
+	return isp_set_schedule_offline(isp->dev, isp->id);
 }
 
 static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx)
@@ -267,7 +267,7 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 			return rc;
 	}
 
-	rc = isp_set_state(isp->dev, isp->id, enable);
+	rc = isp_set_state(isp->dev, isp->id, enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED);
 	if (rc < 0)
 		return rc;
 
@@ -356,13 +356,7 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 
 	{
 		// FIXME
-		struct isp_msg msg;
-
-		msg.id = CAM_MSG_STATE_CHANGED;
-		msg.inst = inst->id;
-		msg.state = CAM_STATE_INITED;
-		pr_info("%s set isp state to INITED\n", __func__);
-		isp_post(inst->dev, &msg, true);
+		isp_set_state(inst->dev, inst->id, CAM_STATE_INITED);
 	}
 
 	{

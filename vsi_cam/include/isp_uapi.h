@@ -16,9 +16,10 @@
 #define ISP_MSG_GET_FUNC    (0x2 << 0)
 #define ISP_MSG_GET_VI_INFO (0x3 << 0)
 
-#define ISP_MSG_IRQ_MIS   (0x1 << 8)
-#define ISP_MSG_MCM_SCH   (0x2 << 8)
-#define ISP_MSG_TUNE_EN   (0x3 << 8)
+#define ISP_MSG_IRQ_MIS    (0x1 << 8)
+#define ISP_MSG_MCM_SCH    (0x2 << 8)
+#define ISP_MSG_TUNE_EN    (0x3 << 8)
+#define ISP_MSG_FRAME_DONE (0x4 << 8)
 
 #define ISP_CTRL_DATA_LENGTH (128)
 

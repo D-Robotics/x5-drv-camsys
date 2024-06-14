@@ -72,6 +72,30 @@ _exit:
 	return rc;
 }
 
+int remove_job(struct job_queue *q, u32 index)
+{
+	struct job *job = NULL, *temp_job;
+	struct irq_job ij;
+	unsigned long flags;
+	int rc = 0;
+
+	if (!q)
+		return -EINVAL;
+
+	spin_lock_irqsave(&q->lock, flags);
+
+	list_for_each_entry_safe(job, temp_job, &q->done_queue, entry) {
+		memcpy(&ij, job->data, sizeof(ij));
+		if (ij.irq_ctx_index == index) {
+			list_del(&job->entry);
+			list_add_tail(&job->entry, &q->idle_queue);
+		}
+	}
+
+	spin_unlock_irqrestore(&q->lock, flags);
+	return rc;
+}
+
 struct job_queue *create_job_queue(unsigned int nmem)
 {
 	struct job_queue *q;

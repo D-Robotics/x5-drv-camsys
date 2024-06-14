@@ -115,9 +115,9 @@ static void isp_frame_work(struct vio_node *vnode)
 	vdev = vnode->ich_subdev[0];
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
 
-	rc = isp_set_mcm_sch_offline(&inst->dev->isp_dev, vnode->ctx_id);
+	rc = isp_set_schedule_offline(&inst->dev->isp_dev, vnode->ctx_id);
 	if (rc)
-		pr_err("%s: failed to call isp_set_mcm_sch_offline.\n", __func__);
+		pr_err("%s: failed to call isp_set_schedule_offline.\n", __func__);
 
 	vio_set_hw_free(vnode);
 	osal_clear_bit(VIO_NODE_SHOT, &vnode->state);
@@ -336,7 +336,6 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	struct isp_nat_instance *inst;
 	struct isp_nat_device *dev;
 	struct vio_node **vn = NULL;
-	struct isp_msg msg;
 	int i, rc;
 
 	if (!vctx || !vctx->vdev)
@@ -397,13 +396,7 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 		}
 		inst->stream_idx = dev->isp_dev.insts[vctx->ctx_id].online_mcm ? i : 0;
 		isp_set_stream_idx(&dev->isp_dev, vctx->ctx_id, inst->stream_idx);
-
-		msg.id = CAM_MSG_STATE_CHANGED;
-		msg.inst = vctx->ctx_id;
-		msg.state = CAM_STATE_INITED;
-		dev->isp_dev.insts[vctx->ctx_id].state = CAM_STATE_INITED;
-		pr_info("%s set isp state to INITED\n", __func__);
-		return isp_post(&dev->isp_dev, &msg, true);
+		return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_INITED);
 	}
 	return 0;
 }
@@ -553,8 +546,8 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 			return rc;
 		}
 
-		pr_info("%s set isp state to STARTED\n", __func__);
-		return isp_set_state(&dev->isp_dev, vctx->ctx_id, 1);
+		pr_info("%s inst: %d, set isp state to STARTED\n", __func__, vctx->ctx_id);
+		return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STARTED);
 	}
 	return 0;
 }
@@ -571,8 +564,8 @@ static s32 isp_video_streamoff(struct vio_video_ctx *vctx)
 	if (vctx->id == VNODE_ID_CAP) {
 		dev = inst->dev;
 
-		pr_info("%s set isp state to STOPPED\n", __func__);
-		rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, 0);
+		pr_info("%s inst: %d, set isp state to STOPPED\n", __func__, vctx->ctx_id);
+		rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED);
 		if (rc < 0) {
 			pr_err("%s failed to call isp_set_state(err=%d).\n", __func__, rc);
 			return rc;

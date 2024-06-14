@@ -21,6 +21,8 @@
 #define ISP_FMT_MAX (3)
 #define ISP_RES_MAX (3)
 
+#define INVALID_MCM_SCH_INST (0xff)
+
 #define isp_write(isp, offset, value) \
 	__raw_writel(value, (isp)->base + (offset))
 
@@ -131,14 +133,16 @@ int isp_set_iformat(struct isp_device *isp, u32 inst, struct cam_format *fmt, st
 		    bool hdr_en);
 int isp_set_oformat(struct isp_device *isp, u32 inst, struct cam_format *fmt);
 int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt);
-int isp_set_state(struct isp_device *isp, u32 inst, int enable);
+int isp_set_state(struct isp_device *isp, u32 inst, int state);
 int isp_set_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx);
 int isp_add_job(struct isp_device *isp, u32 inst);
-int isp_set_mcm_sch_offline(struct isp_device *isp, u32 inst);
-int isp_set_mcm_sch(struct isp_device *isp, struct isp_mcm_sch *sch);
-int isp_get_mcm_sch(struct isp_device *isp, u32 *inst);
-int isp_reset_mcm_sch(struct isp_device *isp);
+int isp_remove_job(struct isp_device *isp, u32 inst);
+int isp_set_schedule_offline(struct isp_device *isp, u32 inst);
+int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool mcm_online);
+int isp_get_schedule(struct isp_device *isp, u32 *inst);
+int isp_reset_schedule(struct isp_device *isp);
+int isp_check_schedule(struct isp_device *isp, u32 *inst);
 int isp_open(struct isp_device *isp, u32 inst);
 int isp_close(struct isp_device *isp, u32 inst);
 int isp_probe(struct platform_device *pdev, struct isp_device *isp);
