@@ -173,7 +173,7 @@ static int32_t isi_alloc_integration_time(uint32_t chn, uint32_t *int_time,
 		break;
 		case (u8)SENSOR_DOL2:
 			sensor_ctl[chn].line_buf[0] = time_L;
-			sensor_ctl[chn].line_buf[1] = time_S;
+			sensor_ctl[chn].line_buf[1] = time_M;
 			sensor_ctl[chn].line_num = 2;
 		break;
 		case (u8)SENSOR_DOL3:
@@ -491,14 +491,15 @@ int32_t common_get_param(uint32_t chn, struct _setting_param_t *user_para)
 	user_para->bayer_start = (bayer_start_u)sensor_param[chn].bayer_start;/*PRQA S 4342*/
 	user_para->bayer_pattern = (bayer_pattern_e)sensor_param[chn].bayer_pattern;/*PRQA S 4342*/
 	user_para->exposure_max_bit_width = (uint8_t)sensor_param[chn].exposure_max_bit_width;
+	user_para->exposure_time_step = (uint8_t)sensor_param[chn].exposure_time_step;
 
-	sen_debug(dev, "param [%d] l:%d g:%d/%d e:%d/%d %dx%d %dfps b:%d o:%d p:%d m:%d\n",/*PRQA S 0685,1294*/
+	sen_debug(dev, "param [%d] l:%d g:%d/%d e:%d/%d %dx%d %dfps b:%d o:%d p:%d m:%d s:%d\n",/*PRQA S 0685,1294*/
 		chn, user_para->lines_per_second,
 		user_para->analog_gain_max, user_para->digital_gain_max,
 		user_para->exposure_time_max, user_para->exposure_time_min,
 		user_para->active_width, user_para->active_height, user_para->fps,
 		user_para->data_width, user_para->bayer_start.rggb, user_para->bayer_pattern,
-		user_para->exposure_max_bit_width);
+		user_para->exposure_max_bit_width, user_para->exposure_time_step);
 	return 0;
 }
 

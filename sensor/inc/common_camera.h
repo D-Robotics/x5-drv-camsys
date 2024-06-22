@@ -200,20 +200,21 @@ typedef enum enum_bayer_pattern_e {
  * @NO{S10E02C08}
  */
 struct _setting_param_t {
-    uint32_t lines_per_second;
-    uint32_t analog_gain_max;
-    uint32_t digital_gain_max;
-    uint32_t exposure_time_max;
-    uint32_t exposure_time_min;
-    uint32_t exposure_time_limit;
+	uint32_t lines_per_second;
+	uint32_t analog_gain_max;
+	uint32_t digital_gain_max;
+	uint32_t exposure_time_max;
+	uint32_t exposure_time_min;
+	uint32_t exposure_time_limit;
 	uint32_t exposure_time_long_max;
-    uint16_t active_width;
-    uint16_t active_height;
+	uint16_t active_width;
+	uint16_t active_height;
 	uint32_t fps;
 	uint8_t data_width;				// Bits per pixel.
 	bayer_start_u bayer_start;		// RGGB pattern start (R/Gr/Gb/B).
 	bayer_pattern_e bayer_pattern;	// CFA pattern type (RGGB/RCCC/RIrGB/RGIrB).
 	uint8_t exposure_max_bit_width;
+	uint8_t exposure_time_step;
 };
 
 struct sensor_priv_old {
