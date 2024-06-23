@@ -154,13 +154,10 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 	return rc;
 }
 
-static s32 vse_attr_check(struct vse_nat_instance *inst)
+static s32 vse_fps_param_check(frame_fps_ctrl_t *fps)
 {
-	vse_attr_t *vse_attr = &inst->attr;
-
-	vpf_param_range_check(vse_attr->fps.src, 0, 120);
-	vpf_param_range_check(vse_attr->fps.dst, 0, 120);
-
+	vpf_param_range_check(fps->src, 0, 120);
+	vpf_param_range_check(fps->dst, 0, 120);
 	return 0;
 }
 
@@ -180,7 +177,7 @@ static s32 vse_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	if (rc < 0)
 		return rc;
 
-	rc = vse_attr_check(inst);
+	rc = vse_fps_param_check(&inst->attr.fps);
 	if (rc)
 		return rc;
 
@@ -259,15 +256,15 @@ static s32 vse_video_reqbufs(struct vio_video_ctx *vctx,
 		vse_get_plane(format, group_attr);
 		group_attr->is_alloc = 0;
 	} else if (vctx->id >= VNODE_ID_CAP) {
-		if (inst->ochn_attr.fmt == FRM_FMT_NV12)
-			format = HW_FORMAT_YUV422_8BIT;
-		else
-			return -EINVAL;
 		ochn_id = vctx->id - VNODE_ID_CAP;
 		if(ochn_id < 0 || ochn_id > VSE_OUT_CHNL_MAX) {
 			vio_err("%s: invalid ochn id\n", __func__);
 			return -EFAULT;
 		}
+		if (inst->ochn_attr.fmt == FRM_FMT_NV12)
+			format = HW_FORMAT_YUV422_8BIT;
+		else
+			return -EINVAL;
 		group_attr->bit_map |= 1;
 		group_attr->is_contig = 1;
 		group_attr->info[0].buf_attr.width = inst->ochn_attr.target_w;
@@ -446,11 +443,6 @@ static s32 vse_ochn_attr_check(u32 ochn_id, vse_ichn_attr_t *vse_ichn_attr, vse_
 	vpf_param_range_check(right, 0, vse_ichn_attr->width);
 	vpf_param_range_check(bottom, 0, vse_ichn_attr->height);
 
-	vpf_param_range_check(attr->fps.src, 0, 120);
-	vpf_param_range_check(attr->fps.dst, 0, 120);
-	if (attr->fps.src < attr->fps.dst)
-		return -EINVAL;
-
 	if (attr->target_w % 2 != 0 || attr->target_h % 2 != 0) {
 		vio_err("vse chn-%d scale size(%d, %d) cannot be odd\n", ochn_id,
 			attr->target_w, attr->target_h);
@@ -499,15 +491,21 @@ static s32 vse_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 		return -EINVAL;
 	}
 
+	if (!attr.chn_en) {
+		vio_dbg("vse ochnid: %d disable\n", ochn_id);
+		return 0;
+	}
+
 	/* should use src inst ichn attr */
 	rc = vse_ochn_attr_check(ochn_id, &nat_dev->src_instance[vctx->ctx_id].ichn_attr, &attr);
 	if (rc) {
 		pr_err("vse_ochn_attr_check failed\n");
 		return rc;
 	}
-	if (attr.chn_en == 0) {
-		vio_dbg("vse ochnid: %d disable\n", ochn_id);
-		return 0;
+	rc = vse_fps_param_check(&attr.fps);
+	if (rc < 0) {
+		pr_err("vse_fps_param_check failed\n");
+		return rc;
 	}
 
 	if (attr.fmt == FRM_FMT_NV12)
@@ -524,7 +522,7 @@ static s32 vse_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 
 	pr_info("%s ochn_id=%d,format=%d,width=%d,stride=%d,height=%d\n", __func__,
 		ochn_id, fmt.format, fmt.width, fmt.stride, fmt.height);
-	rc = vse_set_oformat(&inst->dev->vse_dev, vctx->ctx_id, ochn_id, &fmt, &crop);
+	rc = vse_set_oformat(&inst->dev->vse_dev, vctx->ctx_id, ochn_id, &fmt, &crop, true);
 	if (rc < 0)
 		return rc;
 
@@ -576,8 +574,130 @@ static s32 vse_video_get_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	return 0;
 }
 
+static s32 vse_do_ex_attr_changed(struct vio_video_ctx *vctx, vse_ochn_attr_t *attr)
+{
+	struct vse_nat_instance *inst =
+			container_of(vctx->vdev, struct vse_nat_instance, vdev);
+	struct cam_format fmt;
+	struct cam_rect crop;
+	int ochn_id = vctx->id - VNODE_ID_CAP;
+	int rc;
+
+	/* should use src inst ichn attr */
+	rc = vse_ochn_attr_check(ochn_id, &inst->dev->src_instance[vctx->ctx_id].ichn_attr,
+				  attr);
+	if (rc < 0) {
+		pr_err("vse_ochn_attr_check failed\n");
+		return rc;
+	}
+
+	if (attr->fmt == FRM_FMT_NV12)
+		fmt.format = CAM_FMT_NV12;
+	else
+		return -EINVAL;
+	fmt.width = attr->target_w;
+	fmt.stride = attr->target_w;
+	fmt.height = attr->target_h;
+	crop.x = attr->roi.x;
+	crop.y = attr->roi.y;
+	crop.w = attr->roi.w;
+	crop.h = attr->roi.h;
+
+	pr_info("%s ochn_id=%d, chn_en=%d, format=%d, width=%d, stride=%d, height=%d, roi_w=%d, roi_h=%d\n", __func__,
+		ochn_id, attr->chn_en, fmt.format, fmt.width, fmt.stride, fmt.height, crop.w, crop.h);
+	rc = vse_set_oformat(&inst->dev->vse_dev, vctx->ctx_id, ochn_id, &fmt, &crop, attr->chn_en);
+	if (rc < 0)
+		return rc;
+
+	memcpy(&inst->ochn_attr, attr, sizeof(inst->ochn_attr));
+	return 0;
+}
+
+static s32 vse_do_fps_param_changed(struct vio_video_ctx *vctx, frame_fps_ctrl_t *fps)
+{
+	struct vse_nat_instance *inst =
+			container_of(vctx->vdev, struct vse_nat_instance, vdev);
+	struct vse_fps_rate fps_ctrl;
+	int ochn_id = vctx->id - VNODE_ID_CAP;
+	int rc;
+
+	rc = vse_fps_param_check(fps);
+	if (rc < 0) {
+		pr_err("vse_ochn_attr_check failed\n");
+		return rc;
+	}
+
+	fps_ctrl.src = fps->src;
+	fps_ctrl.dst = fps->dst;
+	rc = vse_set_fps_rate(&inst->dev->vse_dev, vctx->ctx_id, ochn_id, &fps_ctrl);
+	if (rc < 0) {
+		pr_err("vse_set_fps_dst_rate failed");
+		return rc;
+	}
+	memcpy(&inst->ochn_attr.fps, &fps, sizeof(inst->ochn_attr.fps));
+	return rc;
+}
+
 static s32 vse_video_set_ochn_attr_ex(struct vio_video_ctx *vctx, unsigned long arg)
 {
+	struct vse_nat_instance *inst =
+			container_of(vctx->vdev, struct vse_nat_instance, vdev);
+	vse_ochn_attr_ex_t attr_ex;
+	vse_ochn_attr_t attr;
+	bool attr_changed = false, fps_changed = false;
+	int rc;
+
+	if (vctx->id < VNODE_ID_CAP)
+		return -EINVAL;
+
+	if ((vctx->id - VNODE_ID_CAP) > VSE_OUT_CHNL_MAX) {
+		vio_err("%s: Invalid output channel id\n", __func__);
+		return -EINVAL;
+	}
+
+	pr_info("%s vctx->ctx_id=%d,vctx->id=%d\n", __func__, vctx->ctx_id, vctx->id);
+	rc = copy_from_user(&attr_ex, (void *)arg, sizeof(attr_ex));
+	if (rc < 0)
+		return rc;
+
+	memcpy(&attr, &inst->ochn_attr, sizeof(inst->ochn_attr));
+	if (attr.chn_en != attr_ex.chn_en) {
+		attr.chn_en = attr_ex.chn_en;
+		attr_changed = true;
+	}
+	if (attr.target_w != attr_ex.target_w) {
+		attr.target_w = attr_ex.target_w;
+		attr_changed = true;
+	}
+	if (attr.target_h != attr_ex.target_h) {
+		attr.target_h = attr_ex.target_h;
+		attr_changed = true;
+	}
+	if (memcmp(&attr.roi, &attr_ex.roi, sizeof(attr.roi))) {
+		attr.roi = attr_ex.roi;
+		attr_changed =true;
+	}
+	if (attr.fps.src != attr_ex.src_fps) {
+		attr.fps.src = attr_ex.src_fps;
+		fps_changed = true;
+	}
+	if (attr.fps.dst != attr_ex.dst_fps) {
+		attr.fps.dst = attr_ex.dst_fps;
+		fps_changed = true;
+	}
+	if (!attr_changed && !fps_changed)
+		return -EINVAL;
+
+	if (attr_changed) {
+		rc = vse_do_ex_attr_changed(vctx, &attr);
+		if (rc < 0)
+			return rc;
+	}
+	if (fps_changed) {
+		rc = vse_do_fps_param_changed(vctx, &attr.fps);
+		if (rc < 0)
+			return rc;
+	}
 	return 0;
 }
 

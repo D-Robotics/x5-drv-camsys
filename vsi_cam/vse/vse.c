@@ -159,7 +159,7 @@ int vse_set_iformat(struct vse_device *vse, u32 inst, struct cam_format *fmt)
 }
 
 int vse_set_oformat(struct vse_device *vse, u32 inst, u32 chnl, struct cam_format *fmt,
-		    struct cam_rect *crop)
+		    struct cam_rect *crop, bool chn_en)
 {
 	struct vse_instance *ins;
 	struct vse_msg msg;
@@ -172,6 +172,11 @@ int vse_set_oformat(struct vse_device *vse, u32 inst, u32 chnl, struct cam_forma
 		return -EINVAL;
 
 	ins = &vse->insts[inst];
+
+	if (chn_en)
+		ins->fps[chnl].dst = ins->fps[chnl].src;
+	else
+		ins->fps[chnl].dst = 0;
 
 #ifdef EN_CHK_FMT
 	if (!check_oformat(ins, chnl, fmt))
@@ -327,19 +332,21 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	ins = &vse->insts[inst];
 	ctx = &ins->ctx;
 
-	if (ctx->sink_buf) {
-		phys_addr = get_phys_addr(ctx->sink_buf, 0);
-		ins->sch.rdma_buf.addr = phys_addr;
-	}
-	ins->sch.ochn_en_mask = 0;
-	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-		if (ctx->src_buf[i]) {
-			phys_addr = get_phys_addr(ctx->src_buf[i], 0);
-			pr_debug("vse chn%d mp addr:%x\n", i, (u32)phys_addr);
-			ins->sch.mp_buf[i].addr = phys_addr;
-			ins->sch.ochn_en_mask |= BIT(i);
-			// set osd cfg for each channel
-			cam_osd_set_cfg(ctx->src_ctx[i], i);
+	if (vse->mode != VSE_SCM_MODE) {
+		if (ctx->sink_buf) {
+			phys_addr = get_phys_addr(ctx->sink_buf, 0);
+			ins->sch.rdma_buf.addr = phys_addr;
+		}
+		ins->sch.ochn_en_mask = 0;
+		for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
+			if (ctx->src_buf[i]) {
+				phys_addr = get_phys_addr(ctx->src_buf[i], 0);
+				pr_debug("vse chn%d mp addr:%x\n", i, (u32)phys_addr);
+				ins->sch.mp_buf[i].addr = phys_addr;
+				ins->sch.ochn_en_mask |= BIT(i);
+				// set osd cfg for each channel
+				cam_osd_set_cfg(ctx->src_ctx[i], i);
+			}
 		}
 	}
 	vse_server_trigger(vse, inst);
@@ -446,6 +453,7 @@ int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx)
 	spin_lock_irqsave(&ins->lock, flags);
 	ins->ctx = *ctx;
 	ins->ctx.fps = ins->fps;
+	memcpy(ins->ctx.cur_fps, ins->fps, sizeof(ins->ctx.cur_fps));
 	spin_unlock_irqrestore(&ins->lock, flags);
 	return 0;
 }

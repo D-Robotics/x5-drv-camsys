@@ -27,23 +27,23 @@ struct vse_stitching {
 	u8 x, y;
 };
 
+struct vse_fps_rate {
+	u16 src;
+	u16 dst;
+	u16 cnt;
+};
+
 struct vse_irq_ctx {
 	bool is_sink_online_mode;
 	struct vse_stitching stitches[VSE_OUT_CHNL_MAX];
 	struct cam_buf *sink_buf, *src_buf[VSE_OUT_CHNL_MAX];
 	struct cam_ctx *sink_ctx, *src_ctx[VSE_OUT_CHNL_MAX], *stat_ctx;
-	struct vse_fps_rate *fps;
+	struct vse_fps_rate cur_fps[VSE_OUT_CHNL_MAX], *fps;
 };
 
 struct vse_format_cap {
 	u32 format;
 	struct cam_res_cap res[VSE_OUT_CHNL_MAX][VSE_RES_MAX];
-};
-
-struct vse_fps_rate {
-	u16 src;
-	u16 dst;
-	u16 cnt;
 };
 
 struct vse_instance {
@@ -96,7 +96,7 @@ int vse_set_source(struct vse_device *vse, u32 inst, u32 source);
 int vse_set_fps_rate(struct vse_device *vse, u32 inst, u32 chnl, struct vse_fps_rate *fps);
 int vse_set_iformat(struct vse_device *vse, u32 inst, struct cam_format *fmt);
 int vse_set_oformat(struct vse_device *vse, u32 inst, u32 chnl, struct cam_format *fmt,
-		    struct cam_rect *crop);
+		    struct cam_rect *crop, bool chn_en);
 int vse_set_format(struct vse_device *vse, u32 inst, u32 chnl,
 		   struct vse_format *fmt, struct vse_stitching *stitch);
 int vse_set_cascade(struct vse_device *vse, u32 inst, u32 cas_id, bool en_cas);

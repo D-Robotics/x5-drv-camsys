@@ -185,11 +185,13 @@ int new_frame(struct vse_irq_ctx *ctx)
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (!ctx->src_ctx[i])
 			continue;
-		ctx->fps[i].cnt += ctx->fps[i].dst;
-		if (ctx->fps[i].cnt >= ctx->fps[i].src) {
-			ctx->fps[i].cnt -= ctx->fps[i].src;
+		ctx->cur_fps[i].cnt += ctx->cur_fps[i].dst;
+		if (ctx->cur_fps[i].cnt >= ctx->cur_fps[i].src) {
+			ctx->cur_fps[i].cnt -= ctx->cur_fps[i].src;
 			enable |= BIT(i);
 		}
+		if (!ctx->cur_fps[i].cnt && ctx->cur_fps[i].dst != ctx->fps[i].dst)
+			ctx->cur_fps[i].dst = ctx->fps[i].dst;
 		if (!(enable & BIT(i)))
 			continue;
 		ctx->src_buf[i] = cam_dqbuf_irq(ctx->src_ctx[i], true);
@@ -283,7 +285,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 	struct vse_instance *inst;
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
-	u32 value, i;
+	u32 value, i, vse_ctrl;
 
 	value = vse_read(vse, VSE_MI_MIS);
 	pr_debug("+mi mis:0x%x\n", value);
@@ -296,24 +298,22 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		frame_done(&inst->ctx);
 		spin_unlock_irqrestore(&inst->lock, flags);
 
-		// vse_write(vse, 0x308, 0x2492daaa);
-		// vse_write(vse, 0xd58, 0xffffffff);
-		// vse_write(vse, 0xd40, 0x00000000);
-		// vse_write(vse, 0x304, 0x00000000);
-		// vse_write(vse, 0x304, 0x00008000);
-
 		ctx = get_next_irq_ctx(vse);
 		if (!ctx) {
 			vse->is_completed = true;
 			vse->error = 1;
 		} else if (vse->mode == VSE_SCM_MODE) {
+			vse_ctrl = vse_read(vse, VSE_CTRL);
+			vse_ctrl &= ~0x3f;
 			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 				if (ctx->src_buf[i]) {
 					phys_addr_t phys_addr = get_phys_addr(ctx->src_buf[i], 0);
 
 					vse_set_mi_buffer(vse, i, phys_addr, &inst->ofmt[i]);
+					vse_ctrl |= BIT(i);
 				}
 			}
+			vse_write(vse, VSE_CTRL, vse_ctrl);
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}

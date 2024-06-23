@@ -2,6 +2,8 @@
 #ifndef _DW230_VSE_REGS_H_
 #define _DW230_VSE_REGS_H_
 
+#define VSE_CTRL                        (0x0304)
+
 /* MI IRQ */
 #define VSE_FE_MIS                      (0x0114)
 #define VSE_FE_ICR                      (0x0118)

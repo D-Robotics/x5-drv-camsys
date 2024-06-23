@@ -574,7 +574,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		f.format = pixelformat_to_cam_format(inst->out_pixelformat);
 	else
 		f.format = mbus_code_to_cam_format(fmt->format.code);
-	rc = vse_set_oformat(inst->dev, inst->id, channel, &f, &crop);
+	rc = vse_set_oformat(inst->dev, inst->id, channel, &f, &crop, true);
 	if (rc < 0)
 		return rc;
 
@@ -587,7 +587,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (stitch[i].enabled && i != channel) {
 			crop = crops[scene][i];
-			rc = vse_set_oformat(inst->dev, inst->id, i, &f, &crop);
+			rc = vse_set_oformat(inst->dev, inst->id, i, &f, &crop, true);
 			if (rc < 0)
 				return rc;
 		}
