@@ -25,6 +25,7 @@ enum isp_ichn_type {
 struct isp_nat_instance {
 	u32 id;
 	struct vio_subdev vdev;
+	struct vio_subdev *prev;
 	struct isp_nat_device *dev;
 	struct isp_irq_ctx ctx;
 	isp_attr_t attr;

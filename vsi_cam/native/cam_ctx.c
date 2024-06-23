@@ -161,27 +161,17 @@ int cam_osd_set_cfg(struct cam_ctx *ctx, u32 ochn_id)
 	return ret;
 }
 
-int cam_next_set_mode(struct cam_ctx *ctx, u32 mode)
+int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	const struct cam_ops *ops = NULL;
-	struct vio_node *vnode;
 
 	if (unlikely(!vdev))
 		return -EINVAL;
 
-	if (vdev->next) {
-		vdev = vdev->next;
-		if (vdev->vnode->id < MODULE_NUM)
-			ops = get_ops(vdev->vnode->id);
-		if (ops && ops->set_mode)
-			return ops->set_mode((struct cam_ctx *)vdev, mode);
-	} else if (vdev->vnode->next){
-		vnode = vdev->vnode->next;
-		if (vnode->id < MODULE_NUM)
-			ops = get_ops(vnode->id);
-		if (ops && ops->set_mode)
-			return ops->set_mode((struct cam_ctx *)vnode->ich_subdev[0], mode);
-	}
+	if (vdev->vnode->id < MODULE_NUM)
+		ops = get_ops(vdev->vnode->id);
+	if (ops && ops->set_mode)
+		return ops->set_mode((struct cam_ctx *)vdev, mode);
 	return -EBUSY;
 }

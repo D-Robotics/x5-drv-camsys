@@ -82,17 +82,16 @@ static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 		return bind_type;
 
 	if (vdev->id == VNODE_ID_SRC) {
-		vdev->prev = remote_vdev;
+		inst->prev = remote_vdev;
 	} else if (vdev->id == VNODE_ID_CAP) {
 		vdev->chn_attr.format = MEM_PIX_FMT_NV12;
 		vdev->chn_attr.height = inst->attr.crop.h;
 		vdev->chn_attr.width = inst->attr.crop.w;
 		vdev->chn_attr.wstride = inst->attr.crop.w;
-		vdev->next = remote_vdev;
 		if (inst->dev->isp_dev.mode == ISP_STRM_MODE && online_mode)
-			cam_next_set_mode((struct cam_ctx *)vdev, CAM_SIMPLEX_MODE);
+			cam_set_mode((struct cam_ctx *)remote_vdev, CAM_SIMPLEX_MODE);
 		else
-			cam_next_set_mode((struct cam_ctx *)vdev, CAM_MULTIPLEX_MODE);
+			cam_set_mode((struct cam_ctx *)remote_vdev, CAM_MULTIPLEX_MODE);
 	}
 
 	if (online_mode)
@@ -527,7 +526,7 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 		dev = inst->dev;
 		src_inst = &dev->src_instance[vctx->ctx_id];
 		if (src_inst->online_mode) {
-			get_csi_ipi_idx(src_inst->vdev.prev, &csi_idx, &ipi_idx, &ipi_num);
+			get_csi_ipi_idx(src_inst->prev, &csi_idx, &ipi_idx, &ipi_num);
 			pr_info("%s stream_idx=%d,csi_idx=%d,ipi_idx=%d,ipi_num=%d\n", __func__,
 				src_inst->stream_idx, csi_idx, ipi_idx, ipi_num);
 			isp_set_input_select(&dev->isp_dev, src_inst->stream_idx, csi_idx, ipi_idx);

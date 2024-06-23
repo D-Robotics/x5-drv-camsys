@@ -25,6 +25,6 @@ bool cam_osd_update(struct cam_ctx *ctx);
 
 int cam_osd_set_cfg(struct cam_ctx *ctx, u32 ochn_id);
 
-int cam_next_set_mode(struct cam_ctx *ctx, u32 mode);
+int cam_set_mode(struct cam_ctx *ctx, u32 mode);
 
 #endif /* _CAM_COM_H_ */
