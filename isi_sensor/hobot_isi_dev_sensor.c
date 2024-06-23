@@ -293,6 +293,29 @@ static int16_t isi_get_sensor_setting_param(uint32_t chn)
         return ret;
 }
 
+static void isi_set_sensor_cali_name(uint32_t chn, char *cali_name)
+{
+        int32_t ret = 0;
+        pr_debug("%s \n", __func__);
+
+        if (g_isi_sen == NULL)
+                return;
+
+        if (chn >= CAMERA_TOTAL_NUMBER || chn < 0) {
+                pr_err("%s chn %d is error \n", __func__, chn);
+                return;
+        }
+
+        if (g_isi_sen->isi_sensor_cops != NULL) {
+                ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_set_cali_name(chn, cali_name);
+                if (ret < 0) {
+                        pr_err("isi callback sensor_set_cali_name error \n");
+                        return;
+                }
+        } else {
+                pr_err("isi_sensor_cops is NULL \n");
+        }
+}
 
 static int32_t empty_common_alloc_analog_gain(uint32_t chn, int32_t *gain_ptr, uint32_t gain_num)
 {
@@ -377,6 +400,12 @@ static int32_t empty_sensor_get_awb_para(uint32_t chn, struct isi_sensor_awb_inf
         return 0;
 }
 
+static int32_t empty_sensor_set_cali_name(uint32_t chn, char *cali_name)
+{
+        pr_debug("%s\n", __func__);
+        return 0;
+}
+
 struct sensor_isi_ops_s g_isi_sensor_cops = {
         .sensor_alloc_analog_gain = empty_common_alloc_analog_gain,
         .sensor_alloc_digital_gain = empty_common_alloc_digital_gain,
@@ -391,6 +420,7 @@ struct sensor_isi_ops_s g_isi_sensor_cops = {
         .sensor_get_base_info = empty_sensor_get_base_info,
         .sensor_awb_para = empty_common_awb_param,
         .sensor_get_awb_para = empty_sensor_get_awb_para,
+	.sensor_set_cali_name = empty_sensor_set_cali_name,
         .end_magic = SENSOR_OPS_END_MAGIC,
 };
 
@@ -568,6 +598,8 @@ static long isi_sensor_fop_ioctl(struct file *pfile, uint32_t cmd, unsigned long
         struct isi_sensor_line_param_s line_param = {0};
         struct isi_sensor_awb_param_s awb_param = {0};
 
+	camera_calib_t calib_param = {0};
+
         switch (cmd) {
                 case ISI_SENSOR_IOCTL_READ_PORT:
                         chn_number = camera_isi_sensor_chn_number();
@@ -742,6 +774,15 @@ static long isi_sensor_fop_ioctl(struct file *pfile, uint32_t cmd, unsigned long
                                 isi_set_sensor_awb_param(&awb_param);
                         }
                         break;
+		case ISI_SENSOR_IOCTL_GET_LNAME:
+			if (copy_from_user((void *)&calib_param, (void __user *)arg, sizeof(camera_calib_t))) {
+				pr_err("%s %d arg copy error \n",__func__, cmd);
+				ret = -EIO;
+                        } else {
+				pr_debug("%s port = %d, name = %s \n", __func__, calib_param.port, calib_param.name);
+				isi_set_sensor_cali_name(calib_param.port, calib_param.name);
+			}
+			break;
                 default:
                     pr_err("ISI sensor ioctl cmd 0x%x not supported\n", cmd);
                     break;

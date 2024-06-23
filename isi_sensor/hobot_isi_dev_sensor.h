@@ -70,6 +70,24 @@ struct isi_sensor_awb_param_s {
         struct isi_sensor_awb_info_s isi_sensor_awb_info;
 };
 
+#define CALIB_NUM_LENGTH    100
+#define CALIBRATION_MAX_ID  4
+
+/**
+ * @struct camera_calib_s
+ * sensor iq calib device param struct
+ * @NO{S10E02C05}
+ */
+typedef struct camera_calib_s {
+        char name[CALIB_NUM_LENGTH];
+        uint32_t port;
+        uint32_t total_calib;
+        uint32_t calib_total_size[CALIBRATION_MAX_ID];
+        uint32_t calib_mem_size[CALIBRATION_MAX_ID];
+        void *plut[CALIBRATION_MAX_ID];
+} camera_calib_t;
+
+
 /**
  * @def ISI_SENSOR_DEV_NAME
  * sensor device name string
@@ -104,6 +122,9 @@ struct isi_sensor_awb_param_s {
 #define ISI_SENSOR_IOCTL_GET_AWB _IOWR(ISI_SENSOR_IOC_MAGIC, 11, struct isi_sensor_awb_param_s)
 // 设置 AWB
 #define ISI_SENSOR_IOCTL_SET_AWB _IOW(ISI_SENSOR_IOC_MAGIC, 12, struct isi_sensor_awb_param_s)
+// 获取 cali name
+#define ISI_SENSOR_IOCTL_GET_LNAME _IOW(ISI_SENSOR_IOC_MAGIC, 13, camera_calib_t)
+
 
 
 /**

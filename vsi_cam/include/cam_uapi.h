@@ -105,7 +105,7 @@ struct cam_input {
 	__u8 type;
 	union {
 		struct {
-			char name[16]; /* sensor name */
+			char name[100]; /* sensor name */
 			__u8 bayer_format;
 		} sens;
 	};

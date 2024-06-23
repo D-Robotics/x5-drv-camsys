@@ -319,6 +319,7 @@ struct sensor_isi_ops_s {
         int32_t (* sensor_awb_para) (uint32_t chn, uint32_t rgain, uint32_t bgain,
                         uint32_t grgain, uint32_t gbgain, uint32_t temper);
         int32_t (* sensor_get_awb_para) (uint32_t chn, struct isi_sensor_awb_info_s *user_awb);
+	int32_t (* sensor_set_cali_name) (uint32_t chn, char *cali_name);
         void *reserved_func[7];
         uint32_t end_magic;
 };
@@ -340,6 +341,7 @@ struct sensor_isp_ops_s {
 	int32_t (* sensor_awb_para)(uint32_t chn, uint32_t rgain, uint32_t bgain,
 			uint32_t grgain, uint32_t gbgain, uint32_t temper);
 	int32_t (* sensor_set_led) (uint32_t chn, int32_t brightness);
+	int32_t (* sensor_get_cali_name) (uint32_t chn, char *cali_name);
 	void *reserved_func[6];
 	uint32_t end_magic;
 };

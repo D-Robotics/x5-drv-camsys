@@ -34,6 +34,7 @@ sensor_tuning_data_t tuning_param[FIRMWARE_CONTEXT_NUMBER];
 static sensor_event_header_t sensor_event_header[CAMERA_TOTAL_NUMBER];
 static sensor_event_node_t *sensor_event_arr = NULL;
 static uint32_t sensor_update_flag = 0u;
+static char sensor_cali_name[CAMERA_TOTAL_NUMBER][100];
 module_param(sensor_update_flag, uint, 0644); /* PRQA S 0605,0636,4501 */ /* module_param macro */
 
 static int32_t common_alloc_analog_gain(uint32_t chn, int32_t *gain_ptr)
@@ -624,6 +625,21 @@ static int32_t common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s 
         return 0;
 }
 
+static int32_t common_get_cali_name(uint32_t chn, char *cali_name)
+{
+	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
+		pr_err("%s chn %d beyond 16\n", __func__, chn);
+		return -1;
+	}
+
+	if (sensor_cali_name[chn] != NULL) {
+		strncpy(cali_name, sensor_cali_name[chn], (sizeof(sensor_cali_name[0]) - 1));
+	}
+
+	return 0;
+}
+
+
 struct sensor_isp_ops_s sensor_isp_ops = {
 	.sensor_alloc_analog_gain = common_alloc_analog_gain,
 	.sensor_alloc_digital_gain = common_alloc_digital_gain,
@@ -635,6 +651,7 @@ struct sensor_isp_ops_s sensor_isp_ops = {
 	.sensor_get_base_info = common_get_base_info,
         .sensor_awb_para = common_awb_param,
 	.sensor_set_led = common_set_led,
+	.sensor_get_cali_name = common_get_cali_name,
 	.end_magic = SENSOR_OPS_END_MAGIC,
 };
 
@@ -699,6 +716,20 @@ static int32_t common_get_awb_gain(uint32_t chn, struct isi_sensor_awb_info_s *u
         return 0;
 }
 
+static int32_t common_set_cali_name(uint32_t chn, char *cali_name)
+{
+        if (chn >= FIRMWARE_CONTEXT_NUMBER) {
+                pr_err("%s chn %d beyond 8\n", __func__, chn);
+                return -1;
+        }
+
+	if (cali_name != NULL) {
+		strncpy(sensor_cali_name[chn], cali_name, (sizeof(sensor_cali_name[0]) - 1));
+		sensor_cali_name[chn][(sizeof(sensor_cali_name[0]) - 1)] = '\0';
+	}
+
+        return 0;
+}
 
 struct sensor_isi_ops_s sensor_isi_ops = {
         .sensor_alloc_analog_gain = isi_alloc_analog_gain,
@@ -714,6 +745,7 @@ struct sensor_isi_ops_s sensor_isi_ops = {
         .sensor_get_base_info = common_get_base_info,
         .sensor_awb_para = common_awb_param,
         .sensor_get_awb_para = common_get_awb_gain,
+	.sensor_set_cali_name = common_set_cali_name,
         .end_magic = SENSOR_OPS_END_MAGIC,
 };
 
