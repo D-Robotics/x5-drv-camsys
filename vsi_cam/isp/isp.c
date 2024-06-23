@@ -477,6 +477,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	case CAM_STATE_CLOSED:
 		ins->state = CAM_STATE_CLOSED;
 		if (isp->mode != ISP_STRM_MODE) {
+			isp_remove_job(isp, inst);
 			for (i = 0; i < isp->num_insts; i++) {
 				if (i == inst)
 					continue;
