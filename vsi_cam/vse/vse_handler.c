@@ -285,7 +285,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 	struct vse_instance *inst;
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
-	u32 value, i, vse_ctrl;
+	u32 value, i, vse_ctrl, pre_ctrl;
 
 	value = vse_read(vse, VSE_MI_MIS);
 	pr_debug("+mi mis:0x%x\n", value);
@@ -303,7 +303,8 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 			vse->is_completed = true;
 			vse->error = 1;
 		} else if (vse->mode == VSE_SCM_MODE) {
-			vse_ctrl = vse_read(vse, VSE_CTRL);
+			pre_ctrl = vse_read(vse, VSE_CTRL);
+			vse_ctrl = pre_ctrl;
 			vse_ctrl &= ~0x3f;
 			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 				if (ctx->src_buf[i]) {
@@ -313,23 +314,26 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 					vse_ctrl |= BIT(i);
 				}
 			}
-			vse_write(vse, VSE_CTRL, vse_ctrl);
+			if (vse_ctrl != pre_ctrl) {
+				vse_write(vse, VSE_CTRL, vse_ctrl);
+				pr_debug("vse_ctrl %x->%x\n", pre_ctrl, vse_ctrl);
+			}
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}
-	}
 
 #ifndef WITH_LEGACY_VSE
-	if (value & BIT(13)) {
-		struct vse_msg msg = { .id = VSE_MSG_IRQ_STAT };
+		{
+			struct vse_msg msg = { .id = VSE_MSG_IRQ_STAT };
 
-		msg.inst = -1;
-		msg.channel = -1;
-		msg.irq.num = VSE_MI_MIS;
-		msg.irq.stat = value;
-		vse_post(vse, &msg, false);
-	}
+			msg.inst = -1;
+			msg.channel = -1;
+			msg.irq.num = VSE_MI_MIS;
+			msg.irq.stat = value;
+			vse_post(vse, &msg, false);
+		}
 #endif
+	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;
 }
