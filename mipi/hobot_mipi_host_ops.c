@@ -4318,8 +4318,12 @@ int32_t hobot_mipi_host_close_do(struct mipi_hdev_s *hdev)
 		}
 		hobot_mipi_host_params_release(param);
 		(void)mipi_host_configure_clk(hdev, hdev->host.socclk.refclk, 0, 0);
-                (void)mipi_host_snrclk_set_freq(hdev, 0);  //disable clk
-                (void)mipi_host_snrclk_set_en(hdev,0);    //select pinctrl to gpio
+#ifdef CONFIG_HOBOT_MIPI_HOST_SNRCLK
+		if (host->snrclk.index >= 0 && host->socclk.snrclk != NULL)
+			(void)mipi_host_snrclk_set_freq(hdev, 0);  //disable clk
+                if (host->snrclk.pinctrl != NULL)
+			(void)mipi_host_snrclk_set_en(hdev,0);    //select pinctrl to gpio
+#endif
 
 	}
 	osal_mutex_unlock(&user->open_mutex);
