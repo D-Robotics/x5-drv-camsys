@@ -104,7 +104,7 @@ void vio_fps_calculate(struct frame_debug *fdebug, struct frame_id_desc *frameid
 
 	fdebug->fps.cur_frame_count++;
 	if (frameid->tv_sec < fdebug->fps.last_time) {
-		vio_warn("%s: cur sec < last sec, timestamps abnormal\n", __func__);
+		// vio_warn("%s: cur sec < last sec, timestamps abnormal\n", __func__);
 		fdebug->fps.last_time = frameid->tv_sec;
 	}
 
