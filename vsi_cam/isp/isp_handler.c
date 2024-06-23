@@ -333,49 +333,76 @@ static inline int handle_mcm(struct isp_device *isp, u32 path)
 	return 0;
 }
 
+static inline void irq_notify(struct isp_device *isp, u32 inst, struct mi_mis_group *mi_mis)
+{
+	struct isp_msg msg;
+	u32 miv2_mis, miv2_mis1, miv2_mis2, miv2_mis3, mi_mis_hdr1;
+
+	miv2_mis = mi_mis->miv2_mis;
+	miv2_mis1 = mi_mis->miv2_mis1;
+	miv2_mis2 = mi_mis->miv2_mis2;
+	miv2_mis3 = mi_mis->miv2_mis3;
+	mi_mis_hdr1 = mi_mis->mi_mis_hdr1;
+	if (miv2_mis || miv2_mis1 || miv2_mis2 || miv2_mis3 || mi_mis_hdr1) {
+		memset(&msg, 0, sizeof(msg));
+		msg.id = ISP_MSG_IRQ_MIS;
+		msg.inst = 0;
+		msg.irq.num = MI_IRQ_MIS;
+		memcpy(&msg.irq.stat.mi_mis, mi_mis, sizeof(msg.irq.stat.mi_mis));
+		isp_post(isp, &msg, false);
+	}
+
+	if (!isp->unit_test && (mi_mis->miv2_mis & 0x1) && inst != INVALID_MCM_SCH_INST) {
+		memset(&msg, 0, sizeof(msg));
+		msg.id = ISP_MSG_FRAME_DONE;
+		msg.inst = inst;
+		isp_post(isp, &msg, false);
+	}
+}
+
 irqreturn_t mi_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
-	struct isp_msg msg;
 	struct isp_mcm_sch sch;
 	struct isp_instance *ins;
-	u32 miv2_mis, miv2_mis1, miv2_mis2, miv2_mis3, mi_mis_hdr1;
-	u32 cur_mi_irq_ctx;
+	struct mi_mis_group mi_mis;
+	u32 cur_mi_irq_ctx = INVALID_MCM_SCH_INST;
 	struct isp_irq_ctx *ctx;
 	int rc;
 
 	pr_debug("+\n");
-	miv2_mis = isp_read(isp, MIV2_MIS);
-	if (miv2_mis)
-		isp_write(isp, MIV2_ICR, miv2_mis);
-	miv2_mis1 = isp_read(isp, MIV2_MIS1);
-	if (miv2_mis1)
-		isp_write(isp, MIV2_ICR1, miv2_mis1);
-	miv2_mis2 = isp_read(isp, MIV2_MIS2);
-	if (miv2_mis2)
-		isp_write(isp, MIV2_ICR2, miv2_mis2);
-	miv2_mis3 = isp_read(isp, MIV2_MIS3);
-	if (miv2_mis3)
-		isp_write(isp, MIV2_ICR3, miv2_mis3);
-	mi_mis_hdr1 = isp_read(isp, MI_MIS_HDR1);
-	if (mi_mis_hdr1)
-		isp_write(isp, MI_ICR_HDR1, mi_mis_hdr1);
+	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
+	if (mi_mis.miv2_mis)
+		isp_write(isp, MIV2_ICR, mi_mis.miv2_mis);
+	mi_mis.miv2_mis1 = isp_read(isp, MIV2_MIS1);
+	if (mi_mis.miv2_mis1)
+		isp_write(isp, MIV2_ICR1, mi_mis.miv2_mis1);
+	mi_mis.miv2_mis2 = isp_read(isp, MIV2_MIS2);
+	if (mi_mis.miv2_mis2)
+		isp_write(isp, MIV2_ICR2, mi_mis.miv2_mis2);
+	mi_mis.miv2_mis3 = isp_read(isp, MIV2_MIS3);
+	if (mi_mis.miv2_mis3)
+		isp_write(isp, MIV2_ICR3, mi_mis.miv2_mis3);
+	mi_mis.mi_mis_hdr1 = isp_read(isp, MI_MIS_HDR1);
+	if (mi_mis.mi_mis_hdr1)
+		isp_write(isp, MI_ICR_HDR1, mi_mis.mi_mis_hdr1);
 
 	pr_debug("mi mis:0x%x, mis1:0x%x, mis2:0x%x, mis3:0x%x, mis_hdr1:0x%x\n",
-				miv2_mis, miv2_mis1, miv2_mis2, miv2_mis3, mi_mis_hdr1);
+		 mi_mis.miv2_mis, mi_mis.miv2_mis1, mi_mis.miv2_mis2, mi_mis.miv2_mis3,
+		 mi_mis.mi_mis_hdr1);
 
 	// skip buffer management if running unit test!
 	if (!isp->unit_test) {
-		if (miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK)
+		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK)
 			handle_mcm(isp, 0);
-		if (miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK)
+		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK)
 			handle_mcm(isp, 1);
-		if (miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK)
+		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK)
 			handle_mcm(isp, 2);
-		if (miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK)
+		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK)
 			handle_mcm(isp, 3);
 
-		if (miv2_mis & 0x1) {
+		if (mi_mis.miv2_mis & 0x1) {
 			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
 			if (rc) {
 				pr_err("fail to get currect isp instance id!\n");
@@ -431,8 +458,9 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 
 			ins = &isp->insts[isp->next_mi_irq_ctx];
 			if (isp->mode == ISP_MCM_MODE && !ins->online_mcm) {
+				irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 				isp_set_schedule_offline(isp, isp->next_mi_irq_ctx, true);
-				goto _post;
+				goto _exit;
 			}
 			if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
 				node = list_first_entry_or_null(ctx->src_buf_list2,
@@ -455,8 +483,9 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					sch.mp_buf.size = 0;
 				} else {
 					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 					isp_set_schedule(isp, &sch, false);
-					goto _post;
+					goto _exit;
 				}
 			} else if (ctx->is_src_online_mode) {
 				if (isp->mode != ISP_STRM_MODE) {
@@ -465,8 +494,9 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					sch.mp_buf.size = 0;
 				} else {
 					isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
+					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 					isp_set_schedule(isp, &sch, false);
-					goto _post;
+					goto _exit;
 				}
 			} else {
 				pr_err("fail to configure mp buffer!\n");
@@ -496,39 +526,28 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					list_del(&mcm_ib->entry);
 					list_add_tail(&mcm_ib->entry,
 							&isp->ibm[isp->next_mi_irq_ctx].list3);
+					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 					isp_set_schedule(isp, &sch, true);
+					goto _exit;
 				}
 #endif
 			} else if (ctx->sink_buf) {
 				isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
+				irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 				isp_set_schedule(isp, &sch, false);
+				goto _exit;
 			} else if (ctx->sink_ctx) {
 				// TODO:
+				goto _post;
 			}
 		}
 	}
 
 _post:
-	if (miv2_mis || miv2_mis1 || miv2_mis2 || miv2_mis3 || mi_mis_hdr1) {
-		msg.id = ISP_MSG_IRQ_MIS;
-		msg.inst = 0;
-		msg.irq.num = MI_IRQ_MIS;
-		msg.irq.stat.mi_mis.miv2_mis = miv2_mis;
-		msg.irq.stat.mi_mis.miv2_mis1 = miv2_mis1;
-		msg.irq.stat.mi_mis.miv2_mis2 = miv2_mis2;
-		msg.irq.stat.mi_mis.miv2_mis3 = miv2_mis3;
-		msg.irq.stat.mi_mis.mi_mis_hdr1 = mi_mis_hdr1;
-		isp_post(isp, &msg, false);
+	irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 
-		if (miv2_mis & 0x1) {
-			memset(&msg, 0, sizeof(msg));
-			msg.id = ISP_MSG_FRAME_DONE;
-			msg.inst = cur_mi_irq_ctx;
-			isp_post(isp, &msg, false);
-		}
-	}
+_exit:
 	pr_debug("-\n");
-
 	return IRQ_HANDLED;
 }
 

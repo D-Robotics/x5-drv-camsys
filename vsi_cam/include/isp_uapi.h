@@ -35,15 +35,17 @@ enum isp_irq_num {
 	FE_IRQ_MIS,
 };
 
+struct mi_mis_group {
+	__u32 miv2_mis;
+	__u32 miv2_mis1;
+	__u32 miv2_mis2;
+	__u32 miv2_mis3;
+	__u32 mi_mis_hdr1;
+};
+
 union isp_irq_stat {
 	__u32 isp_mis;
-	struct {
-		__u32 miv2_mis;
-		__u32 miv2_mis1;
-		__u32 miv2_mis2;
-		__u32 miv2_mis3;
-		__u32 mi_mis_hdr1;
-	} mi_mis;
+	struct mi_mis_group mi_mis;
 	__u32 fe_mis;
 };
 
