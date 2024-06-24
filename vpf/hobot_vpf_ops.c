@@ -1476,6 +1476,7 @@ static s32 vpf_video_stop(struct vio_video_ctx *vctx)
 	if (vdev->reqbuf_flag == 1u) {
 		frame_manager_flush(vdev->cur_fmgr);
 		osal_atomic_set(&vnode->rcount, 0);
+		vctx->event = 0;
 	}
 
 	vctx->state = BIT((s32)VIO_VIDEO_STOP);
