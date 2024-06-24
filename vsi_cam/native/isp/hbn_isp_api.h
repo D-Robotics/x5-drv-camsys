@@ -264,12 +264,16 @@ typedef struct hbn_isp_af_zone_weight_attr_s {
 
 typedef struct hbn_isp_ae_statistics_s {
 	__u32 expStat[HBN_ISP_GRID_ITEMS * HBN_ISP_PIXEL_CHANNEL];
-	__u32 frame_id;	// 当前对应frame id(备用)
+	__u32 datatype;
+	__u32 frame_id;
+	__u64 timestamps;
 } hbn_isp_ae_statistics_t;
 
 typedef struct hbn_isp_awb_statistics_s {
 	__u32 awbStat[HBN_ISP_GRID_ITEMS * HBN_ISP_PIXEL_CHANNEL];
-	__u32 frame_id;	// 当前对应frame id(备用)
+	__u32 datatype;
+	__u32 frame_id;
+	__u64 timestamps;
 } hbn_isp_awb_statistics_t;
 
 typedef struct hbn_isp_af_statistics_s {
