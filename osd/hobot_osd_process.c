@@ -98,21 +98,21 @@ int32_t osd_vga4_to_sw(uint32_t *color_map, uint8_t *src_addr,
 			addr_y_offset_or = &addr_y_or[base_offset + w];
 			addr_uv_offset_or = &addr_uv_or[((h >> 1u) * width) + w];
 
-			addr_y_offset[0] = (uint8_t)(color_map_tmp[color_index] & OSD_FILL_FF);
-			if (w % 2 == 0) {
-				color_vu = (uint16_t)(color_map_tmp[color_index] >> 8);
-				*(uint16_t *)addr_uv_offset = color_vu;
-			}
-
 			// todo: remove it
 			if (alpha_index == 0xF)
 				alpha_index = 0xFF;
 			else
 				alpha_index = 0;
 
+			addr_y_offset[0] = (uint8_t)(color_map_tmp[color_index] & OSD_FILL_FF);
 			addr_y_offset_or[0] = alpha_index;
-			addr_uv_offset_or[0] = alpha_index;
-			addr_uv_offset_or[1] = alpha_index;
+
+			if (w % 2 == 0) {
+				color_vu = (uint16_t)(color_map_tmp[color_index] >> 8);
+				*(uint16_t *)addr_uv_offset = color_vu;
+				addr_uv_offset_or[0] = alpha_index;
+				addr_uv_offset_or[1] = alpha_index;
+			}
 		}
 	}
 
