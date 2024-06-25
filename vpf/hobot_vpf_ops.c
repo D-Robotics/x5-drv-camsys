@@ -156,6 +156,16 @@ static void vpf_safety_close(const struct vio_node *vnode)
 	}
 }
 
+static void vpf_vdev_free_resource(struct vio_subdev *vdev)
+{
+	struct vio_framemgr *framemgr;
+
+	if (vdev != NULL && osal_atomic_read(&vdev->refcount) == 0) {
+		framemgr = vdev->cur_fmgr;
+		vpf_free_buffer(framemgr, vdev->iommu_dev);
+		frame_manager_close(framemgr);
+	}
+}
 /**
  * @NO{S09E05C01}
  * @ASIL{B}
@@ -174,7 +184,6 @@ static void vpf_vdev_close(struct vio_subdev *vdev)
 {
 	s32 ret;
 	struct vio_node *vnode;
-	struct vio_framemgr *framemgr;
 
 	if (vdev == NULL)
 		return;
@@ -183,21 +192,18 @@ static void vpf_vdev_close(struct vio_subdev *vdev)
 	if (osal_atomic_dec_return(&vdev->refcount) == 0) {
 		vpf_safety_close(vnode);
 
-		osal_mutex_lock(&vdev->mlock);
-		framemgr = vdev->cur_fmgr;
 		if (vdev->leader == 1u) {
 			ret = vio_group_task_stop(vnode->gtask);
 			if (ret < 0)
 				vio_err("%s: vio_group_task_stop failed, ret(%d)\n", __func__, ret);
 		}
-		vpf_free_buffer(framemgr, vdev->iommu_dev);
-		frame_manager_close(framemgr);
+
+		osal_mutex_lock(&vdev->mlock);
 		vdev->leader = 0;
 		vdev->reqbuf_flag = 0;
 		vdev->state = 0;
 		vdev->prev = NULL;
 		vdev->next = NULL;
-		vnode->state = 0;
 		osal_mutex_unlock(&vdev->mlock);
 	}
 	vio_info("[%s][S%d][C%d] %s: refcount %d\n", vdev->name, vnode->flow_id, vnode->ctx_id,
@@ -460,6 +466,79 @@ static void vpf_vctx_unbind_vdev(struct vio_video_ctx *vctx)
 	}
 }
 
+static void vpf_free_ctx_id(struct vio_video_ctx *vctx)
+{
+	u32 i;
+	u32 ctx_id;
+	struct vpf_device *dev;
+	struct vio_subdev *vdev;
+	struct vio_node *vnode;
+
+	dev = vctx->dev;
+	ctx_id = vctx->ctx_id;
+	if (ctx_id < dev->max_ctx) {
+		vnode = &dev->vnode[ctx_id];
+		for (i = 0; i < MAXIMUM_CHN; i++) {
+			if ((vnode->active_ich & 1 << i) != 0) {
+				vdev = vnode->ich_subdev[i];
+				if (osal_atomic_read(&vdev->refcount) != 0)
+					break;
+			}
+
+			if ((vnode->active_och & 1 << i) != 0) {
+				vdev = vnode->och_subdev[i];
+				if (osal_atomic_read(&vdev->refcount) != 0)
+					break;
+			}
+		}
+
+		if (i == MAXIMUM_CHN)
+			vnode->state = 0;
+	}
+	vio_dbg("[%s] %s: ctx_id = %d\n", vctx->name, __func__, ctx_id);
+}
+
+static s32 vpf_alloc_ctx_id(struct vio_video_ctx *vctx, s32 ctx_id)
+{
+	u32 i = 0;
+	u32 active_ctx_id;
+	struct vio_node *vnode = NULL;
+	struct vpf_device *dev;
+
+	active_ctx_id = ctx_id;
+	if (vctx->id == VNODE_ID_SRC) {
+		dev = vctx->dev;
+		if (ctx_id < AUTO_CTX_ID || ctx_id >= dev->max_ctx) {
+			vio_err("[%s] %s: wrong ctx_id %d, max_ctx %d\n",
+				vctx->name, __func__, ctx_id, dev->max_ctx);
+			return -EFAULT;
+		}
+
+		if (ctx_id == AUTO_CTX_ID) {
+			for (i = 0; i < dev->max_ctx; i++) {
+				vnode = &dev->vnode[i];
+				if (osal_test_and_set_bit(VIO_NODE_BIND_CTX, &vnode->state) == 0u) {
+					active_ctx_id = i;
+					break;
+				}
+			}
+
+			if (i == dev->max_ctx) {
+				vio_err("[%s] %s: all ctx id is used, max_ctx %d\n",
+					vctx->name, __func__, dev->max_ctx);
+				return -EFAULT;
+			}
+		} else {
+			vnode = &dev->vnode[ctx_id];
+			osal_set_bit(VIO_NODE_BIND_CTX, &vnode->state);
+		}
+	} 
+	vctx->ctx_id = active_ctx_id;
+
+	vio_dbg("[%s] %s: ctx_id = %d\n", vctx->name, __func__, vctx->ctx_id);
+
+	return 0;
+}
 /**
  * @NO{S09E05C01}
  * @ASIL{B}
@@ -475,38 +554,19 @@ static void vpf_vctx_unbind_vdev(struct vio_video_ctx *vctx)
  * @callergraph
  * @design
  */
-static s32 vpf_bind_context(struct vio_video_ctx *vctx, s32 *ctx_id)
+static s32 vpf_bind_context(struct vio_video_ctx *vctx, s32 ctx_id)
 {
 	s32 ret = 0;
-	s32 i = 0;
+	u32 i = 0;
 	struct vio_node *vnode;
 	struct vpf_device *dev;
 
+	ret = vpf_alloc_ctx_id(vctx, ctx_id);
+	if (ret < 0)
+		return ret;
+
 	dev = vctx->dev;
-	if (*ctx_id < AUTO_CTX_ID || *ctx_id >= dev->max_ctx) {
-		vio_err("[%s] %s: wrong ctx_id %d, max_ctx %d\n", vctx->name, __func__, *ctx_id, dev->max_ctx);
-		return -EFAULT;
-	}
-
-	if (vctx->id == VNODE_ID_SRC && *ctx_id == AUTO_CTX_ID) {
-		for (i = 0; i < dev->max_ctx; i++) {
-			vnode = &dev->vnode[i];
-			if (osal_test_and_set_bit(VIO_NODE_BIND_CTX, &vnode->state) == 0) {
-				*ctx_id = i;
-				break;
-			}
-		}
-	} else {
-		vnode = &dev->vnode[*ctx_id];
-		osal_set_bit(VIO_NODE_BIND_CTX, &vnode->state);
-	}
-
-	if (i == dev->max_ctx) {
-		vio_err("[%s] %s: all ctx id is used, max_ctx %d\n", vctx->name, __func__, dev->max_ctx);
-		return -EFAULT;
-	}
-
-	vctx->ctx_id = *ctx_id;
+	vnode = &dev->vnode[vctx->ctx_id];
 	for (i = 0; i < MAXIMUM_CHN; i++) {
 		if (vctx->id == i) {
 			ret = vpf_vctx_bind_vdev(vctx, vnode->ich_subdev[i]);
@@ -525,6 +585,7 @@ static s32 vpf_bind_context(struct vio_video_ctx *vctx, s32 *ctx_id)
 		}
 	}
 	vio_vnode_init(vnode);
+	vctx->flow_id = vnode->flow_id;// for multi-process to get same context data
 
 	return ret;
 }
@@ -921,6 +982,7 @@ static s32 vpf_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 {
 	s32 ret = 0;
 	struct vpf_device *dev;
+	struct vio_subdev *vdev;
 
 	dev = vctx->dev;
 	if (dev->vps_ops && dev->vps_ops->video_set_inter_attr) {
@@ -929,9 +991,12 @@ static s32 vpf_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 			return ret;
 	}
 
-	ret = vpf_alloc_default_frames(vctx);
-	if (ret < 0)
-		return ret;
+	vdev = vctx->vdev;
+	if (osal_test_and_set_bit((s32)VIO_SUBDEV_REQBUF, &vdev->state) == 0) {
+		ret = vpf_alloc_default_frames(vctx);
+		if (ret < 0)
+			return ret;
+	}
 
 	vio_info("[%s][C%d] %s: done\n", vctx->name, vctx->ctx_id, __func__);
 
@@ -1746,11 +1811,11 @@ static s32 vpf_video_bind_context(struct vio_video_ctx *vctx, unsigned long arg)
 		return -EFAULT;
 	}
 
-	ret = vpf_bind_context(vctx, &ctx_id);
+	ret = vpf_bind_context(vctx, ctx_id);
 	if (ret < 0)
 		return ret;
 
-	copy_ret = osal_copy_to_app((void __user *) arg, &ctx_id, sizeof(s32));
+	copy_ret = osal_copy_to_app((void __user *) arg, &vctx->ctx_id, sizeof(s32));
 	if (copy_ret != 0) {
 		vio_err("[%s] %s: failed to copy to app, ret = %lld\n", vctx->name, __func__, copy_ret);
 		return -EFAULT;
@@ -2433,7 +2498,9 @@ s32 vpf_device_close(struct vio_video_ctx *vctx)
 	}
 
 	vctx->state = BIT((s32)VIO_VIDEO_CLOSE);
+	vpf_vdev_free_resource(vctx->vdev);
 	vpf_vctx_unbind_vdev(vctx);
+	vpf_free_ctx_id(vctx);
 	vio_info("[%s] %s: done\n", vctx->name, __func__);
 
     return ret;
