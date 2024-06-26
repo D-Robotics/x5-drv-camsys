@@ -18,11 +18,11 @@ ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vsi_cam/native/v
 ccflags-y += -D X5_CHIP
 
 # isc
-ifneq ($(CONFIG_ION_HOBOT),)
-  vs_isc-objs += isc/isc.o isc/ion_mem_helper.o
-else
+#ifneq ($(CONFIG_ION_HOBOT),)
+#  vs_isc-objs += isc/isc.o isc/ion_mem_helper.o
+#else
   vs_isc-objs += isc/isc.o isc/mem_helper.o
-endif
+#endif
 # obj-$(CONFIG_VIDEO_VS_SW_ISC) += vs_isc.o
 obj-m += vs_isc.o
 

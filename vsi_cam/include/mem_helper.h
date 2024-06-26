@@ -11,5 +11,7 @@ int mem_free(struct device *dev, struct list_head *list, struct mem_buf *buf);
 int mem_free_all(struct device *dev, struct list_head *list);
 int mem_mmap(struct device *dev, struct list_head *list,
 	     struct vm_area_struct *vma);
+int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf);
+int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf);
 
 #endif /* _MEM_HELPER_H_ */

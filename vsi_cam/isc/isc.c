@@ -812,6 +812,30 @@ static int isc_ioctl_free(struct isc_handle *isc, void *arg)
 	return mem_free(isc->dev, &isc->buf_list, &buf);
 }
 
+static int isc_ioctl_cache_flush(struct isc_handle *isc, void *arg)
+{
+	struct mem_buf buf;
+	int rc;
+
+	rc = copy_from_user(&buf, (void *)arg, sizeof(buf));
+	if (rc < 0)
+		return rc;
+
+	return mem_cache_flush(isc->dev, &isc->buf_list, &buf);
+}
+
+static int isc_ioctl_cache_invalid(struct isc_handle *isc, void *arg)
+{
+	struct mem_buf buf;
+	int rc;
+
+	rc = copy_from_user(&buf, (void *)arg, sizeof(buf));
+	if (rc < 0)
+		return rc;
+
+	return mem_cache_invalid(isc->dev, &isc->buf_list, &buf);
+}
+
 static long isc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	long rc = -EINVAL;
@@ -841,6 +865,12 @@ static long isc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case ISC_IOCTL_FREE:
 		rc = isc_ioctl_free(isc, (void *)arg);
+		break;
+	case ISC_IOCTL_CACHE_FLUSH:
+		rc = isc_ioctl_cache_flush(isc, (void *)arg);
+		break;
+	case ISC_IOCTL_CACHE_INVALID:
+		rc = isc_ioctl_cache_invalid(isc, (void *)arg);
 		break;
 	default:
 		break;
@@ -977,6 +1007,8 @@ static int __init isc_init(void)
 		goto _dcreate_err;
 	}
 	dma_set_coherent_mask(device, DMA_BIT_MASK(32));
+	if (!device->dma_mask)
+		device->dma_mask = &device->coherent_dma_mask;
 
 	dev->dev = device;
 	return 0;

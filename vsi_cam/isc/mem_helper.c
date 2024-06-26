@@ -102,5 +102,81 @@ int mem_mmap(struct device *dev, struct list_head *list,
 }
 EXPORT_SYMBOL(mem_mmap);
 
+int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf)
+{
+	struct _mem_buf *b, *_buf = NULL;
+	unsigned long pfn;
+	struct page *page;
+	unsigned long offset;
+	size_t size;
+	dma_addr_t dma_addr = 0;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return -EINVAL;
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr/* && b->size == buf->size*/) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return -EINVAL;
+
+	pfn = __phys_to_pfn(_buf->addr);
+	page = pfn_to_page(pfn);
+	offset = offset_in_page(_buf->addr);
+	size = PAGE_ALIGN(_buf->size);
+	dma_addr = dma_map_page(dev, page, offset, size, DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, dma_addr)) {
+		// dev_err(dev, "ma map page failed.\n");
+		return -EINVAL;
+	}
+
+	dma_sync_single_for_device(dev, dma_addr, size, DMA_TO_DEVICE);
+	dma_unmap_page(dev, dma_addr, size, DMA_TO_DEVICE);
+	return 0;
+}
+EXPORT_SYMBOL(mem_cache_flush);
+
+int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf)
+{
+	struct _mem_buf *b, *_buf = NULL;
+	unsigned long pfn;
+	struct page *page;
+	unsigned long offset;
+	size_t size;
+	dma_addr_t dma_addr = 0;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return -EINVAL;
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr/* && b->size == buf->size*/) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return -EINVAL;
+
+	pfn = __phys_to_pfn(_buf->addr);
+	page = pfn_to_page(pfn);
+	offset = offset_in_page(_buf->addr);
+	size = PAGE_ALIGN(_buf->size);
+	dma_addr = dma_map_page(dev, page, offset, size, DMA_FROM_DEVICE);
+	if (dma_mapping_error(dev, dma_addr)) {
+		// dev_err(dev, "ma map page failed.\n");
+		return -EINVAL;
+	}
+
+	dma_sync_single_for_cpu(dev, dma_addr, size, DMA_FROM_DEVICE);
+	dma_unmap_page(dev, dma_addr, size, DMA_FROM_DEVICE);
+	return 0;
+}
+EXPORT_SYMBOL(mem_cache_invalid);
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VeriSilicon Camera SW Team");

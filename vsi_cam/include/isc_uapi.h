@@ -13,12 +13,14 @@
 
 #define ISC_IOCTL_BASE      ('X')
 
-#define ISC_IOCTL_BIND      _IOWR(ISC_IOCTL_BASE, 0, struct isc_bind)
-#define ISC_IOCTL_SEND      _IOWR(ISC_IOCTL_BASE, 1, struct isc_send)
-#define ISC_IOCTL_RECV      _IOWR(ISC_IOCTL_BASE, 2, struct isc_recv)
-#define ISC_IOCTL_CLOSE     _IOWR(ISC_IOCTL_BASE, 3, int)
-#define ISC_IOCTL_ALLOC     _IOWR(ISC_IOCTL_BASE, 4, struct mem_buf)
-#define ISC_IOCTL_FREE      _IOWR(ISC_IOCTL_BASE, 5, struct mem_buf)
+#define ISC_IOCTL_BIND          _IOWR(ISC_IOCTL_BASE, 0, struct isc_bind)
+#define ISC_IOCTL_SEND          _IOWR(ISC_IOCTL_BASE, 1, struct isc_send)
+#define ISC_IOCTL_RECV          _IOWR(ISC_IOCTL_BASE, 2, struct isc_recv)
+#define ISC_IOCTL_CLOSE         _IOWR(ISC_IOCTL_BASE, 3, int)
+#define ISC_IOCTL_ALLOC         _IOWR(ISC_IOCTL_BASE, 4, struct mem_buf)
+#define ISC_IOCTL_FREE          _IOWR(ISC_IOCTL_BASE, 5, struct mem_buf)
+#define ISC_IOCTL_CACHE_FLUSH   _IOWR(ISC_IOCTL_BASE, 6, struct mem_buf)
+#define ISC_IOCTL_CACHE_INVALID _IOWR(ISC_IOCTL_BASE, 7, struct mem_buf)
 
 #define ISC_MSG_FLAG_USER   (0x00000001)
 #define ISC_MSG_FLAG_LONG   (0x00000002)
