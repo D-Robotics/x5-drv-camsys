@@ -622,7 +622,6 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 		if (isp_mis & BIT(1))
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);
 		if (isp_mis & (BIT(2) | BIT(3))) {
-			cam_drop(ins->ctx.stat_ctx);
 			if (isp_mis & BIT(3))
 				cam_set_frame_status(ins->ctx.src_ctx, VSIZE_ERR);
 		}
