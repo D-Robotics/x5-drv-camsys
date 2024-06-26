@@ -299,7 +299,7 @@ int new_frame(struct isp_irq_ctx *ctx)
 	return 0;
 }
 
-static inline int handle_mcm(struct isp_device *isp, u32 path)
+static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 {
 	u32 inst = isp->stream_idx_mapping[path];
 	struct isp_instance *ins;
@@ -315,9 +315,13 @@ static inline int handle_mcm(struct isp_device *isp, u32 path)
 	{
 		struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
 							   struct ibuf, entry);
-
 		if (ib) {
-			list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list2);
+			if (!error) {
+				list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list2);
+			} else {
+				list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list1);
+				pr_debug("mcm%d frame done but buf full\n", path);
+			}
 			list_del(&ib->entry);
 			ins->mcm_ib = ib;
 		} else {
@@ -369,6 +373,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 	u32 cur_mi_irq_ctx = INVALID_MCM_SCH_INST;
 	struct isp_irq_ctx *ctx;
 	int rc;
+	u32 ris;
 
 	pr_debug("+\n");
 	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
@@ -393,14 +398,26 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 
 	// skip buffer management if running unit test!
 	if (!isp->unit_test) {
-		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK)
-			handle_mcm(isp, 0);
-		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK)
-			handle_mcm(isp, 1);
-		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK)
-			handle_mcm(isp, 2);
-		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK)
-			handle_mcm(isp, 3);
+		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK) {
+			ris = isp_read(isp, MIV2_RIS1);
+			handle_mcm(isp, 0, ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
+			isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
+		}
+		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK) {
+			ris = isp_read(isp, MIV2_RIS1);
+			handle_mcm(isp, 1, ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
+			isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
+		}
+		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK) {
+			ris = isp_read(isp, MIV2_RIS3);
+			handle_mcm(isp, 2, ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
+			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
+		}
+		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK) {
+			ris = isp_read(isp, MIV2_RIS3);
+			handle_mcm(isp, 3, ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
+			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
+		}
 
 		if (mi_mis.miv2_mis & 0x1) {
 			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
