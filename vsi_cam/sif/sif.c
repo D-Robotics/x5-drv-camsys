@@ -312,14 +312,14 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
-	irq_val |= SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF;
+	irq_val |= SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN;
+	val = sif_read(dev, SIF_DMA_CTL);
+	val |= SIF_DMA_CONFIG_IPI[inst];
 	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
-		val = sif_read(dev, SIF_DMA_CTL);
-		val |= SIF_DMA_CONFIG_IPI[inst];
 		val |= SIF_ENABLE_IPI[inst];
-		sif_write(dev, SIF_DMA_CTL, val);
-		irq_val |= SIF_IRQ_DONE | SIF_FRAME_SIZE_ERROR_EN;
+		irq_val |= SIF_IRQ_DONE;
 	}
+	sif_write(dev, SIF_DMA_CTL, val);
 
 	if (sif->ctx.emb_buf_ctx)
 		irq_val |= SIF_IRQ_EBD_DMA_DONE;
@@ -340,12 +340,12 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
-	irq_val &= ~(SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF);
+	irq_val &= ~(SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN);
 	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
 		val = sif_read(dev, SIF_DMA_CTL);
 		val &= ~SIF_ENABLE_IPI[inst];
 		sif_write(dev, SIF_DMA_CTL, val);
-		irq_val &= ~(SIF_IRQ_DONE | SIF_FRAME_SIZE_ERROR_EN);
+		irq_val &= ~(SIF_IRQ_DONE);
 	}
 
 	if (sif->ctx.emb_buf_ctx)

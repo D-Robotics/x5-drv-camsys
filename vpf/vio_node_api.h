@@ -216,6 +216,7 @@ struct chn_attr {
 struct vio_subdev {
 	s8 *name;
 	u32 id;
+	u8 frame_status;
 	osal_spinlock_t slock;
 	osal_mutex_t mlock;
 	struct vio_framemgr	framemgr;

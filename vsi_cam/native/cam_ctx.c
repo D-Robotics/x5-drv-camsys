@@ -175,3 +175,29 @@ int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 		return ops->set_mode((struct cam_ctx *)vdev, mode);
 	return -EBUSY;
 }
+
+void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status)
+{
+	struct vio_subdev *vdev = (struct vio_subdev *)cam_ctx;
+	unsigned long flag;
+
+	if (vdev) {
+		spin_lock_irqsave(&vdev->slock, flag);
+		vdev->frame_status = status;
+		spin_unlock_irqrestore(&vdev->slock, flag);
+	}
+}
+
+u8 cam_get_frame_status(void *cam_ctx)
+{
+	unsigned long flag;
+	u8 status;
+	struct vio_subdev *vdev = (struct vio_subdev *)cam_ctx;
+
+	if (vdev) {
+		spin_lock_irqsave(&vdev->slock, flag);
+		status = vdev->frame_status;
+		spin_unlock_irqrestore(&vdev->slock, flag);
+	}
+	return status;
+}

@@ -6,6 +6,13 @@
 
 #include "cam_buf.h"
 
+enum cam_frame_status {
+	NO_ERR,
+	VSIZE_ERR,
+	HSIZE_ERR,
+	BOTH_ERR,
+};
+
 int cam_trigger(struct cam_ctx *ctx);
 
 bool cam_is_completed(struct cam_ctx *ctx);
@@ -26,5 +33,9 @@ bool cam_osd_update(struct cam_ctx *ctx);
 int cam_osd_set_cfg(struct cam_ctx *ctx, u32 ochn_id);
 
 int cam_set_mode(struct cam_ctx *ctx, u32 mode);
+
+void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status);
+
+u8 cam_get_frame_status(void *cam_ctx);
 
 #endif /* _CAM_COM_H_ */

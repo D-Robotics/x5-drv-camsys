@@ -152,7 +152,7 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 	if (ins->hsize_err_count_pre != SIF_HSIZE_ERR(val)
 	    && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
 		// meet Hsize error drop frame.
-		cam_drop(ins->ctx.buf_ctx);
+		cam_set_frame_status(ins->ctx.buf_ctx, HSIZE_ERR);
 		cam_drop(ins->ctx.sink_ctx);
 	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
 		   && ins->vsize_err_count_pre != SIF_VSIZE_ERR(val)) {
@@ -163,7 +163,7 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
 		   && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
 		// corner case, drop frame for safety.
-		cam_drop(ins->ctx.buf_ctx);
+		cam_set_frame_status(ins->ctx.buf_ctx, BOTH_ERR);
 		cam_drop(ins->ctx.sink_ctx);
 	}
 
@@ -232,6 +232,7 @@ static void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	sif_frame.fs_ts = (sif_frame.fs_ts << 32) | fs_l;
 	sif_set_frame_des(ins->ctx.sink_ctx, (void *)&sif_frame);
 	cam_set_stat_info(ins->ctx.sink_ctx, CAM_STAT_FS);
+	cam_set_frame_status(ins->ctx.buf_ctx, NO_ERR);
 }
 
 static void sif_handle_frame_done(struct sif_device *sif, u32 inst)
@@ -241,6 +242,7 @@ static void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 	struct sif_instance *ins;
 	phys_addr_t p_addr = 0;
 	phys_addr_t p_uv_addr = 0;
+	u8 frame_status = 0;
 
 	ins = &sif->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
@@ -248,7 +250,11 @@ static void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 
 	dev_dbg(sif->dev, "sif(%d-%d), sink ctx %p buf ctx %p buf %p\n",sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 	if (ctx->buf) {
-		cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
+		frame_status = cam_get_frame_status(ctx->buf_ctx);
+		if (frame_status && (frame_status != VSIZE_ERR))
+			cam_drop(ctx->buf_ctx);
+		else
+			cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
 		ctx->buf = NULL;
 	}
 

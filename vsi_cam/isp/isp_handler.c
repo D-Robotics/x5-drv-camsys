@@ -206,7 +206,11 @@ static inline void frame_done(struct isp_irq_ctx *ctx)
 	node = list_first_entry_or_null(ctx->src_buf_list3,
 					struct cam_list_node, entry);
 	if (node) {
-		cam_qbuf_irq(ctx->src_ctx, node->data, true);
+		if (cam_get_frame_status(ctx->src_ctx))
+			cam_drop(ctx->src_ctx);
+		else
+			cam_qbuf_irq(ctx->src_ctx, node->data, true);
+
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
 	}
@@ -586,12 +590,16 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			if (ins->ctx.is_sink_online_mode)
 				sif_get_frame_des(ins->ctx.src_ctx);
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FS);
+			cam_set_frame_status(ins->ctx.src_ctx, NO_ERR);
 			isp_mis &= ~BIT(6);
 		}
 		if (isp_mis & BIT(1))
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);
-		if (isp_mis & (BIT(2) | BIT(3)))
+		if (isp_mis & (BIT(2) | BIT(3))) {
 			cam_drop(ins->ctx.stat_ctx);
+			if (isp_mis & BIT(3))
+				cam_set_frame_status(ins->ctx.src_ctx, VSIZE_ERR);
+		}
 		if (isp_mis) {
 			msg.irq.num = ISP_IRQ_MIS;
 			msg.irq.stat.isp_mis = isp_mis;

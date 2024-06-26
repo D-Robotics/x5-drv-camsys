@@ -98,3 +98,13 @@ int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 {
 	return 0;
 }
+
+void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status)
+{
+
+}
+
+u8 cam_get_frame_status(void *cam_ctx)
+{
+	return 0;
+}
