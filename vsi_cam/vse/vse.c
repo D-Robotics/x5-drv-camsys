@@ -332,23 +332,22 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	ins = &vse->insts[inst];
 	ctx = &ins->ctx;
 
-	if (vse->mode != VSE_SCM_MODE) {
-		if (ctx->sink_buf) {
-			phys_addr = get_phys_addr(ctx->sink_buf, 0);
-			ins->sch.rdma_buf.addr = phys_addr;
-		}
-		ins->sch.ochn_en_mask = 0;
-		for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-			if (ctx->src_buf[i]) {
-				phys_addr = get_phys_addr(ctx->src_buf[i], 0);
-				pr_debug("vse chn%d mp addr:%x\n", i, (u32)phys_addr);
-				ins->sch.mp_buf[i].addr = phys_addr;
-				ins->sch.ochn_en_mask |= BIT(i);
-				// set osd cfg for each channel
-				cam_osd_set_cfg(ctx->src_ctx[i], i);
-			}
+	if (ctx->sink_buf) {
+		phys_addr = get_phys_addr(ctx->sink_buf, 0);
+		ins->sch.rdma_buf.addr = phys_addr;
+	}
+	ins->sch.ochn_en_mask = 0;
+	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
+		if (ctx->src_buf[i]) {
+			phys_addr = get_phys_addr(ctx->src_buf[i], 0);
+			pr_debug("vse chn%d mp addr:%x\n", i, (u32)phys_addr);
+			ins->sch.mp_buf[i].addr = phys_addr;
+			ins->sch.ochn_en_mask |= BIT(i);
+			// set osd cfg for each channel
+			cam_osd_set_cfg(ctx->src_ctx[i], i);
 		}
 	}
+
 	vse_server_trigger(vse, inst);
 	pr_debug("inst %d\n", inst);
 }
@@ -465,11 +464,13 @@ int vse_add_job(struct vse_device *vse, u32 inst)
 	int rc;
 	u32 id;
 
-	pr_debug("add job inst:%d\n", inst);
-	rc = push_job(vse->jq, &job);
-	if (rc < 0) {
-		dev_err(vse->dev, "failed to push a job(err=%d)\n", rc);
-		return rc;
+	if (vse->mode != VSE_SCM_MODE) {
+		pr_debug("add job inst:%d\n", inst);
+		rc = push_job(vse->jq, &job);
+		if (rc < 0) {
+			dev_err(vse->dev, "failed to push a job(err=%d)\n", rc);
+			return rc;
+		}
 	}
 
 	if (vse->error) {
