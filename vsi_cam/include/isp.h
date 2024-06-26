@@ -15,7 +15,7 @@
 #define ISP_SINK_OFFLINE_PATH_MAX (2)
 #define ISP_SINK_PATH_MAX (ISP_SINK_ONLINE_PATH_MAX + ISP_SINK_OFFLINE_PATH_MAX)
 #define SRC_BUF_NUM (16)
-#define MCM_BUF_NUM (4)
+#define MCM_BUF_NUM (6)
 #define HDR_BUF_NUM (2)
 
 #define ISP_FMT_MAX (3)
@@ -50,7 +50,7 @@ struct isp_instance {
 	struct isp_irq_ctx ctx;
 	struct list_head src_buf_list1, src_buf_list2, src_buf_list3;
 	struct cam_list_node src_bufs[SRC_BUF_NUM];
-	struct ibuf *mcm_ib, *prev_mcm_ib;
+	struct ibuf *mcm_ib, *mcm_ib1, *prev_mcm_ib;
 	struct isp_format_cap fmt_cap[ISP_FMT_MAX];
 	struct isp_format fmt;
 	struct cam_input in;

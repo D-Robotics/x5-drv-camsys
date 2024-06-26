@@ -364,40 +364,14 @@ void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path_id,
 			    phys_addr_t phys_addr, struct cam_format *fmt)
 {
 	u32 base = MI_MCMn_RAW_BASE(path_id);
-	u32 value;
 
 	isp_write(isp, MI_MCMn_RAW_ADDR(base), phys_addr);
 #ifdef WITH_LEGACY_ISP
 	isp_write(isp, MI_MCMn_RAW_SIZE(base), fmt->stride * fmt->height * MCM_BUF_NUM);
-	value = 0x9;
 #else
 	isp_write(isp, MI_MCMn_RAW_SIZE(base), fmt->stride * fmt->height);
-	value = 0x19;
 #endif
 	isp_write(isp, MI_MCMn_RAW_OFFS(base), 0x00000000);
-	isp_write(isp, MI_MCM_CTRL, value);
-
-	/* force update */
-	switch (path_id) {
-	case 0:
-		value |= BIT(2);
-		isp_write(isp, MI_MCM_CTRL, value);
-		break;
-	case 1:
-		value |= BIT(7);
-		isp_write(isp, MI_MCM_CTRL, value);
-		break;
-	case 2:
-		value |= BIT(2);
-		isp_write(isp, MI_MCM_G2_CTRL, value);
-		break;
-	case 3:
-		value |= BIT(5);
-		isp_write(isp, MI_MCM_G2_CTRL, value);
-		break;
-	default:
-		break;
-	}
 }
 
 void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr)
@@ -461,6 +435,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	struct isp_mcm_sch sch;
 	int rc, i;
 	u32 sch_inst = INVALID_MCM_SCH_INST;
+	u32 value;
 	bool state_check = false;
 	int cur_state;
 
@@ -542,6 +517,44 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 				phys_addr = ib->buf.addr;
 				isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
 				ins->mcm_ib = ib;
+				list_del(&ib->entry);
+
+				value = isp_read(isp, MI_MCM_CTRL);
+				value |= 0x19;
+				isp_write(isp, MI_MCM_CTRL, value);
+
+				/* force update */
+				switch (ins->stream_idx) {
+				case 0:
+					value |= BIT(2);
+					isp_write(isp, MI_MCM_CTRL, value);
+					break;
+				case 1:
+					value |= BIT(7);
+					isp_write(isp, MI_MCM_CTRL, value);
+					break;
+				case 2:
+					value |= BIT(2);
+					isp_write(isp, MI_MCM_G2_CTRL, value);
+					break;
+				case 3:
+					value |= BIT(5);
+					isp_write(isp, MI_MCM_G2_CTRL, value);
+					break;
+				default:
+					break;
+				}
+
+				ib = list_first_entry_or_null(&isp->ibm[inst].list1,
+							      struct ibuf, entry);
+				if (!ib) {
+					list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list1);
+					rc = -ENOMEM;
+					goto _exit;
+				}
+				phys_addr = ib->buf.addr;
+				isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
+				ins->mcm_ib1 = ib;
 				list_del(&ib->entry);
 			}
 

@@ -4,6 +4,7 @@
 
 /* IRQ address offset */
 #define ISP_IMSC    (0x000005bc)
+#define ISP_RIS     (0x000005c0)
 #define ISP_MIS     (0x000005c4)
 #define ISP_ICR     (0x000005c8)
 

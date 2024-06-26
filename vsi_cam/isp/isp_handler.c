@@ -254,7 +254,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 			mcm_ib = list_first_entry_or_null(&isp->ibm[id].list2,
 								struct ibuf, entry);
 			if (!mcm_ib) {
-				pr_warn("%s no mcm buf available!\n", __func__);
+				/* pr_warn("%s no mcm buf available!\n", __func__); */
 				continue;
 			}
 		}
@@ -327,9 +327,10 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 				pr_debug("mcm%d frame done but buf full\n", path);
 			}
 			list_del(&ib->entry);
-			ins->mcm_ib = ib;
+			ins->mcm_ib = ins->mcm_ib1;
+			ins->mcm_ib1 = ib;
 		} else {
-			ib = ins->mcm_ib;
+			ib = ins->mcm_ib1;
 		}
 
 		isp_set_mcm_raw_buffer(isp, path, ib->buf.addr, &ins->fmt.ifmt);
@@ -377,7 +378,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 	u32 cur_mi_irq_ctx = INVALID_MCM_SCH_INST;
 	struct isp_irq_ctx *ctx;
 	int rc;
-	u32 ris;
+	u32 ris, isp_ris;
 
 	pr_debug("+\n");
 	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
@@ -402,23 +403,48 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 
 	// skip buffer management if running unit test!
 	if (!isp->unit_test) {
+		isp_ris = isp_read(isp, ISP_RIS);
 		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK) {
 			ris = isp_read(isp, MIV2_RIS1);
+			if (isp_ris & BIT(26)) {
+				if (!(ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK)) {
+					pr_info("%s sensor0 dataloss but no buf full\n", __func__);
+					ris |= MIV2_MIS_MCM_RAW0_BUF_FULL_MASK;
+				}
+			}
 			handle_mcm(isp, 0, ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
 			isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
 		}
 		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK) {
 			ris = isp_read(isp, MIV2_RIS1);
+			if (isp_ris & BIT(25)) {
+				if (!(ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK)) {
+					pr_info("%s sensor1 dataloss but no buf full\n", __func__);
+					ris |= MIV2_MIS_MCM_RAW1_BUF_FULL_MASK;
+				}
+			}
 			handle_mcm(isp, 1, ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
 			isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
 		}
 		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK) {
 			ris = isp_read(isp, MIV2_RIS3);
+			if (isp_ris & BIT(24)) {
+				if (!(ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK)) {
+					pr_info("%s sensor2 dataloss but no buf full\n", __func__);
+					ris |= MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK;
+				}
+			}
 			handle_mcm(isp, 2, ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
 			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
 		}
 		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK) {
 			ris = isp_read(isp, MIV2_RIS3);
+			if (isp_ris & BIT(23)) {
+				if (!(ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK)) {
+					pr_info("%s sensor3 dataloss but no buf full\n", __func__);
+					ris |= MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK;
+				}
+			}
 			handle_mcm(isp, 3, ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
 			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
 		}
@@ -458,7 +484,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			if (!ctx)
 				goto _post;
 
-#ifdef WITH_LEGACY_VSE
+#ifdef WITH_LEGACY_ISP
 			{
 				bool is_completed = true;
 
