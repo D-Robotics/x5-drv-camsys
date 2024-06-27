@@ -600,6 +600,10 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 					list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list1);
 					ins->mcm_ib = NULL;
 				}
+				if (ins->mcm_ib1) {
+					list_add_tail(&ins->mcm_ib1->entry, &isp->ibm[inst].list1);
+					ins->mcm_ib1 = NULL;
+				}
 			}
 		}
 		break;
