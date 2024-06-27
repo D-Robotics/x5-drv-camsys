@@ -752,13 +752,14 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 	struct cam_input in;
 	struct isp_nat_instance *inst;
 	struct sensor_isp_ops_s *cops;
-	struct isi_sensor_base_info_s sensor_base_param;
+	struct isi_sensor_base_info_s sensor_base_param = {0};
 	char sensor_cali_name[100] = {0};
 
 	inst = container_of(vctx->vdev, struct isp_nat_instance, vdev);
 	cops = (struct sensor_isp_ops_s *)inst->dev->sensor_ops->cops;
 	if (cops && cops->sensor_get_base_info) {
-		rc = cops->sensor_get_base_info(vctx->flow_id, &sensor_base_param);
+		rc = cops->sensor_get_base_info(vctx->flow_id, &sensor_base_param,
+				sizeof(sensor_base_param.sensor_name));
 		if (rc < 0) {
 			pr_err("get sensor base info param fail\n");
 			return rc;
@@ -766,7 +767,7 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 	}
 
 	if (cops && cops->sensor_get_cali_name) {
-		rc = cops->sensor_get_cali_name(vctx->flow_id, sensor_cali_name);
+		rc = cops->sensor_get_cali_name(vctx->flow_id, sensor_cali_name, sizeof(sensor_cali_name));
 		if (rc < 0) {
 			pr_err("sensor_get_cali_name fail\n");
 			return rc;
@@ -777,7 +778,7 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 
 	in.type = CAM_INPUT_SENSOR;
 	in.index = vctx->flow_id;
-	if (sensor_cali_name == NULL)
+	if (sensor_cali_name[0] == '\0')
 		snprintf(in.sens.name, sizeof(in.sens.name), "%s", sensor_base_param.sensor_name);
 	else {
 		if (strcmp(sensor_cali_name, "disable") == 0)
@@ -822,7 +823,8 @@ static int32_t empty_common_get_param(uint32_t chn, struct _setting_param_t *use
 	return 0;
 }
 
-static int32_t empty_common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s *user_para)
+static int32_t empty_common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s *user_para,
+					uint32_t max_len)
 {
         pr_info("%s:empty function\n", __func__);
 

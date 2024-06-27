@@ -315,7 +315,8 @@ struct sensor_isi_ops_s {
         uint32_t (* read_register) (uint32_t chn, uint32_t address);
         int32_t (* write_register) (uint32_t chn, uint32_t address, uint32_t data);
         int32_t (* sensor_get_para) (uint32_t chn, struct _setting_param_t *user_para);
-        int32_t (* sensor_get_base_info) (uint32_t chn, struct isi_sensor_base_info_s *user_para);
+        int32_t (* sensor_get_base_info) (uint32_t chn, struct isi_sensor_base_info_s *user_para,
+			uint32_t max_len);
         int32_t (* sensor_awb_para) (uint32_t chn, uint32_t rgain, uint32_t bgain,
                         uint32_t grgain, uint32_t gbgain, uint32_t temper);
         int32_t (* sensor_get_awb_para) (uint32_t chn, struct isi_sensor_awb_info_s *user_awb);
@@ -337,11 +338,12 @@ struct sensor_isp_ops_s {
 	uint32_t (* read_register) (uint32_t chn, uint32_t address);
 	int32_t (* write_register) (uint32_t chn, uint32_t address, uint32_t data);
 	int32_t (* sensor_get_para)(uint32_t chn, struct _setting_param_t *user_para);
-        int32_t (* sensor_get_base_info) (uint32_t chn, struct isi_sensor_base_info_s *user_para);
+        int32_t (* sensor_get_base_info) (uint32_t chn, struct isi_sensor_base_info_s *user_para,
+			uint32_t max_len);
 	int32_t (* sensor_awb_para)(uint32_t chn, uint32_t rgain, uint32_t bgain,
 			uint32_t grgain, uint32_t gbgain, uint32_t temper);
 	int32_t (* sensor_set_led) (uint32_t chn, int32_t brightness);
-	int32_t (* sensor_get_cali_name) (uint32_t chn, char *cali_name);
+	int32_t (* sensor_get_cali_name) (uint32_t chn, char *cali_name, int32_t max_len);
 	void *reserved_func[6];
 	uint32_t end_magic;
 };

@@ -475,6 +475,9 @@ int32_t common_get_param(uint32_t chn, struct _setting_param_t *user_para)
 		return -1;
 	}
 
+	if (user_para == NULL)
+		return -1;
+
 	user_para->lines_per_second = sensor_param[chn].lines_per_second;
 	user_para->analog_gain_max = sensor_param[chn].analog_gain_max;
 	user_para->digital_gain_max = sensor_param[chn].digital_gain_max;
@@ -604,7 +607,7 @@ static int32_t common_set_led(uint32_t chn, int32_t brightness)
 	return ret;
 }
 
-static int32_t common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s *user_para)
+static int32_t common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s *user_para, uint32_t max_len)
 {
 	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
 		pr_err("%s chn %d beyond 16\n", __func__, chn);
@@ -614,7 +617,13 @@ static int32_t common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s 
         // sync
         get_tuning_info(chn);
 
-        memcpy(user_para->sensor_name, tuning_param[chn].sensor_name, sizeof(tuning_param[chn].sensor_name));
+	if (user_para == NULL)
+		return -1;
+
+	if (max_len >= 1) {
+		strncpy(user_para->sensor_name, tuning_param[chn].sensor_name, (max_len - 1));
+		user_para->sensor_name[(max_len - 1)] = '\0';
+	}
         user_para->chn = chn;
         user_para->sensor_addr = tuning_param[chn].sensor_addr;
         user_para->bus_num = tuning_param[chn].bus_num;
@@ -625,15 +634,16 @@ static int32_t common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s 
         return 0;
 }
 
-static int32_t common_get_cali_name(uint32_t chn, char *cali_name)
+static int32_t common_get_cali_name(uint32_t chn, char *cali_name, int32_t max_len)
 {
 	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
 		pr_err("%s chn %d beyond 16\n", __func__, chn);
 		return -1;
 	}
 
-	if (sensor_cali_name[chn] != NULL) {
-		strncpy(cali_name, sensor_cali_name[chn], (sizeof(sensor_cali_name[0]) - 1));
+	if (cali_name != NULL && max_len >= 1) {
+		strncpy(cali_name, sensor_cali_name[chn], (max_len - 1));
+		cali_name[max_len - 1] = '\0';
 	}
 
 	return 0;
@@ -662,6 +672,9 @@ static int32_t common_get_analog_gain(uint32_t chn, struct isi_sensor_again_info
                 return -1;
         }
 
+	if (user_again == NULL)
+		return -1;
+
         user_again->again_buf[0] = sensor_ctl[chn].gain_buf[0];
         user_again->again_buf[1] = sensor_ctl[chn].gain_buf[1];
         user_again->again_buf[2] = sensor_ctl[chn].gain_buf[2];
@@ -676,6 +689,9 @@ static int32_t common_get_digital_gain(uint32_t chn, struct isi_sensor_dgain_inf
                 pr_err("%s chn %d beyond 8\n", __func__, chn);
                 return -1;
         }
+
+	if (user_dgain == NULL)
+		return -1;
 
         user_dgain->dgain_buf[0] = sensor_ctl[chn].dgain_buf[0];
         user_dgain->dgain_buf[1] = sensor_ctl[chn].dgain_buf[1];
@@ -692,6 +708,9 @@ static int32_t common_get_integration_time(uint32_t chn, struct isi_sensor_line_
                 return -1;
         }
 
+	if (user_line == NULL)
+		return -1;
+
         user_line->line_buf[0] = sensor_ctl[chn].line_buf[0];
         user_line->line_buf[1] = sensor_ctl[chn].line_buf[1];
         user_line->line_buf[2] = sensor_ctl[chn].line_buf[2];
@@ -706,6 +725,9 @@ static int32_t common_get_awb_gain(uint32_t chn, struct isi_sensor_awb_info_s *u
                 pr_err("%s chn %d beyond 8\n", __func__, chn);
                 return -1;
         }
+
+	if (user_awb == NULL)
+		return -1;
 
         user_awb->rgain = sensor_ctl[chn].rgain;
         user_awb->bgain = sensor_ctl[chn].bgain;

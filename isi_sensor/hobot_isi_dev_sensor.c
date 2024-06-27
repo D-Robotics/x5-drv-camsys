@@ -370,7 +370,7 @@ static int32_t empty_common_awb_param(uint32_t chn, uint32_t rgain, uint32_t bga
         return 0;
 }
 
-static int32_t empty_sensor_get_base_info(uint32_t chn, struct isi_sensor_base_info_s *user_para)
+static int32_t empty_sensor_get_base_info(uint32_t chn, struct isi_sensor_base_info_s *user_para, uint32_t max_len)
 {
         pr_debug("%s\n", __func__);
         return 0;
@@ -561,7 +561,7 @@ static int32_t isi_sensor_get_base_info(uint32_t chn)
 
         if (g_isi_sen->isi_sensor_cops != NULL) {
                 ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->
-                sensor_get_base_info(chn, &g_sensor_base_info[chn]);
+                sensor_get_base_info(chn, &g_sensor_base_info[chn], sizeof(g_sensor_base_info[chn].sensor_name));
                 if (ret != 0) {
                         pr_err("%s, g_sensor_base_info update failed \n",__func__);
                         return ret;
