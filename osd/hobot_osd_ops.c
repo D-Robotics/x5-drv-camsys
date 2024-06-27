@@ -440,7 +440,7 @@ static int32_t osd_create_handle(struct osd_video_ctx *osd_ctx, unsigned long ar
 	list_add_tail(&handle->node, &osd_dev->osd_list);
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	osd_info("[H%d] done\n", handle->info.handle_id);
+	// osd_info("[H%d] done\n", handle->info.handle_id);
 
 	return ret;
 exit_free_polygon:
@@ -500,7 +500,7 @@ static int32_t osd_destroy_handle(struct osd_video_ctx *osd_ctx, unsigned long a
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	osd_info("[H%d] done\n", id);
+	// osd_info("[H%d] done\n", id);
 
 	return ret;
 }
@@ -787,7 +787,7 @@ static int32_t osd_get_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		return -EFAULT;
 	}
 
-	osd_info("[H%d] done\n", buffer_info.handle_id);
+	// osd_info("[H%d] done\n", buffer_info.handle_id);
 
 	return ret;
 }
@@ -843,7 +843,7 @@ static int32_t osd_set_buffer(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
-	osd_info("[H%d] done\n", buffer_info.handle_id);
+	// osd_info("[H%d] done\n", buffer_info.handle_id);
 
 	return ret;
 }
@@ -959,9 +959,9 @@ static int32_t osd_attach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	osd_sw_set_process_flag(subdev);
 	mutex_unlock(&subdev->bind_mutex);
 
-	osd_info("[H%d][CHN%d][CTX%d] done\n",
-		bind->bind_info.handle_id, bind->bind_info.chn_id,
-		bind->bind_info.ctx_id);
+	// osd_info("[H%d][CHN%d][CTX%d] done\n",
+	// 	bind->bind_info.handle_id, bind->bind_info.chn_id,
+	// 	bind->bind_info.ctx_id);
 
 	return ret;
 
@@ -1027,8 +1027,8 @@ static int32_t osd_detach(struct osd_video_ctx *osd_ctx, unsigned long arg)
 		mutex_unlock(&subdev->bind_mutex);
 	}
 
-	osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
-		bind_info.chn_id, bind_info.ctx_id);
+	// osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+	// 	bind_info.chn_id, bind_info.ctx_id);
 
 	return ret;
 }
@@ -1067,8 +1067,8 @@ static int32_t osd_get_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	}
 	mutex_unlock(&subdev->bind_mutex);
 
-	osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
-		bind_info.chn_id, bind_info.ctx_id);
+	// osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+	// 	bind_info.chn_id, bind_info.ctx_id);
 
 	return ret;
 }
@@ -1200,8 +1200,8 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 	kthread_queue_work(&osd_dev->worker, &osd_dev->work);
 	mutex_unlock(&subdev->bind_mutex);
 
-	osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
-		bind_info.chn_id, bind_info.ctx_id);
+	// osd_info("[H%d][CHN%d][CTX%d] done\n", bind_info.handle_id,
+	// 	bind_info.chn_id, bind_info.ctx_id);
 
 	return ret;
 	// if (polygon_buf != NULL) {
