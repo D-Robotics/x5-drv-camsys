@@ -608,8 +608,6 @@ s32 vin_node_set_internal_attr(struct vio_video_ctx *vctx, void *attr)
 			}
 		} else {
 			vin_ops->video_set_internal_attr(vctx, &inter_attr->mipi_inter_attr);
-			if (osal_test_and_clear_bit(MIPI_OPEN, &subdev->state))
-				vin_ops->close(vctx);
 		}
 		osal_set_bit(MIPI_INIT, &subdev->state);
 	}
