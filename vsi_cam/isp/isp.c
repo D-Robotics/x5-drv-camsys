@@ -438,6 +438,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	u32 value;
 	bool state_check = false;
 	int cur_state;
+	struct ibuf *ib = NULL;
 
 	if (!isp || inst >= isp->num_insts)
 		return -EINVAL;
@@ -508,36 +509,43 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 			}
 		} else {
 			if (ins->online_mcm && ins->stream_idx > -1) {
-				struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
-									   struct ibuf, entry);
+				ib = list_first_entry_or_null(&isp->ibm[inst].list1,
+							      struct ibuf, entry);
 				if (!ib) {
 					rc = -ENOMEM;
 					goto _exit;
 				}
-				phys_addr = ib->buf.addr;
-				isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
+				isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr, &ins->fmt.ifmt);
 				ins->mcm_ib = ib;
 				list_del(&ib->entry);
-
-				value = isp_read(isp, MI_MCM_CTRL);
-				value |= 0x19;
-				isp_write(isp, MI_MCM_CTRL, value);
 
 				/* force update */
 				switch (ins->stream_idx) {
 				case 0:
+					value = isp_read(isp, MI_MCM_CTRL);
+					value |= 0x19;
+					isp_write(isp, MI_MCM_CTRL, value);
 					value |= BIT(2);
 					isp_write(isp, MI_MCM_CTRL, value);
 					break;
 				case 1:
+					value = isp_read(isp, MI_MCM_CTRL);
+					value |= 0x19;
+					isp_write(isp, MI_MCM_CTRL, value);
 					value |= BIT(7);
 					isp_write(isp, MI_MCM_CTRL, value);
 					break;
 				case 2:
+					value = isp_read(isp, MI_MCM_G2_CTRL);
+					value |= 0x19;
+					isp_write(isp, MI_MCM_G2_CTRL, value);
 					value |= BIT(2);
 					isp_write(isp, MI_MCM_G2_CTRL, value);
 					break;
 				case 3:
+					value = isp_read(isp, MI_MCM_G2_CTRL);
+					value |= 0x19;
+					isp_write(isp, MI_MCM_G2_CTRL, value);
 					value |= BIT(5);
 					isp_write(isp, MI_MCM_G2_CTRL, value);
 					break;
@@ -552,10 +560,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 					rc = -ENOMEM;
 					goto _exit;
 				}
-				phys_addr = ib->buf.addr;
-				isp_set_mcm_raw_buffer(isp, ins->stream_idx, phys_addr, &ins->fmt.ifmt);
-				ins->mcm_ib1 = ib;
-				list_del(&ib->entry);
 			}
 
 			state_check = false;
@@ -617,8 +621,14 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	msg.state = state;
 	rc = isp_post(isp, &msg, true);
 
-	if (state == CAM_STATE_STARTED && isp->mode != ISP_STRM_MODE)
+	if (state == CAM_STATE_STARTED && isp->mode != ISP_STRM_MODE) {
+		if (ib) {
+			isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr, &ins->fmt.ifmt);
+			ins->mcm_ib1 = ib;
+			list_del(&ib->entry);
+		}
 		ins->state = CAM_STATE_STARTED;
+	}
 
 _exit:
 	mutex_unlock(&isp->set_state_lock);
