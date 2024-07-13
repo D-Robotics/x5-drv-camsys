@@ -144,7 +144,7 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct vse_irq_ctx *ctx)
+static inline void frame_done(struct vse_irq_ctx *ctx, bool timeout)
 {
 	u32 i;
 
@@ -155,7 +155,10 @@ static inline void frame_done(struct vse_irq_ctx *ctx)
 
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
-			if (!cam_osd_update(ctx->src_ctx[i])) {
+			if (timeout) {
+				cam_drop(ctx->src_ctx[i]);
+				ctx->src_buf[i] = NULL;
+			} else if (!cam_osd_update(ctx->src_ctx[i])) {
 				cam_qbuf_irq(ctx->src_ctx[i], ctx->src_buf[i], true);
 				ctx->src_buf[i] = NULL;
 			}
@@ -285,17 +288,29 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 	struct vse_instance *inst;
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
-	u32 value, i, vse_ctrl, pre_ctrl;
+	u32 mis, mis1, i, vse_ctrl, pre_ctrl, value;
 
-	value = vse_read(vse, VSE_MI_MIS);
-	pr_debug("+mi mis:0x%x\n", value);
-	if (value)
-		vse_write(vse, VSE_MI_ICR, value);
+	mis = vse_read(vse, VSE_MI_MIS);
+	if (mis) {
+		vse_write(vse, VSE_MI_ICR, mis);
+		pr_debug("+mi mis:0x%x\n", mis);
+	}
 
-	if (value & BIT(13)) {
+	mis1 = vse_read(vse, VSE_MI_MIS1);
+	if (mis1) {
+		vse_write(vse, VSE_MI_ICR1, mis1);
+		pr_debug("+mi mis1:0x%x\n", mis1);
+	}
+	if (mis1 & 0x5)
+		mis = BIT(13);
+
+	if (mis & BIT(13)) {
+		value = vse_read(vse, VSE_MI0_BUS_CFG);
+		value &= ~BIT(21);
+		vse_write(vse, VSE_MI0_BUS_CFG, value);
 		inst = &vse->insts[vse->next_irq_ctx];
 		spin_lock_irqsave(&inst->lock, flags);
-		frame_done(&inst->ctx);
+		frame_done(&inst->ctx, !!(mis1 & 0x5));
 		spin_unlock_irqrestore(&inst->lock, flags);
 
 		ctx = get_next_irq_ctx(vse);
@@ -329,7 +344,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 			msg.inst = -1;
 			msg.channel = -1;
 			msg.irq.num = VSE_MI_MIS;
-			msg.irq.stat = value;
+			msg.irq.stat = mis;
 			vse_post(vse, &msg, false);
 		}
 #endif
