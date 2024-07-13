@@ -308,6 +308,9 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		value = vse_read(vse, VSE_MI0_BUS_CFG);
 		value &= ~BIT(21);
 		vse_write(vse, VSE_MI0_BUS_CFG, value);
+		value = vse_read(vse, VSE_MI_IMSC1);
+		value &= ~0x5;
+		vse_write(vse, VSE_MI_IMSC1, value);
 		inst = &vse->insts[vse->next_irq_ctx];
 		spin_lock_irqsave(&inst->lock, flags);
 		frame_done(&inst->ctx, !!(mis1 & 0x5));

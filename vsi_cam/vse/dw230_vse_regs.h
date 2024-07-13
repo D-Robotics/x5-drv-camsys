@@ -8,6 +8,7 @@
 #define VSE_FE_MIS                      (0x0114)
 #define VSE_FE_ICR                      (0x0118)
 #define VSE_MI0_BUS_CFG                 (0x0d20)
+#define VSE_MI_IMSC1                    (0x0d44)
 #define VSE_MI_ISR                      (0x0d48)
 #define VSE_MI_MIS                      (0x0d50)
 #define VSE_MI_MIS1                     (0x0d54)
