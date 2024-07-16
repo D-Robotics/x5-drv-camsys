@@ -791,10 +791,10 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 	in.type = CAM_INPUT_SENSOR;
 	in.index = vctx->flow_id;
 	if (sensor_cali_name[0] == '\0')
-		snprintf(in.sens.name, sizeof(in.sens.name), "%s", sensor_base_param.sensor_name);
+		snprintf(in.sens.name, sizeof(in.sens.name), "%s_tuning.json", sensor_base_param.sensor_name);
 	else {
 		if (strcmp(sensor_cali_name, "disable") == 0)
-			snprintf(in.sens.name, sizeof(in.sens.name), "%s", sensor_base_param.sensor_name);
+			snprintf(in.sens.name, sizeof(in.sens.name), "%s_tuning.json", sensor_base_param.sensor_name);
 		else
 			snprintf(in.sens.name, sizeof(in.sens.name), "%s", sensor_cali_name);
 	}
