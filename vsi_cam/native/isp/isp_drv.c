@@ -872,9 +872,9 @@ static ssize_t isp_stat_show(struct device *dev, struct device_attribute *attr, 
 			break;
 
 		len += snprintf(&buf[len], size - len,
-			       "input_mode:%d\nsched_mode:%d\nsensor_mode:%d\n",
+			       "input_mode:%d\nsched_mode:%d\ntile_mode:%d\nsensor_mode:%d\n",
 			       src_ins->attr.input_mode, src_ins->attr.sched_mode,
-			       src_ins->attr.sensor_mode);
+			       src_ins->attr.tile_mode, src_ins->attr.sensor_mode);
 		if (size - len <= 0)
 			break;
 
