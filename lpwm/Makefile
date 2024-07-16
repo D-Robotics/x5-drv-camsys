@@ -13,11 +13,3 @@ ccflags-y += -I$(srctree)/drivers/smmu/
 ifeq ($(CONFIG_HOBOT_GCOV_AVIO),y)
 GCOV_PROFILE := y
 endif
-
-OUT_DIR := ${OUTPUT_BUILD_DIR}/kernel
-
-all:
-	make -C $(OUT_DIR) M=$(PWD) modules
-
-clean:
-	make -C $(OUT_DIR) M=$(PWD) clean
