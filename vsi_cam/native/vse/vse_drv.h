@@ -6,7 +6,7 @@
 #include "vse_api.h"
 
 #include "vse.h"
-#include "hobot_osd_dev.h"
+#include "../../../osd/hobot_osd_dev.h"
 
 #define SRC_INDEX  0
 #define CAP_INDEX_1ST 1

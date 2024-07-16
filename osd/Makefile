@@ -13,13 +13,3 @@ ccflags-y += -D _LINUX_KERNEL_MODE
 ifeq ($(CONFIG_HOBOT_GCOV_AVIO),y)
 GCOV_PROFILE := y
 endif
-
-OUT_DIR := ${OUTPUT_BUILD_DIR}/kernel
-
-all: FORCE
-	make -C $(OUT_DIR) M=$(PWD) modules
-
-clean: FORCE
-	make -C $(OUT_DIR) M=$(PWD) clean
-
-FORCE:
