@@ -689,7 +689,7 @@ int isp_add_job(struct isp_device *isp, u32 inst, bool mcm_online)
 	if (mcm_online) {
 		rc = push_job(isp->jq, &job);
 		if (rc < 0) {
-	//		dev_err(isp->dev, "failed to push a job(err=%d)\n", rc);
+	//		dev_err(isp->dev, "failed to push a job[%d](err=%d)\n", inst, rc);
 			return rc;
 		}
 		return 0;
@@ -930,6 +930,7 @@ int isp_reset_schedule(struct isp_device *isp)
 
 	isp->rdma_busy = false;
 	isp->error = 1;
+	isp->frame_done_status = 0;
 	spin_unlock_irqrestore(&isp->mcm_sch_lock, flags);
 	return rc;
 }
@@ -948,6 +949,7 @@ int isp_check_schedule(struct isp_device *isp, u32 *inst)
 	if (!node) {
 		isp->error = 1;
 		isp->rdma_busy = false;
+		isp->frame_done_status = 0;
 		*inst = INVALID_MCM_SCH_INST;
 	} else {
 		*inst = node->inst;

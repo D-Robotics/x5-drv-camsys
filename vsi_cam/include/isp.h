@@ -28,6 +28,12 @@
 
 #define isp_read(isp, offset) __raw_readl((isp)->base + (offset))
 
+enum isp_frame_done_type {
+	ISP_MP_FRAME_END  = 0x1 << 0,
+	ISP_RDMA_END      = 0x1 << 1,
+	ISP_MIS_FRAME_END = 0x1 << 2,
+};
+
 struct isp_irq_ctx {
 	bool is_sink_online_mode, is_src_online_mode, ddr_en;
 	struct cam_buf *sink_buf, *src_buf;
@@ -111,6 +117,7 @@ struct isp_device {
 	struct list_head mcm_sch_idle_list, mcm_sch_busy_list;
 	struct mcm_sch_node sch_node[ISP_SINK_PATH_MAX * SRC_BUF_NUM];
 	refcount_t open_cnt;
+	int frame_done_status;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_log_file;

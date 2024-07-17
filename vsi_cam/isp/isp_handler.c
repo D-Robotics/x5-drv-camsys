@@ -142,6 +142,26 @@ static s32 handle_get_vi_info(struct isp_device *isp, struct isp_msg *msg)
 	return 0;
 }
 
+static inline void isp_post_frame_end(struct isp_device *isp, u32 inst)
+{
+	struct isp_msg msg;
+	u32 status;
+
+	if (!isp)
+		return;
+
+	status = isp->frame_done_status;
+
+	if (status & ISP_RDMA_END && status & ISP_MP_FRAME_END && status & ISP_MIS_FRAME_END) {
+		memset(&msg, 0, sizeof(msg));
+		msg.id = ISP_MSG_FRAME_DONE;
+		msg.inst = inst;
+		isp_post(isp, &msg, false);
+		isp->frame_done_status = 0;
+		pr_debug("post frame end inst:%d", inst);
+	}
+}
+
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -245,7 +265,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 			ctx = NULL;
 			break;
 		}
-
+		pr_debug("isp %s: pop_job[%d]\n", __func__, job.irq_ctx_index);
 		id = job.irq_ctx_index;
 		inst = &isp->insts[id];
 		if (inst->state != CAM_STATE_STARTED)
@@ -254,7 +274,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 			mcm_ib = list_first_entry_or_null(&isp->ibm[id].list2,
 								struct ibuf, entry);
 			if (!mcm_ib) {
-				/* pr_warn("%s no mcm buf available!\n", __func__); */
+				/* pr_warn("%s no mcm buf available! inst:%d\n", __func__, id); */
 				continue;
 			}
 		}
@@ -308,6 +328,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 	u32 inst = isp->stream_idx_mapping[path];
 	struct isp_instance *ins;
 
+	pr_debug("%s: path[%d], inst:%d\n", __func__, path, inst);
 	if (unlikely(inst >= isp->num_insts))
 		return -1;
 
@@ -338,6 +359,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 #else
 	isp->in_counts[inst]++;
 #endif
+	pr_debug("isp_add_job:%d\n", inst);
 	isp_add_job(isp, inst, true);
 	return 0;
 }
@@ -361,12 +383,14 @@ static inline void irq_notify(struct isp_device *isp, u32 inst, struct mi_mis_gr
 		isp_post(isp, &msg, false);
 	}
 
-	if (!isp->unit_test && (mi_mis->miv2_mis & 0x1) && inst != INVALID_MCM_SCH_INST) {
-		memset(&msg, 0, sizeof(msg));
-		msg.id = ISP_MSG_FRAME_DONE;
-		msg.inst = inst;
-		isp_post(isp, &msg, false);
-	}
+	if (mi_mis->miv2_mis & BIT(24))
+		isp->frame_done_status |= ISP_RDMA_END;
+
+	if (mi_mis->miv2_mis & 0x1)
+		isp->frame_done_status |= ISP_MP_FRAME_END;
+
+	if (!isp->unit_test && (mi_mis->miv2_mis & 0x1) && inst != INVALID_MCM_SCH_INST)
+		isp_post_frame_end(isp, inst);
 }
 
 irqreturn_t mi_irq_handler(int irq, void *arg)
@@ -619,8 +643,10 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			cam_set_frame_status(ins->ctx.src_ctx, NO_ERR);
 			isp_mis &= ~BIT(6);
 		}
-		if (isp_mis & BIT(1))
+		if (isp_mis & BIT(1)) {
+			isp->frame_done_status |= ISP_MIS_FRAME_END;
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);
+		}
 		if (isp_mis & (BIT(2) | BIT(3))) {
 			if (isp_mis & BIT(3))
 				cam_set_frame_status(ins->ctx.src_ctx, VSIZE_ERR);
@@ -629,6 +655,13 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			msg.irq.num = ISP_IRQ_MIS;
 			msg.irq.stat.isp_mis = isp_mis;
 			isp_post(isp, &msg, false);
+			/**
+			 * if MI frame done is not ready, frame done message will not be sent to
+			 * cam_service. in this case, there is no negative impact to call
+			 * isp_post_frame_end() with incorrect instance isp id
+			 **/
+			if (isp_mis & BIT(1))
+				isp_post_frame_end(isp, isp->cur_mi_irq_ctx);
 		}
 	} else {
 		return IRQ_NONE;
