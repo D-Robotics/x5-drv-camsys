@@ -156,17 +156,10 @@ static void sif_set_ex_feature(struct sif_device *sif, u32 inst)
 static int sif_set_ipi_fmt(struct sif_device *sif, u32 inst, struct cam_format *fmt)
 {
 	u32 val, reg_val;
-	struct sif_irq_ctx *ctx;
-	struct sif_instance *ins;
-	phys_addr_t p_addr = 0;
-	phys_addr_t p_uv_addr = 0;
-	unsigned long flags;
 
 	val = sif_read(sif, SIF_DMA_CTL);
 
 	val |= SIF_WR_LIMIT_ENABLE | SIF_WR_LIMIT_OUTSTAND(8);
-
-	ins = &sif->insts[inst];
 
 	val &= SIF_FMT_CLEAR[inst];
 	switch (fmt->format) {
@@ -217,31 +210,6 @@ static int sif_set_ipi_fmt(struct sif_device *sif, u32 inst, struct cam_format *
 	sif_write(sif, SIF_IPI_PIX_HSTRIDE(inst), fmt->stride - 1);
 	sif_write(sif, SIF_IPI_PIX_HSIZE(inst), fmt->width - 1);
 	sif_write(sif, SIF_IPI_PIX_VSIZE(inst), fmt->height - 1);
-
-	spin_lock_irqsave(&ins->lock, flags);
-	ctx = &ins->ctx;
-	if (ctx->buf_ctx)
-		ctx->buf = cam_dqbuf_irq(ctx->buf_ctx, true);
-	if (ctx->buf) {
-		p_addr = get_phys_addr(ctx->buf, 0);
-		if (fmt->format == CAM_FMT_NV12 || fmt->format == CAM_FMT_NV16
-			|| (sif->ipi_channel_num != 1  && inst == sif->ipi_base))
-			p_uv_addr = p_addr + (fmt->stride * fmt->height);
-	}
-	spin_unlock_irqrestore(&ins->lock, flags);
-	if (p_addr) {
-		if (fmt->format == CAM_FMT_NV12 || fmt->format == CAM_FMT_NV16) {
-			sif_write(sif, SIF_IPI_BADDR_Y(inst), p_addr);
-			if (p_uv_addr)
-				sif_write(sif, SIF_IPI_BADDR_UV(inst), p_uv_addr);
-		} else if (sif->ipi_channel_num != 1 && inst == sif->ipi_base) {
-			sif_write(sif, SIF_IPI_BADDR_Y(inst), p_addr);
-			if (p_uv_addr)
-				sif_write(sif, SIF_IPI_BADDR_Y(inst + 1), p_uv_addr);
-		} else {
-			sif_write(sif, SIF_IPI_BADDR_Y(inst), p_addr);
-		}
-	}
 
 	return 0;
 }
@@ -302,17 +270,46 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 static void sif_start_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
+	struct sif_irq_ctx *ctx;
+	phys_addr_t p_addr = 0;
+	phys_addr_t p_uv_addr = 0;
 	unsigned long flags;
 	u32 val;
 	u32 irq_val;
 
 	sif = &dev->insts[inst];
+	spin_lock_irqsave(&sif->lock, flags);
+	sif->frame_start_cnt = 0;
+	ctx = &sif->ctx;
+	if (ctx->buf_ctx)
+		ctx->buf = cam_dqbuf_irq(ctx->buf_ctx, true);
+	if (ctx->buf) {
+		p_addr = get_phys_addr(ctx->buf, 0);
+		if (sif->fmt.format == CAM_FMT_NV12 || sif->fmt.format == CAM_FMT_NV16
+			|| (dev->ipi_channel_num != 1  && inst == sif->ipi_base))
+			p_uv_addr = p_addr + (sif->fmt.stride * sif->fmt.height);
+	}
+	spin_unlock_irqrestore(&sif->lock, flags);
+	if (p_addr) {
+		if (sif->fmt.format == CAM_FMT_NV12 || sif->fmt.format == CAM_FMT_NV16) {
+			sif_write(dev, SIF_IPI_BADDR_Y(inst), p_addr);
+			if (p_uv_addr)
+				sif_write(dev, SIF_IPI_BADDR_UV(inst), p_uv_addr);
+		} else if (dev->ipi_channel_num != 1 && inst == sif->ipi_base) {
+			sif_write(dev, SIF_IPI_BADDR_Y(inst), p_addr);
+			if (p_uv_addr)
+				sif_write(dev, SIF_IPI_BADDR_Y(inst + 1), p_uv_addr);
+		} else {
+			sif_write(dev, SIF_IPI_BADDR_Y(inst), p_addr);
+		}
+	}
+
 	sif->hsize_err_count_pre = 0;
 	sif->vsize_err_count_pre = 0;
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
-	irq_val |= SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN;
+	irq_val |= SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN | SIF_PIXEL_BUF_AFULL_IRQ_EN;
 	val = sif_read(dev, SIF_DMA_CTL);
 	val |= SIF_DMA_CONFIG_IPI[inst];
 	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
@@ -340,7 +337,7 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
-	irq_val &= ~(SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN);
+	irq_val &= ~(SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN | SIF_PIXEL_BUF_AFULL_IRQ_EN);
 	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
 		val = sif_read(dev, SIF_DMA_CTL);
 		val &= ~SIF_ENABLE_IPI[inst];

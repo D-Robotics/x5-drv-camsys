@@ -153,7 +153,6 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 	    && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
 		// meet Hsize error drop frame.
 		cam_set_frame_status(ins->ctx.buf_ctx, HSIZE_ERR);
-		cam_drop(ins->ctx.sink_ctx);
 	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
 		   && ins->vsize_err_count_pre != SIF_VSIZE_ERR(val)) {
 		// when hsync is more than exception, post warning.
@@ -164,7 +163,6 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 		   && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
 		// corner case, drop frame for safety.
 		cam_set_frame_status(ins->ctx.buf_ctx, BOTH_ERR);
-		cam_drop(ins->ctx.sink_ctx);
 	}
 
 	ins->hsize_err_count_pre = SIF_HSIZE_ERR(val);
@@ -195,12 +193,16 @@ static void sif_handle_pps_irq(struct sif_device *sif, u32 inst)
 	// TODO:add pps timestamp to vio framework.
 }
 
-static void sif_handle_frame_start(struct sif_device *sif, u32 inst)
+static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 {
 	struct sif_instance *ins;
 	struct sif_frame_des sif_frame = {0};
 	u32 val = 0;
 	u32 fs_l = 0, fs_h = 0, trigger_l = 0, trigger_h = 0;
+	struct sif_irq_ctx *ctx;
+	phys_addr_t p_addr = 0;
+	phys_addr_t p_uv_addr = 0;
+	unsigned long flags;
 
 	ins = &sif->insts[inst];
 	if (ins->sif_cfg.ts_ctrl.time_stamp_en) {
@@ -232,40 +234,27 @@ static void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	sif_frame.fs_ts = (sif_frame.fs_ts << 32) | fs_l;
 	sif_set_frame_des(ins->ctx.sink_ctx, (void *)&sif_frame);
 	cam_set_stat_info(ins->ctx.sink_ctx, CAM_STAT_FS);
-	cam_set_frame_status(ins->ctx.buf_ctx, NO_ERR);
-}
 
-static void sif_handle_frame_done(struct sif_device *sif, u32 inst)
-{
-	unsigned long flags;
-	struct sif_irq_ctx *ctx;
-	struct sif_instance *ins;
-	phys_addr_t p_addr = 0;
-	phys_addr_t p_uv_addr = 0;
-	u8 frame_status = 0;
-
-	ins = &sif->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
 	ctx = &ins->ctx;
-
-	dev_dbg(sif->dev, "sif(%d-%d), sink ctx %p buf ctx %p buf %p\n",sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
-	if (ctx->buf) {
-		frame_status = cam_get_frame_status(ctx->buf_ctx);
-		if (frame_status && (frame_status != VSIZE_ERR))
-			cam_drop(ctx->buf_ctx);
-		else
-			cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
-		ctx->buf = NULL;
-	}
-
+	if (ctx->buf_ctx)
+		ins->frame_start_cnt++;
+	dev_dbg(sif->dev, "sif(%d-%d), FS sink ctx %p buf ctx %p buf %p\n",
+		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 	if (ins->state == CAM_STATE_STARTED) {
+		if (ctx->next_buf) {
+			cam_drop(ctx->buf_ctx);
+			ctx->buf = ctx->next_buf;
+		}
 		if (ctx->buf_ctx)
-			ctx->buf = cam_dqbuf_irq(ctx->buf_ctx, true);
-		if (ctx->buf) {
-			p_addr = get_phys_addr(ctx->buf, 0);
+			ctx->next_buf = cam_dqbuf_irq(ctx->buf_ctx, true);
+		if (ctx->next_buf) {
+			p_addr = get_phys_addr(ctx->next_buf, 0);
 			if (ins->fmt.format == CAM_FMT_NV12 || ins->fmt.format == CAM_FMT_NV16
 				|| (sif->ipi_channel_num != 1 && inst == sif->ipi_base))
 				p_uv_addr = p_addr + (ins->fmt.stride * ins->fmt.height);
+		} else {
+			cam_set_frame_status(ctx->buf_ctx, DQ_FAIL);
 		}
 	}
 	spin_unlock_irqrestore(&ins->lock, flags);
@@ -283,6 +272,42 @@ static void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 			sif_write(sif, SIF_IPI_BADDR_Y(inst), p_addr);
 		}
 	}
+	spin_lock_irqsave(&sif->cfg_reg_lock, flags);
+	val = sif_read(sif, SIF_DMA_CTL);
+	val |= SIF_DMA_CONFIG_IPI[inst];
+	sif_write(sif, SIF_DMA_CTL, val);
+	spin_unlock_irqrestore(&sif->cfg_reg_lock, flags);
+}
+
+static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
+{
+	unsigned long flags;
+	struct sif_irq_ctx *ctx;
+	struct sif_instance *ins;
+	u8 frame_status = 0;
+
+	ins = &sif->insts[inst];
+	spin_lock_irqsave(&ins->lock, flags);
+	ctx = &ins->ctx;
+	if (ctx->buf_ctx)
+		ins->frame_start_cnt--;
+	dev_dbg(sif->dev, "sif(%d-%d), FE sink ctx %p buf ctx %p buf %p \n",
+		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
+	if (ctx->buf) {
+		frame_status = cam_get_frame_status(ctx->buf_ctx);
+		if (frame_status || (ins->frame_start_cnt != 0)) {
+			cam_drop(ctx->buf_ctx);
+			cam_dec_frame_status(ctx->buf_ctx);
+		} else {
+			cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
+		}
+	}
+
+	ctx->buf = ctx->next_buf;
+	ctx->next_buf = NULL;
+	if (ctx->buf_ctx)
+		ins->frame_start_cnt = 0;
+	spin_unlock_irqrestore(&ins->lock, flags);
 }
 
 static void sif_handle_emb_done(struct sif_device *sif, u32 inst)
@@ -317,8 +342,7 @@ static void sif_handle_emb_done(struct sif_device *sif, u32 inst)
 irqreturn_t sif_irq_handler(int irq, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
-	u32 i, status, val, pps_status;
-	unsigned long flags;
+	u32 i, status, pps_status;
 
 	pr_debug("+\n");
 	for (i = 0; i < sif->num_insts; i++) {
@@ -335,8 +359,8 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 
 		sif_write(sif, SIF_IPI_IRQ_CLR(i), status);
 
-		if (status & SIF_IRQ_OF)
-			cam_drop(sif->insts[i].ctx.sink_ctx);
+		if (status & (SIF_IRQ_OF | SIF_PIXEL_BUF_AFULL_IRQ_EN))
+			cam_set_frame_status(sif->insts[i].ctx.buf_ctx, IPI_OF);
 
 		if (status & SIF_IRQ_FS)
 			sif_handle_frame_start(sif, i);
@@ -348,14 +372,9 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 
 		if (status & SIF_IRQ_DONE)
 			sif_handle_frame_done(sif, i);
+
 		if (status & SIF_IRQ_EBD_DMA_DONE)
 			sif_handle_emb_done(sif, i);
-
-		spin_lock_irqsave(&sif->cfg_reg_lock, flags);
-		val = sif_read(sif, SIF_DMA_CTL);
-		val |= SIF_DMA_CONFIG_IPI[i];
-		sif_write(sif, SIF_DMA_CTL, val);
-		spin_unlock_irqrestore(&sif->cfg_reg_lock, flags);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;

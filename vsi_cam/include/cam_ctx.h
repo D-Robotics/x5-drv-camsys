@@ -7,10 +7,12 @@
 #include "cam_buf.h"
 
 enum cam_frame_status {
-	NO_ERR,
-	VSIZE_ERR,
-	HSIZE_ERR,
-	BOTH_ERR,
+	NO_ERR = 0,
+	VSIZE_ERR = 1,
+	HSIZE_ERR = 1,
+	BOTH_ERR = 1,
+	DQ_FAIL = 1,
+	IPI_OF = 2,
 };
 
 int cam_trigger(struct cam_ctx *ctx);
@@ -37,5 +39,7 @@ int cam_set_mode(struct cam_ctx *ctx, u32 mode);
 void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status);
 
 u8 cam_get_frame_status(void *cam_ctx);
+
+void cam_dec_frame_status(void *cam_ctx);
 
 #endif /* _CAM_COM_H_ */

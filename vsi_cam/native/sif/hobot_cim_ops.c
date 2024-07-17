@@ -641,6 +641,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	if (cim_priv_attr->ddr_en) {
 		ctx.buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
 		ctx.buf = NULL;
+		ctx.next_buf = NULL;
 	}
 	if (cim_priv_attr->embeded_en) {
 		ctx.emb_buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_EMB];
@@ -718,6 +719,7 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 	if (cim_priv_attr->ddr_en) {
 		ctx.buf_ctx = NULL;
 		ctx.buf = NULL;
+		ctx.next_buf = NULL;
 	}
 	if (cim_priv_attr->embeded_en) {
 		ctx.emb_buf_ctx = NULL;

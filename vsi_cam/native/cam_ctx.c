@@ -191,7 +191,7 @@ void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status)
 u8 cam_get_frame_status(void *cam_ctx)
 {
 	unsigned long flag;
-	u8 status;
+	u8 status = 0;
 	struct vio_subdev *vdev = (struct vio_subdev *)cam_ctx;
 
 	if (vdev) {
@@ -200,4 +200,17 @@ u8 cam_get_frame_status(void *cam_ctx)
 		spin_unlock_irqrestore(&vdev->slock, flag);
 	}
 	return status;
+}
+
+void cam_dec_frame_status(void *cam_ctx)
+{
+	struct vio_subdev *vdev = (struct vio_subdev *)cam_ctx;
+	unsigned long flag;
+
+	if (vdev) {
+		spin_lock_irqsave(&vdev->slock, flag);
+		if (vdev->frame_status)
+			vdev->frame_status--;
+		spin_unlock_irqrestore(&vdev->slock, flag);
+	}
 }

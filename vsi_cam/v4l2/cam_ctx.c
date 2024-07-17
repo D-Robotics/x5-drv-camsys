@@ -108,3 +108,8 @@ u8 cam_get_frame_status(void *cam_ctx)
 {
 	return 0;
 }
+
+void cam_dec_frame_status(void *cam_ctx)
+{
+
+}

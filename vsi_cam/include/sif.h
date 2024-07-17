@@ -73,7 +73,7 @@ enum pps_trigger_source {
 struct sif_irq_ctx {
 	struct cam_ctx *sink_ctx;
 	struct cam_ctx *buf_ctx;
-	struct cam_buf *buf;
+	struct cam_buf *buf, *next_buf;
 	struct cam_ctx *emb_buf_ctx;
 	struct cam_buf *emb_buf;
 };
@@ -97,6 +97,7 @@ struct sif_instance {
 	u32 ipi_base;
 	u32 hsize_err_count_pre;
 	u32 vsize_err_count_pre;
+	int frame_start_cnt;
 };
 
 struct sif_device {

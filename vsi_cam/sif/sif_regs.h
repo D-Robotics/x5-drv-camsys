@@ -172,9 +172,7 @@ static inline u32 SIF_PPS_TS_HI(unsigned int n)
 	return (0x24c + (n) * 0x08);
 }
 
-#define SIF_IPI0_ERR_SIZE (0xf4)
-#define SIF_IPI1_ERR_SIZE (0xf8)
-#define SIF_BURST_LENGTH (0x3333)
+#define SIF_BURST_LENGTH (0xffff)
 
 #define SIF_IRQ_FS                 BIT(0)
 #define SIF_IRQ_DONE               BIT(1)

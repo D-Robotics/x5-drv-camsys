@@ -230,7 +230,7 @@ static inline void frame_done(struct isp_irq_ctx *ctx)
 			cam_drop(ctx->src_ctx);
 		else
 			cam_qbuf_irq(ctx->src_ctx, node->data, true);
-
+		cam_set_frame_status(ctx->src_ctx, NO_ERR);
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
 	}
@@ -640,7 +640,6 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			if (ins->ctx.is_sink_online_mode)
 				sif_get_frame_des(ins->ctx.src_ctx);
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FS);
-			cam_set_frame_status(ins->ctx.src_ctx, NO_ERR);
 			isp_mis &= ~BIT(6);
 		}
 		if (isp_mis & BIT(1)) {
