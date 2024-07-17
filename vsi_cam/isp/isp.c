@@ -283,18 +283,27 @@ int isp_set_oformat(struct isp_device *isp, u32 inst, struct cam_format *fmt)
 
 static int alloc_mcm_buf(struct isp_device *isp, u32 id, struct cam_format *fmt)
 {
-	u32 size, i;
+	u32 size, i, rc;
 	struct mem_buf *buf;
 
 	size = fmt->stride * fmt->height * MCM_BUF_NUM;
 	if (!size)
 		return -EINVAL;
 	buf = &isp->in_bufs[id];
-	if (buf->size > 0 && buf->size != size)
-		mem_free(isp->dev, &isp->in_buf_list, buf);
+	if (buf->size > 0 && buf->size != size) {
+		rc = mem_free(isp->dev, &isp->in_buf_list, buf);
+		if (unlikely(rc)) {
+			pr_err("mem_free fail, (err=%d)\n", rc);
+			return rc;
+		}
+	}
 	if (buf->size != size) {
 		buf->size = size;
-		mem_alloc(isp->dev, &isp->in_buf_list, buf);
+		rc = mem_alloc(isp->dev, &isp->in_buf_list, buf);
+		if (unlikely(rc)) {
+			pr_err("mem_alloc fail, (err=%d)\n", rc);
+			return rc;
+		}
 
 		size = fmt->stride * fmt->height;
 		for (i = 0; i < MCM_BUF_NUM; i++) {
@@ -310,17 +319,27 @@ static int alloc_hdr_buf(struct isp_device *isp, u32 id, struct cam_format *fmt)
 {
 	u32 size;
 	struct mem_buf *buf;
+	int rc;
 
 	size = fmt->stride * fmt->height;
 	if (!size)
 		return -EINVAL;
 
 	buf = &isp->hdr_bufs[id];
-	if (buf->size > 0 && buf->size != size)
-		mem_free(isp->dev, &isp->hdr_buf_list, buf);
+	if (buf->size > 0 && buf->size != size) {
+		rc = mem_free(isp->dev, &isp->hdr_buf_list, buf);
+		if (unlikely(rc)) {
+			pr_err("mem_free fail, (err=%d)\n", rc);
+			return rc;
+		}
+	}
 	if (buf->size != size) {
 		buf->size = size;
-		mem_alloc(isp->dev, &isp->hdr_buf_list, buf);
+		rc = mem_alloc(isp->dev, &isp->hdr_buf_list, buf);
+		if (unlikely(rc)) {
+			pr_err("mem_alloc fail, (err=%d)\n", rc);
+			return rc;
+		}
 	}
 	return 0;
 }
@@ -329,6 +348,7 @@ int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt)
 {
 	struct isp_instance *ins;
 	struct isp_msg msg;
+	int rc;
 
 	if (!isp || !fmt)
 		return -EINVAL;
@@ -346,12 +366,23 @@ int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt)
 	if (ins->hdr_en) {
 		int i;
 
-		for (i = 0; i < HDR_BUF_NUM; i++)
-			alloc_hdr_buf(isp, i, &fmt->ifmt);
+		for (i = 0; i < HDR_BUF_NUM; i++) {
+			rc = alloc_hdr_buf(isp, i, &fmt->ifmt);
+			if (unlikely(rc)) {
+				mem_free_all(isp->dev, &isp->hdr_buf_list);
+				pr_err("inst %d alloc_hdr_buf fail, (err=%d)\n", inst, rc);
+				return rc;
+			}
+		}
 	}
 
-	if (ins->online_mcm && ins->stream_idx > -1)
-		alloc_mcm_buf(isp, inst, &fmt->ifmt);
+	if (ins->online_mcm && ins->stream_idx > -1) {
+		rc = alloc_mcm_buf(isp, inst, &fmt->ifmt);
+		if (unlikely(rc)) {
+			pr_err("inst %d alloc_mcm_buf fail, (err=%d)\n", inst, rc);
+			return rc;
+		}
+	}
 
 	memcpy(&ins->fmt, fmt, sizeof(ins->fmt));
 	msg.id = CAM_MSG_FORMAT_CHANGED;
@@ -1229,8 +1260,12 @@ int isp_remove(struct platform_device *pdev, struct isp_device *isp)
 			rc);
 
 	destroy_job_queue(isp->jq);
-	mem_free_all(isp->dev, &isp->in_buf_list);
-	mem_free_all(isp->dev, &isp->hdr_buf_list);
+	rc = mem_free_all(isp->dev, &isp->in_buf_list);
+	if (unlikely(rc))
+		dev_err(&pdev->dev, "fail to free in_buf_list (err=%d)\n", rc);
+	rc = mem_free_all(isp->dev, &isp->hdr_buf_list);
+	if (unlikely(rc))
+		dev_err(&pdev->dev, "fail to free hdr_buf_list (err=%d)\n", rc);
 	put_cam_ctrl_device(isp->ctrl_dev);
 	pm_runtime_disable(isp->dev);
 
