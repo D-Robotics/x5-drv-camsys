@@ -1228,7 +1228,7 @@ static int32_t sensor_evk_do(struct sensor_device_s *sen, sensor_event_info_t *e
 		/* if interrupt by signal? */
 		if (ret < 0) {
 			user->ev_wait--;
-			sen_err(dev, "%s: %s wait evk failed %d\n", __func__,
+			sen_warn(dev, "%s: %s wait evk abort %d\n", __func__,
 				g_sen_ev_state_names[user->ev_state], ret);
 			osal_mutex_unlock(&user->mutex);
 			break;
@@ -1239,7 +1239,7 @@ static int32_t sensor_evk_do(struct sensor_device_s *sen, sensor_event_info_t *e
 			if (retry >= pa->ev_retry_max) {
 				user->ev_wait--;
 				ret = -ETIME;
-				sen_err(dev, "%s: %s %dms timeout failed %d\n", __func__,
+				sen_warn(dev, "%s: %s %dms timeout abort %d\n", __func__,
 					g_sen_ev_state_names[user->ev_state], ev_timeout_ms, ret);
 				osal_mutex_unlock(&user->mutex);
 				break;
