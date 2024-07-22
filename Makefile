@@ -2,6 +2,7 @@
 # Makefile for the Linux Kernel IPS specific device drivers.
 #
 subdir-ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vpf/
+subdir-ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/osd/
 subdir-ccflags-y += -I$(srctree)/drivers/staging/android/ion/
 subdir-ccflags-y += -I$(srctree)/drivers/smmu/
 subdir-ccflags-y += -I$(srctree)/drivers/iommu/
