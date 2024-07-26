@@ -49,34 +49,21 @@ typedef enum enum_isp_module_version {
 typedef union tag_isp_module_ctrl_u {
 	__u32 u32Key;
 	struct {
-		__u32 bitWdrBlc : 1; /* RW;[0] */
-		__u32 bitWdrDgain : 1; /* RW;[1] */
-		__u32 bitWdrWbGain : 1; /* RW;[2] */
-		__u32 bitFrameStitch : 1; /* RW;[3] */
-		__u32 bitDecompare : 1; /* RW;[4] */
-		__u32 bitWb : 1; /* RW;[5] */
-		__u32 bitIspDgain : 1; /* RW;[6] */
-		__u32 bitBlc : 1; /* RW;[7] */
-		__u32 bitGe : 1; /* RW;[8] */
-		__u32 bitDdpc : 1; /* RW;[9] */
-		__u32 bitSdpc : 1; /* RW;[10] */
-		__u32 bitMeshShading: 1; /* RW;[11] */
-		__u32 bitIsp2Dnr : 1; /* RW;[12] */
-		__u32 bitIsp3Dnr : 1; /* RW;[13] */
-		__u32 bitWdr : 1; /* RW;[14] */
-		__u32 bitDemosaic : 1; /* RW;[15] */
-		__u32 bitCac : 1; /* RW;[16] */
-		__u32 bitDepurle : 1; /* RW;[17] */
-		__u32 bitCcm : 1; /* RW;[18] */
-		__u32 bitGamma : 1; /* RW;[19] */
-		__u32 bitCa : 1; /* RW;[20] */
-		__u32 bitCnr : 1; /* RW;[21] */
-		__u32 bitEe : 1; /* RW;[22] */
-		__u32 bitCsc : 1; /* RW;[23] */
-		__u32 bitColorProcess : 1; /* RW;[24] */
-		__u32 bitRgbir : 1; /* RW;[25] */
-		__u32 bitRadialShading : 1; /* RW;[26] */
-		__u32 bitYnr : 1; /* RW;[27] */
+		__u32 bit_ccm : 1; /* RW;[0] */
+		__u32 bit_cnr : 1; /* RW;[1] */
+		__u32 bit_cproc : 1; /* RW;[2] */
+		__u32 bit_dg : 1; /* RW;[3] */
+		__u32 bit_demosaic : 1; /* RW;[4] */
+		__u32 bit_dpcc : 1; /* RW;[5] */
+		__u32 bit_2dnr : 1; /* RW;[6] */
+		__u32 bit_3dnr : 1; /* RW;[7] */
+		__u32 bit_ee : 1; /* RW;[8] */
+		__u32 bit_lsc : 1; /* RW;[9] */
+		__u32 bit_lut3d : 1; /* RW;[10] */
+		__u32 bit_wdr: 1; /* RW;[11] */
+		__u32 bit_ynr : 1; /* RW;[12] */
+		__u32 bit_ge : 1; /* RW;[13] */
+		__u32 bit_wb : 1; /* RW;[14] */
 	};
 } isp_module_ctrl_u;
 
@@ -171,7 +158,6 @@ typedef struct hbn_isp_awb_gain_s {
 typedef struct hbn_isp_awb_auto_attr_s {
 	__u32 speed;
 	__u32 tolerance;
-	__u32 static_wb[4]; // 归一化参数
 	__u32 rg_strength;  // r通道强度（设置白平衡偏好r通道）
 	__u32 bg_strength;  // b通道强度（设置白平衡偏好b通道）
 	hbn_isp_awb_gain_t gain;
