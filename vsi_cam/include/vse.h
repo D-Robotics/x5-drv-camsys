@@ -6,6 +6,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/spinlock.h>
+#include <linux/timekeeping.h>
 
 #include "cam_uapi.h"
 #include "job_queue.h"
@@ -60,6 +61,9 @@ struct vse_instance {
 	enum vse_src source;
 	enum cam_state state;
 	enum cam_error error;
+	ktime_t last_frame_done[VSE_OUT_CHNL_MAX];
+	ktime_t frame_interval[VSE_OUT_CHNL_MAX];
+	u32 frame_count[VSE_OUT_CHNL_MAX];
 };
 
 struct vse_device {
@@ -81,7 +85,8 @@ struct vse_device {
 	enum vse_work_mode mode;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
-	struct dentry *debugfs_file;
+	struct dentry *debugfs_log_file;
+	struct dentry *debugfs_fps_file;
 #endif
 };
 

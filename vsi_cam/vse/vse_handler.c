@@ -144,8 +144,10 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct vse_irq_ctx *ctx, bool timeout)
+static inline void frame_done(struct vse_instance *inst, bool timeout)
 {
+	struct vse_irq_ctx *ctx = &inst->ctx;
+	ktime_t now_time = ktime_get_boottime();
 	u32 i;
 
 	if (ctx->sink_buf) {
@@ -162,6 +164,11 @@ static inline void frame_done(struct vse_irq_ctx *ctx, bool timeout)
 				cam_qbuf_irq(ctx->src_ctx[i], ctx->src_buf[i], true);
 				ctx->src_buf[i] = NULL;
 			}
+			if (inst->last_frame_done[i])
+				inst->frame_interval[i] += ktime_to_ms
+						(ktime_sub(now_time, inst->last_frame_done[i]));
+			inst->last_frame_done[i] = now_time;
+			inst->frame_count[i]++;
 		}
 	}
 
@@ -314,7 +321,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		vse_write(vse, VSE_MI_IMSC1, value);
 		inst = &vse->insts[vse->next_irq_ctx];
 		spin_lock_irqsave(&inst->lock, flags);
-		frame_done(&inst->ctx, !!(mis1 & 0x5));
+		frame_done(inst, !!(mis1 & 0x5));
 		spin_unlock_irqrestore(&inst->lock, flags);
 
 		ctx = get_next_irq_ctx(vse);

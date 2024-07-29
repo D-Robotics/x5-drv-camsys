@@ -479,6 +479,9 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	cur_state = ins->state;
 	switch (state) {
 	case CAM_STATE_INITED:
+		ins->last_frame_done = 0;
+		ins->frame_interval = 0;
+		ins->frame_count = 0;
 		ins->state = CAM_STATE_INITED;
 		break;
 	case CAM_STATE_CLOSED:
@@ -1354,6 +1357,52 @@ static const struct file_operations isp_debugfs_tune_fops = {
 	.llseek = seq_lseek,
 };
 
+static ssize_t isp_debugfs_fps_read(struct file *f, char __user *buf,
+				    size_t size, loff_t *pos)
+{
+	struct isp_device *isp = f->f_inode->i_private;
+	struct isp_instance *ins;
+	char *output = NULL;
+	size_t output_size = 0;
+	size_t output_len = 0;
+	ssize_t all_bytes_read = 0;
+	ssize_t targets_read;
+	u32 i, fps;
+
+	output_size = 20 * isp->num_insts;
+	output = kmalloc(output_size, GFP_KERNEL);
+	if (!output)
+		return -ENOMEM;
+
+	for (i = 0; i < isp->num_insts; i++) {
+		ins = &isp->insts[i];
+		if (ins->frame_interval)
+			fps = 100000 * (ins->frame_count - 1) / ins->frame_interval;
+		else
+			fps = 0;
+		output_len += snprintf(output + output_len, output_size - output_len,
+				       "isp[%d] fps:%d\n", i, fps / 100);
+	}
+
+	all_bytes_read = output_len;
+	if (*pos >= all_bytes_read)
+		return 0;
+
+	targets_read = min(size, (size_t)(all_bytes_read - *pos));
+	if (copy_to_user(buf, output + *pos, targets_read))
+		return -EFAULT;
+
+	*pos += targets_read;
+	kfree(output);
+	return targets_read;
+}
+
+static const struct file_operations isp_debugfs_fps_fops = {
+	.owner  = THIS_MODULE,
+	.read  = isp_debugfs_fps_read,
+	.llseek = seq_lseek,
+};
+
 void isp_debugfs_init(struct isp_device *isp)
 {
 	if (!isp->debugfs_dir)
@@ -1368,6 +1417,10 @@ void isp_debugfs_init(struct isp_device *isp)
 		isp->debugfs_tune_file = debugfs_create_file
 				("tune", 0222, isp->debugfs_dir, isp,
 				&isp_debugfs_tune_fops);
+	if (!isp->debugfs_fps_file)
+		isp->debugfs_fps_file = debugfs_create_file
+				("fps", 0444, isp->debugfs_dir, isp,
+				&isp_debugfs_fps_fops);
 }
 
 void isp_debugfs_remo(struct isp_device *isp)
@@ -1377,6 +1430,7 @@ void isp_debugfs_remo(struct isp_device *isp)
 		isp->debugfs_dir = NULL;
 		isp->debugfs_log_file = NULL;
 		isp->debugfs_tune_file = NULL;
+		isp->debugfs_fps_file = NULL;
 	}
 }
 #endif

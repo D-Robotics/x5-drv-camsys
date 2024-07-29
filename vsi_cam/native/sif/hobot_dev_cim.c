@@ -932,7 +932,9 @@ static s32 cim_probe(struct platform_device *pdev)
 	if (cim->stl.stl_ops->stl_init != NULL)
 		cim->stl.stl_ops->stl_init((void *)cim);
 #endif
-
+#ifdef CONFIG_DEBUG_FS
+	sif_debugfs_init(&cim->sif);
+#endif
 	// cim_set_irq_thread_priority(cim);
 	dev_info(dev, "[FRT:D] %s(%d)\n", __func__, ret);
 	/*  ret = diagnose_report_startup_status((u16)ModuleDiag_cim + (u16)cim->hw_id, (u8)MODULE_STARTUP_END); */
@@ -993,6 +995,9 @@ static s32 cim_remove(struct platform_device *pdev)
 	// vio_unregister_callback_ops(VIN_MODULE, COPS_8);
 	// vio_unregister_callback_ops(VIN_MODULE, COPS_9);
 	vin_node_device_node_deinit(cim->hw_id);
+#ifdef CONFIG_DEBUG_FS
+	sif_debugfs_remo(&cim->sif);
+#endif
 	dev_info(dev, "%s\n", __func__);
 	return ret;
 }

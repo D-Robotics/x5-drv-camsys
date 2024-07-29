@@ -6,6 +6,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/refcount.h>
+#include <linux/timekeeping.h>
 
 #include "isp_uapi.h"
 #include "job_queue.h"
@@ -67,6 +68,8 @@ struct isp_instance {
 	bool hdr_en;
 	u32 rdma_buf_count;
 	u32 online_mcm;
+	ktime_t last_frame_done, frame_interval;
+	u32 frame_count;
 };
 
 struct ibuf {
@@ -122,6 +125,7 @@ struct isp_device {
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_log_file;
 	struct dentry *debugfs_tune_file;
+	struct dentry *debugfs_fps_file;
 #endif
 };
 

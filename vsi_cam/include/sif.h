@@ -6,6 +6,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+#include <linux/timekeeping.h>
 
 #include "cam_buf.h"
 #include "cam_uapi.h"
@@ -98,6 +99,8 @@ struct sif_instance {
 	u32 hsize_err_count_pre;
 	u32 vsize_err_count_pre;
 	int frame_start_cnt;
+	ktime_t last_frame_done, frame_interval;
+	u32 frame_count;
 };
 
 struct sif_device {
@@ -116,6 +119,10 @@ struct sif_device {
 	spinlock_t cfg_reg_lock; /* lock for cfg register*/
 	struct cam_ctrl_device *ctrl_dev;
 	struct sif_instance *insts;
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *debugfs_dir;
+	struct dentry *debugfs_fps_file;
+#endif
 };
 
 struct sif_frame_des {
@@ -135,7 +142,10 @@ int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post);
 int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx);
 int sif_probe(struct platform_device *pdev, struct sif_device *sif);
 int sif_remove(struct platform_device *pdev, struct sif_device *sif);
-
+#ifdef CONFIG_DEBUG_FS
+void sif_debugfs_init(struct sif_device *sif);
+void sif_debugfs_remo(struct sif_device *sif);
+#endif
 int sif_reset_ipi(struct sif_device *sif, u32 inst);
 
 void sif_reset(struct sif_device *sif);

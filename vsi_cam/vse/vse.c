@@ -369,10 +369,14 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = inst;
 	msg.channel = -1;
-	if (enable)
+	if (enable) {
+		memset(ins->last_frame_done, 0, sizeof(ins->last_frame_done));
+		memset(ins->frame_interval, 0, sizeof(ins->frame_interval));
+		memset(ins->frame_count, 0, sizeof(ins->frame_count));
 		msg.state = CAM_STATE_STARTED;
-	else
+	} else {
 		msg.state = CAM_STATE_STOPPED;
+	}
 	rc = vse_post(vse, &msg, true);
 	if (rc < 0)
 		return rc;
@@ -712,7 +716,7 @@ void vse_reset(struct vse_device *vse)
 }
 
 #ifdef CONFIG_DEBUG_FS
-static ssize_t vse_debugfs_write(struct file *f, const char __user *buf,
+static ssize_t vse_debugfs_log_write(struct file *f, const char __user *buf,
 				 size_t size, loff_t *pos)
 {
 	struct vse_device *vse = f->f_inode->i_private;
@@ -745,9 +749,60 @@ static ssize_t vse_debugfs_write(struct file *f, const char __user *buf,
 	return size;
 }
 
-static const struct file_operations vse_debugfs_fops = {
+static const struct file_operations vse_debugfs_log_fops = {
 	.owner  = THIS_MODULE,
-	.write  = vse_debugfs_write,
+	.write  = vse_debugfs_log_write,
+	.llseek = seq_lseek,
+};
+
+static ssize_t vse_debugfs_fps_read(struct file *f, char __user *buf,
+                                    size_t size, loff_t *pos)
+{
+	struct vse_device *vse = f->f_inode->i_private;
+	struct vse_instance *ins;
+	char *output = NULL;
+	size_t output_size = 0;
+	size_t output_len = 0;
+	ssize_t all_bytes_read = 0;
+	ssize_t targets_read;
+	u32 i, fps;
+
+	output_size = 10 * vse->num_insts + 20 * VSE_OUT_CHNL_MAX * vse->num_insts + vse->num_insts;
+	output = kmalloc(output_size, GFP_KERNEL);
+	if (!output)
+		return -ENOMEM;
+
+	for (i = 0; i < vse->num_insts; i++) {
+		ins = &vse->insts[i];
+		output_len += snprintf(output + output_len, output_size - output_len, "vse[%d]: ", i);
+		for (int j = 0; j < VSE_OUT_CHNL_MAX; j++) {
+			if (ins->frame_interval[j])
+				fps = 100000 * (ins->frame_count[j] - 1) / ins->frame_interval[j];
+			else
+				fps = 0;
+			output_len += snprintf(output + output_len, output_size - output_len,
+					       "chn[%d] fps:%d  ", j, fps / 100);
+		}
+		output_len += snprintf(output + output_len, output_size - output_len, "\n");
+	}
+
+	all_bytes_read = output_len;
+
+	if (*pos >= all_bytes_read)
+		return 0;
+
+	targets_read = min(size, (size_t)(all_bytes_read - *pos));
+	if (copy_to_user(buf, output + *pos, targets_read))
+		return -EFAULT;
+
+	*pos += targets_read;
+	kfree(output);
+	return targets_read;
+}
+
+static const struct file_operations vse_debugfs_fps_fops = {
+	.owner  = THIS_MODULE,
+	.read  = vse_debugfs_fps_read,
 	.llseek = seq_lseek,
 };
 
@@ -757,10 +812,15 @@ void vse_debugfs_init(struct vse_device *vse)
 		vse->debugfs_dir = debugfs_create_dir("vse", NULL);
 	if (!vse->debugfs_dir)
 		return;
-	if (!vse->debugfs_file)
-		vse->debugfs_file = debugfs_create_file
+	if (!vse->debugfs_log_file)
+		vse->debugfs_log_file = debugfs_create_file
 				("log", 0222, vse->debugfs_dir, vse,
-				&vse_debugfs_fops);
+				&vse_debugfs_log_fops);
+	if (!vse->debugfs_fps_file)
+		vse->debugfs_fps_file = debugfs_create_file
+				("fps", 0444, vse->debugfs_dir, vse,
+				&vse_debugfs_fps_fops);
+
 }
 
 void vse_debugfs_remo(struct vse_device *vse)
@@ -768,7 +828,8 @@ void vse_debugfs_remo(struct vse_device *vse)
 	if (vse->debugfs_dir) {
 		debugfs_remove_recursive(vse->debugfs_dir);
 		vse->debugfs_dir = NULL;
-		vse->debugfs_file = NULL;
+		vse->debugfs_log_file = NULL;
+		vse->debugfs_fps_file = NULL;
 	}
 }
 #endif

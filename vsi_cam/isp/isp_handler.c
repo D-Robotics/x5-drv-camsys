@@ -232,9 +232,11 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct isp_irq_ctx *ctx)
+static inline void frame_done(struct isp_instance *inst)
 {
+	struct isp_irq_ctx *ctx = &inst->ctx;
 	struct cam_list_node *node;
+	ktime_t now_time = ktime_get_boottime();
 
 	if (ctx->sink_buf) {
 		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
@@ -255,6 +257,11 @@ static inline void frame_done(struct isp_irq_ctx *ctx)
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
 	}
+	if (inst->last_frame_done)
+		inst->frame_interval += ktime_to_ms
+				(ktime_sub(now_time, inst->last_frame_done));
+	inst->last_frame_done = now_time;
+	inst->frame_count++;
 }
 
 struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
@@ -504,7 +511,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				// handle isp frame end intr
 				ins = &isp->insts[isp->cur_mi_irq_ctx];
 				if (ins->state == CAM_STATE_STARTED) {
-					frame_done(&ins->ctx);
+					frame_done(ins);
 					if (ins->online_mcm) {
 						struct ibuf *ib;
 

@@ -203,8 +203,14 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	phys_addr_t p_addr = 0;
 	phys_addr_t p_uv_addr = 0;
 	unsigned long flags;
+	ktime_t now_time = ktime_get_boottime();
 
 	ins = &sif->insts[inst];
+	if (ins->last_frame_done)
+		ins->frame_interval += ktime_to_ms
+				(ktime_sub(now_time, ins->last_frame_done));
+	ins->last_frame_done = now_time;
+	ins->frame_count++;
 	if (ins->sif_cfg.ts_ctrl.time_stamp_en) {
 		if (ins->sif_cfg.ts_ctrl.trigger_mode & IPI_VSYNC) {
 			fs_l = sif_read(sif, SIF_IPI_TS_VSYNC_LO(inst));

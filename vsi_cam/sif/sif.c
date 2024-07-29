@@ -7,6 +7,7 @@
 #include <linux/property.h>
 #include <linux/mfd/syscon.h>
 #include <linux/reset.h>
+#include <linux/debugfs.h>
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
@@ -386,13 +387,16 @@ int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post)
 		return -EINVAL;
 
 	for (i = 0; i < sif->ipi_channel_num; i++) {
+		ins = &sif->insts[inst];
 		if (enable) {
+			ins->last_frame_done = 0;
+			ins->frame_interval = 0;
+			ins->frame_count = 0;
 			state = CAM_STATE_STARTED;
 			sif_start_ipi(sif, inst);
 		} else {
 			state = CAM_STATE_STOPPED;
 		}
-		ins = &sif->insts[inst];
 		ins->size_err_cnt = 0;
 		spin_lock_irqsave(&ins->lock, flags);
 		ins->state = state;
@@ -578,6 +582,83 @@ void sif_reset(struct sif_device *sif)
 		reset_control_deassert(sif->rst);
 	}
 }
+
+#ifdef CONFIG_DEBUG_FS
+static ssize_t sif_debugfs_fps_read(struct file *f, char __user *buf,
+				    size_t size, loff_t *pos)
+{
+	struct sif_device *sif = f->f_inode->i_private;
+	struct sif_instance *ins;
+	char *output = NULL;
+	size_t output_size = 0;
+	size_t output_len = 0;
+	ssize_t all_bytes_read = 0;
+	ssize_t targets_read;
+	u32 i, fps;
+
+	output_size = 40 * sif->num_insts;
+	output = kmalloc(output_size, GFP_KERNEL);
+	if (!output)
+		return -ENOMEM;
+
+	output_len += snprintf(output + output_len, output_size - output_len,
+			       "sif[%d]: ", sif->id);
+	for (i = 0; i < sif->num_insts; i++) {
+		ins = &sif->insts[i];
+		if (ins->frame_interval)
+			fps = 100000 * (ins->frame_count - 1) / ins->frame_interval;
+		else
+			fps = 0;
+		output_len += snprintf(output + output_len, output_size - output_len,
+				       "ipi[%d] fps:%d  ", i, fps / 100);
+	}
+	output_len += snprintf(output + output_len, output_size - output_len, "\n");
+
+	all_bytes_read = output_len;
+
+	if (*pos >= all_bytes_read)
+		return 0;
+
+	targets_read = min(size, (size_t)(all_bytes_read - *pos));
+	if (copy_to_user(buf, output + *pos, targets_read))
+		return -EFAULT;
+
+	*pos += targets_read;
+	kfree(output);
+	return targets_read;
+}
+
+static const struct file_operations sif_debugfs_fps_fops = {
+	.owner  = THIS_MODULE,
+	.read  = sif_debugfs_fps_read,
+	.llseek = seq_lseek,
+};
+
+void sif_debugfs_init(struct sif_device *sif)
+{
+	char sub_dir_name[10];
+
+	snprintf(sub_dir_name, sizeof(sub_dir_name), "sif%d", sif->id);
+
+	if (!sif->debugfs_dir)
+		sif->debugfs_dir = debugfs_create_dir(sub_dir_name, NULL);
+	if (!sif->debugfs_dir)
+		return;
+	if (!sif->debugfs_fps_file)
+		sif->debugfs_fps_file = debugfs_create_file
+				("fps", 0444, sif->debugfs_dir, sif,
+				&sif_debugfs_fps_fops);
+}
+
+void sif_debugfs_remo(struct sif_device *sif)
+{
+	if (sif->debugfs_dir) {
+		debugfs_remove_recursive(sif->debugfs_dir);
+		sif->debugfs_dir = NULL;
+		sif->debugfs_fps_file = NULL;
+	}
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 int sif_system_suspend(struct device *dev)
