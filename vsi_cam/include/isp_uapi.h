@@ -12,9 +12,10 @@
 
 #define ISP_MCM_CLOCK (CAM_CLOCK_EXT_BASE + 1)
 
-#define ISP_MSG_UNIT_TEST   (0x1 << 0)
-#define ISP_MSG_GET_FUNC    (0x2 << 0)
-#define ISP_MSG_GET_VI_INFO (0x3 << 0)
+#define ISP_MSG_UNIT_TEST      (0x1 << 0)
+#define ISP_MSG_GET_FUNC       (0x2 << 0)
+#define ISP_MSG_GET_VI_INFO    (0x3 << 0)
+#define ISP_MSG_GET_FRAME_INFO (0x4 << 0)
 
 #define ISP_MSG_IRQ_MIS    (0x1 << 8)
 #define ISP_MSG_MCM_SCH    (0x2 << 8)
@@ -90,6 +91,11 @@ struct isp_vi_info {
 	__u8 hdr_en;
 };
 
+struct isp_frame_info {
+	__u32 frame_id;
+	__u64 time_stamp;
+};
+
 struct isp_msg {
 	__u32 id;
 	__u32 inst;
@@ -111,6 +117,7 @@ struct isp_msg {
 		struct cam_clk clk;
 		struct cam_log log;
 		struct isp_vi_info vinfo;
+		struct isp_frame_info frame_info;
 		__u32 tune_enabled;
 	};
 };

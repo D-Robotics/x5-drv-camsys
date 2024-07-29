@@ -162,6 +162,21 @@ static inline void isp_post_frame_end(struct isp_device *isp, u32 inst)
 	}
 }
 
+static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_instance *ins;
+
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+
+	memset(&msg->frame_info, 0, sizeof(msg->frame_info));
+	isp_update_frame_info(&msg->frame_info, ins->ctx.src_ctx);
+
+	return 0;
+}
+
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -208,6 +223,9 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	case ISP_MSG_GET_VI_INFO:
 		rc = handle_get_vi_info(isp, m);
 		break;
+	case ISP_MSG_GET_FRAME_INFO:
+		rc = handle_get_frame_info(isp, m);
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -226,10 +244,13 @@ static inline void frame_done(struct isp_irq_ctx *ctx)
 	node = list_first_entry_or_null(ctx->src_buf_list3,
 					struct cam_list_node, entry);
 	if (node) {
-		if (cam_get_frame_status(ctx->src_ctx))
+		if (cam_get_frame_status(ctx->src_ctx)) {
 			cam_drop(ctx->src_ctx);
-		else
+		} else {
+			if (ctx->is_sink_online_mode)
+				sif_get_frame_des(ctx->src_ctx);
 			cam_qbuf_irq(ctx->src_ctx, node->data, true);
+		}
 		cam_set_frame_status(ctx->src_ctx, NO_ERR);
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
@@ -637,8 +658,6 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 		isp_mis &= ~(BIT(26) | BIT(25) | BIT(24) | BIT(23)); /*sensor dataloss*/
 		ins = &isp->insts[isp->next_mi_irq_ctx];
 		if (isp_mis & BIT(6)) {
-			if (ins->ctx.is_sink_online_mode)
-				sif_get_frame_des(ins->ctx.src_ctx);
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FS);
 			isp_mis &= ~BIT(6);
 		}

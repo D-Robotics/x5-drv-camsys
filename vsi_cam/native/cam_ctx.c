@@ -4,6 +4,7 @@
 #include "cam_buf.h"
 #include "cam_ops.h"
 #include "vio_node_api.h"
+#include "isp.h"
 #include "sif.h"
 
 #include "cam_ctx.h"
@@ -100,6 +101,18 @@ void sif_get_frame_des(struct cam_ctx *ctx)
 
 	if (subdev)
 		vio_get_frame_id(subdev->vnode);
+}
+
+void isp_update_frame_info(void *data,struct cam_ctx *ctx)
+{
+	struct vio_subdev *subdev         = (struct vio_subdev *)ctx;
+	struct isp_frame_info *frame_info = (struct isp_frame_info *)data;
+
+	if (unlikely(!subdev || !frame_info))
+		return;
+
+	frame_info->frame_id = subdev->vnode->frameid.frame_id;
+	frame_info->time_stamp = subdev->vnode->frameid.timestamps;
 }
 
 void cam_set_stat_info(struct cam_ctx *ctx, u32 type)

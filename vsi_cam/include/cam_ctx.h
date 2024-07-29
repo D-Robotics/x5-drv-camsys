@@ -28,6 +28,8 @@ void sif_set_frame_des(struct cam_ctx *ctx, void *data);
 
 void sif_get_frame_des(struct cam_ctx *ctx);
 
+void isp_update_frame_info(void *data,struct cam_ctx *ctx);
+
 void cam_set_stat_info(struct cam_ctx *ctx, u32 type);
 
 bool cam_osd_update(struct cam_ctx *ctx);
