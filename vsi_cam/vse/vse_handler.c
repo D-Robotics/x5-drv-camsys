@@ -288,7 +288,8 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 	struct vse_instance *inst;
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
-	u32 mis, mis1, i, vse_ctrl, pre_ctrl, value;
+	u32 mis, mis1, i, vse_ctrl, pre_ctrl, value, base;
+	u8 chnl;
 
 	mis = vse_read(vse, VSE_MI_MIS);
 	if (mis) {
@@ -335,6 +336,12 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 			if (vse_ctrl != pre_ctrl) {
 				vse_write(vse, VSE_CTRL, vse_ctrl);
 				pr_debug("vse_ctrl %x->%x\n", pre_ctrl, vse_ctrl);
+			}
+			for (chnl = 0; chnl < VSE_OUT_CHNL_MAX; chnl++) {
+				if (chnl == 4) /* exclude path4 in all scenarios */
+					continue;
+				base = VSE_OSDn_BASE(chnl);
+				vse_write(vse, VSE_OSDn_CTRL(base), 0x00000c7f);
 			}
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);

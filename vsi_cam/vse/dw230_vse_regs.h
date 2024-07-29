@@ -33,7 +33,9 @@
 #define VSE_MIn_CR_OFFS(__base)         ((__base) + 0x44)
 
 /* OSD buffer related */
-#define VSE_OSDn_BASE(n)                ((n) * 0x8c + 0x1400)
+#define VSE_OSDn_BASE(n)                (n == 0 ? 0x1400: (n == 1 ? 0x148c:\
+                                        (n == 2 ? 0x1518: (n == 3 ? 0x15a4:\
+                                        (n == 4 ? 0x1630:0x16bc)))))
 #define VSE_OSDn_CTRL(__base)           ((__base) + 0x00)
 #define VSE_OSDn_ROI0_ADDR(__base)      ((__base) + 0x10)
 #define VSE_OSDn_ROI1_ADDR(__base)      ((__base) + 0x20)
