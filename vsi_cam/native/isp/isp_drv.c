@@ -366,6 +366,18 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 		dev->isp_dev.cur_mi_irq_ctx = 0;
 		dev->isp_dev.next_mi_irq_ctx = 0;
 	}
+
+	if (inst->attr.tile_mode) {
+		if(inst->attr.input_mode == ISP_STRM_MODE) {
+			pr_err("%s tile mode not supported in stream mode!\n", __func__);
+			return -EINVAL;
+		}
+		dev->isp_dev.insts[vctx->ctx_id].tile_en = 1;
+		dev->isp_dev.insts[vctx->ctx_id].tile_count = 0;
+	} else {
+		dev->isp_dev.insts[vctx->ctx_id].tile_en = 0;
+	}
+
 	memset(&inst->ctx, 0, sizeof(inst->ctx));
 
 	if (vctx->id == VNODE_ID_SRC) {
@@ -611,7 +623,7 @@ static s32 isp_ichn_attr_check(struct vio_video_ctx *vctx)
 
 	vpf_param_range_check(isp_ichn_attr->tpg_en, 0, CAM_TRUE);
 	vpf_param_range_check(isp_ichn_attr->width, 0, 5472);
-	vpf_param_range_check(isp_ichn_attr->height, 0, 3076);
+	vpf_param_range_check(isp_ichn_attr->height, 0, 3496);
 	vpf_param_range_check(isp_ichn_attr->fmt, FRM_FMT_NULL, FRM_FMT_UYVY);
 	vpf_param_range_check(isp_ichn_attr->bit_width, 8, 12);
 

@@ -120,6 +120,7 @@ static s32 handle_get_func(struct isp_device *isp, struct isp_msg *msg)
 
 	memset(&msg->func, 0, sizeof(msg->func));
 	msg->func.work_mode = isp->mode;
+	msg->func.tile_en = ins->tile_en;
 	if (msg->func.work_mode == ISP_MCM_MODE) {
 		msg->func.mcm.online = ins->online_mcm ? 1 : 0;
 		msg->func.mcm.stream_idx = ins->stream_idx;
@@ -504,7 +505,8 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 		if (mi_mis.miv2_mis & 0x1) {
 			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
 			if (rc) {
-				pr_err("fail to get currect isp instance id!\n");
+				if (cur_mi_irq_ctx == INVALID_MCM_SCH_INST)
+					pr_err("fail to get currect isp instance id!\n");
 			} else {
 				pr_debug("isp:%d, mi frame done!\n", cur_mi_irq_ctx);
 				isp->cur_mi_irq_ctx = cur_mi_irq_ctx;
@@ -578,8 +580,10 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			{
 				if (isp->mode != ISP_STRM_MODE) {
 					sch.id = isp->next_mi_irq_ctx;
-					sch.mp_buf.addr = get_phys_addr(node->data, 0);
-					sch.mp_buf.size = 0;
+					sch.mp_buf.mem.addr = get_phys_addr(node->data, 0);
+					sch.mp_buf.mem.size = 0;
+					memcpy(&sch.mp_buf.fmt, &ins->fmt.ofmt, sizeof(sch.mp_buf.fmt));
+					sch.mp_buf.valid = 1;
 				} else {
 					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
 					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
@@ -589,8 +593,10 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			} else if (ctx->is_src_online_mode) {
 				if (isp->mode != ISP_STRM_MODE) {
 					sch.id = isp->next_mi_irq_ctx;
-					sch.mp_buf.addr = 0;
-					sch.mp_buf.size = 0;
+					sch.mp_buf.mem.addr = 0;
+					sch.mp_buf.mem.size = 0;
+					memcpy(&sch.mp_buf.fmt, &ins->fmt.ofmt, sizeof(sch.mp_buf.fmt));
+					sch.mp_buf.valid = 1;
 				} else {
 					isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
 					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
@@ -620,8 +626,13 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 						(&isp->ibm[isp->next_mi_irq_ctx].list2,
 						struct ibuf, entry);
 				if (mcm_ib) {
-					sch.rdma_buf.addr = mcm_ib->buf.addr;
-					sch.rdma_buf.size = mcm_ib->buf.size;
+					sch.rdma_buf.mem.addr = mcm_ib->buf.addr;
+					sch.rdma_buf.mem.size = mcm_ib->buf.size;
+					memcpy(&sch.rdma_buf.fmt, &ins->fmt.ifmt, sizeof(sch.rdma_buf.fmt));
+					sch.rdma_buf.valid = 1;
+					sch.hdr_en = ins->hdr_en ? 1 : 0;
+					sch.tile_en = ins->tile_en ? 1 : 0;
+					sch.online_mcm = ins->online_mcm;
 					list_del(&mcm_ib->entry);
 					list_add_tail(&mcm_ib->entry,
 							&isp->ibm[isp->next_mi_irq_ctx].list3);

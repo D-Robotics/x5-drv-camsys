@@ -867,16 +867,22 @@ int isp_set_schedule_offline(struct isp_device *isp, u32 inst, bool isp_irq_call
 	if (ctx->sink_buf) {
 		sch.id = inst;
 		if (list_node) {
-			sch.mp_buf.addr = get_phys_addr(list_node->data, 0);
+			sch.mp_buf.mem.addr = get_phys_addr(list_node->data, 0);
 		} else if (ctx->is_src_online_mode) {
-			sch.mp_buf.addr = 0;
+			sch.mp_buf.mem.addr = 0;
 		} else {
 			rc = -1;
 			goto _exit;
 		}
-		sch.mp_buf.size = 0;
-		sch.rdma_buf.addr = get_phys_addr(ctx->sink_buf, 0);
-		sch.rdma_buf.size = 0;
+		sch.mp_buf.mem.size = 0;
+		memcpy(&sch.mp_buf.fmt, &ins->fmt.ofmt, sizeof(sch.mp_buf.fmt));
+		sch.mp_buf.valid = 1;
+		sch.rdma_buf.mem.addr = get_phys_addr(ctx->sink_buf, 0);
+		sch.rdma_buf.mem.size = 0;
+		memcpy(&sch.rdma_buf.fmt, &ins->fmt.ifmt, sizeof(sch.rdma_buf.fmt));
+		sch.rdma_buf.valid = 1;
+		sch.hdr_en = ins->hdr_en ? 1 : 0;
+		sch.online_mcm = ins->online_mcm;
 		sch_node = list_first_entry_or_null(&isp->mcm_sch_idle_list, struct mcm_sch_node,
 						    entry);
 		if (!sch_node) {
@@ -914,6 +920,7 @@ _exit:
 int isp_get_schedule(struct isp_device *isp, u32 *inst)
 {
 	unsigned long flags;
+	struct isp_instance *ins;
 	struct mcm_sch_node *node = NULL;
 	int rc = 0;
 
@@ -921,9 +928,9 @@ int isp_get_schedule(struct isp_device *isp, u32 *inst)
 		return -EINVAL;
 
 	spin_lock_irqsave(&isp->mcm_sch_lock, flags);
-	isp->rdma_busy = false;
-	isp->error = 1;
 	if (isp->mode == ISP_STRM_MODE) {
+		isp->rdma_busy = false;
+		isp->error = 1;
 		*inst = 0;
 		goto _exit;
 	}
@@ -934,6 +941,20 @@ int isp_get_schedule(struct isp_device *isp, u32 *inst)
 		goto _exit;
 	}
 
+	ins = &isp->insts[node->inst];
+	if (ins->tile_en) {
+		ins->tile_count++;
+		if (ins->tile_count < TILE_COUNT) {
+			*inst = node->inst;
+			rc = -1;
+			goto _exit;
+		} else {
+			ins->tile_count = 0;
+		}
+	}
+
+	isp->rdma_busy = false;
+	isp->error = 1;
 	*inst = node->inst;
 	list_del(&node->entry);
 	list_add_tail(&node->entry, &isp->mcm_sch_idle_list);

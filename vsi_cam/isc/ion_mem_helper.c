@@ -133,5 +133,17 @@ int mem_mmap(struct device *dev, struct list_head *list,
 }
 EXPORT_SYMBOL(mem_mmap);
 
+int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf)
+{
+	return 0;
+}
+EXPORT_SYMBOL(mem_cache_flush);
+
+int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf)
+{
+	return 0;
+}
+EXPORT_SYMBOL(mem_cache_invalid);
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VeriSilicon Camera SW Team");

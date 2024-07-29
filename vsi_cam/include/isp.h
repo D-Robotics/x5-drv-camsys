@@ -18,6 +18,7 @@
 #define SRC_BUF_NUM (16)
 #define MCM_BUF_NUM (6)
 #define HDR_BUF_NUM (2)
+#define TILE_COUNT (2)
 
 #define ISP_FMT_MAX (3)
 #define ISP_RES_MAX (3)
@@ -66,6 +67,8 @@ struct isp_instance {
 	enum cam_error error;
 	int stream_idx;
 	bool hdr_en;
+	bool tile_en;
+	u32 tile_count;
 	u32 rdma_buf_count;
 	u32 online_mcm;
 	ktime_t last_frame_done, frame_interval;

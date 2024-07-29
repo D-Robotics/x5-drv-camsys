@@ -72,6 +72,7 @@ enum isp_work_mode {
 
 struct isp_func {
 	__u32 work_mode;
+	__u8 tile_en;
 	union {
 		struct {
 			__u16 online;
@@ -80,10 +81,19 @@ struct isp_func {
 	};
 };
 
+struct isp_buf {
+	__u32 valid;
+	struct cam_format fmt;
+	struct mem_buf mem;
+};
+
 struct isp_mcm_sch {
 	__u32 id;
-	struct mem_buf rdma_buf;
-	struct mem_buf mp_buf;
+	__u32 hdr_en;
+	__u32 tile_en;
+	__u32 online_mcm;
+	struct isp_buf rdma_buf;
+	struct isp_buf mp_buf;
 };
 
 struct isp_vi_info {
