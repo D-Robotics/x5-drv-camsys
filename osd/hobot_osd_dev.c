@@ -179,38 +179,6 @@ static void osd_hw_set_roi_addr_config(struct osd_subdev *subdev)
 	spin_unlock(&subdev->osd_hw_cfg->osd_cfg_slock);
 }
 
-// static void osd_process_set_pym_addr(struct osd_process_info *proc_info,
-//     struct mp_vio_frame *frame, struct pym_subdev *pym_subdev)
-// {
-//     uint32_t buf_layer;
-//     struct special_buffer *pym_spec;
-
-//     buf_layer = proc_info->buf_layer;
-//     pym_spec = &frame->common_frame.frameinfo.spec;
-//     if (buf_layer < MAX_PYM_DS_COUNT) {
-//         proc_info->image_width =
-//             ALIGN(pym_subdev->pym_cfg.stds_box[buf_layer].tgt_width, 16);
-//         proc_info->image_height = pym_subdev->pym_cfg.stds_box[buf_layer].tgt_height;
-
-//         if ((buf_layer == 0) &&
-//             (test_bit(PYM_DMA_INPUT, &pym_subdev->pym_dev->state))) {
-//             proc_info->tar_y_addr = __va(frame->common_frame.frameinfo.addr[0]);
-//             proc_info->tar_uv_addr = __va(frame->common_frame.frameinfo.addr[1]);
-//         } else {
-//             proc_info->tar_y_addr = __va(pym_spec->ds_y_addr[buf_layer]);
-//             proc_info->tar_uv_addr = __va(pym_spec->ds_uv_addr[buf_layer]);
-//         }
-//     } else {
-//         buf_layer = buf_layer - MAX_PYM_DS_COUNT;
-//         proc_info->image_width =
-//             ALIGN(pym_subdev->pym_cfg.stus_box[buf_layer].tgt_width, 16);
-//         proc_info->image_height = pym_subdev->pym_cfg.stus_box[buf_layer].tgt_height;
-
-//         proc_info->tar_y_addr = __va(pym_spec->us_y_addr[buf_layer]);
-//         proc_info->tar_uv_addr = __va(pym_spec->us_uv_addr[buf_layer]);
-//     }
-// }
-
 static void osd_hw_set_color_map(struct osd_subdev *subdev)
 {
 	struct vse_osd_cfg  *osd_hw_cfg;
@@ -720,7 +688,7 @@ static int32_t hobot_osd_remove(struct platform_device *pdev)
 
 	kfree(osd);
 
-	pr_err("%s\n", __func__);
+	osd_info("done\n");
 
 	return ret;
 }

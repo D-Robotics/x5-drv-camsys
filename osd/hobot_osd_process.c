@@ -919,8 +919,8 @@ void osd_process_sta_workfunc(struct osd_process_info *proc_info)
 {
 	uint8_t *y_addr, *y_addr_temp;
 	uint32_t h, w;
-	osal_time_t time_now = { 0 };
-	osal_time_t time_next = { 0 };
+	osal_time_t time_now = {0};
+	osal_time_t time_next = {0};
 	uint64_t time_us;
 	uint32_t crop_width, crop_height;
 
@@ -929,8 +929,7 @@ void osd_process_sta_workfunc(struct osd_process_info *proc_info)
 		return;
 	}
 	if (proc_info->tar_y_addr == NULL) {
-		pr_err("osd process type:%d tar_addr y:%p error\n",
-			proc_info->proc_type, proc_info->tar_y_addr);
+		osd_err("process type:%d tar_addr y null error\n", proc_info->proc_type);
 		return;
 	}
 
@@ -976,7 +975,7 @@ void osd_process_sta_workfunc(struct osd_process_info *proc_info)
 	time_us = (((time_next.tv_sec * 1000 * 1000) + time_next.tv_nsec / 1000) -
 		((time_now.tv_sec * 1000 * 1000) + time_now.tv_nsec / 1000));
 
-	pr_debug("osd sta process, x:%d y:%d w:%d h:%d y_addr:%p "
+	osd_debug("sta process, x:%d y:%d w:%d h:%d y_addr:%p "
 		"sta_level: %d %d %d bin_value: %d %d %d %d, cost %lldus\n",
 		proc_info->start_x, proc_info->start_y, proc_info->width,
 		proc_info->height, y_addr,

@@ -1212,15 +1212,14 @@ static int32_t osd_set_bind_attr(struct osd_video_ctx *osd_ctx, unsigned long ar
 
 static int32_t osd_set_sta(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
-	int32_t ret = 0;
-	int32_t i = 0;
+	int32_t ret, i;
 	struct osd_dev *osd_dev;
 	struct osd_sta_info sta_info;
 	struct osd_subdev *subdev;
 
 	ret = copy_from_user((void *)&sta_info, (void __user *)arg, sizeof(struct osd_sta_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed (ret=%d)\n", __func__, ret);
+		osd_err("copy_from_user failed\n");
 		return -EFAULT;
 	}
 
@@ -1241,8 +1240,7 @@ static int32_t osd_set_sta(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	memcpy(subdev->osd_sta.sta_box, sta_info.sta_box, MAX_STA_NUM * sizeof(struct osd_sta_box));
 	subdev->osd_sta.sta_state = OSD_STA_REQUEST;
 
-	// todo: ensure how to distinguish sw/hw process
-	if (subdev->chn_id <= OSD_VSE_US) {
+	if (sta_info.chn_id != OSD_VSE_DS4) {
 		osd_hw_set_sta_config(subdev);
 		subdev->osd_sta.sta_state = OSD_STA_PROCESS;
 	} else {
@@ -1250,7 +1248,7 @@ static int32_t osd_set_sta(struct osd_video_ctx *osd_ctx, unsigned long arg)
 	}
 	mutex_unlock(&subdev->sta_mutex);
 
-	pr_info("[S%d][C%d] %s done\n", sta_info.chn_id, sta_info.ctx_id, __func__);
+	osd_debug("[CHN%d][CTX%d] done.\n", sta_info.chn_id, sta_info.ctx_id);
 
 	return ret;
 }
@@ -1280,35 +1278,18 @@ static int32_t osd_set_sta_level(struct osd_video_ctx *osd_ctx, unsigned long ar
 	return ret;
 }
 
-// todo: get sta bin from vse hw
-static int32_t osd_hw_get_sta_bin(struct osd_subdev *subdev)
-{
-//     struct ipu_subdev *ipu_subdev;
-
-//     if ((subdev->chn_id >= OSD_IPU_DS2) || (subdev->osd_hw_cfg == NULL)) {
-//         return -EINVAL;
-//     }
-
-//     ipu_subdev = container_of(subdev->osd_hw_cfg, struct ipu_subdev, osd_cfg);
-
-//     return osd_get_sta_bin(ipu_subdev,
-//         (uint16_t (*)[MAX_STA_BIN_NUM])subdev->osd_sta.sta_value);
-	return 0;
-}
-
-
 static int32_t osd_get_sta_bin_value(struct osd_video_ctx *osd_ctx, unsigned long arg)
 {
-	int32_t ret = 0;
+	int32_t ret, i;
 	struct osd_dev *osd_dev;
 	struct osd_sta_bin_info sta_bin_info;
 	struct osd_subdev *subdev;
 	uint32_t enable_index;
-	int32_t i = 0;
+	struct vse_nat_instance *vse_ctx = NULL;
 
 	ret = copy_from_user((void *)&sta_bin_info, (void __user *)arg, sizeof(struct osd_sta_bin_info));
 	if (ret) {
-		pr_err("%s: copy_from_user failed\n", __func__);
+		osd_err("copy_from_user failed\n");
 		return ret;
 	}
 
@@ -1317,20 +1298,36 @@ static int32_t osd_get_sta_bin_value(struct osd_video_ctx *osd_ctx, unsigned lon
 	enable_index = subdev->osd_sta.enable_index;
 
 	if (subdev->osd_sta.sta_state == OSD_STA_NULL) {
-		pr_err("[S%d][C%d] need set sta first, now state:%d\n",
+		osd_err("[CHN%d][CTX%d] need set sta first, now state:%d\n",
 			sta_bin_info.chn_id, sta_bin_info.ctx_id, subdev->osd_sta.sta_state);
 		return -EFAULT;
 	}
 	if (enable_index == MAX_STA_NUM) {
-		pr_warn("[S%d][C%d] no enable sta\n", sta_bin_info.chn_id, sta_bin_info.ctx_id);
+		osd_warn("[CHN%d][CTX%d] no enable sta\n", sta_bin_info.chn_id, sta_bin_info.ctx_id);
 		goto exit_sta_null;
 	}
 
+	if (subdev->osd_hw_cfg)
+		vse_ctx = container_of(subdev->osd_hw_cfg, struct vse_nat_instance, osd_hw_cfg);
+
 	for (i = 0; i <= OSD_STA_WAIT_CNT; i++) {
-		// todo: ensure how to distinguish sw/hw process
-		if (subdev->chn_id <=  OSD_VSE_US) {
-			// it means hw process sta
-			osd_hw_get_sta_bin(subdev);
+		if (sta_bin_info.chn_id != OSD_VSE_DS4) {
+			if (subdev->osd_info && subdev->osd_info->get_sta_val) {
+				ret = subdev->osd_info->get_sta_val(vse_ctx, sta_bin_info.chn_id, subdev->osd_sta.sta_value);
+				if (ret == -EBUSY) {
+					osd_debug("sta has not been updated\n");
+					msleep(10);
+					continue;
+				}else if (ret < 0) {
+					osd_err("get sta fail!\n");
+					goto exit_sta_null;
+				}
+				osd_debug("get bin value done\n");
+				break;
+			} else {
+				osd_err("get sta null!\n");
+				goto exit_sta_null;
+			}
 		} else {
 			kthread_flush_work(&subdev->work);
 		}
@@ -1343,7 +1340,7 @@ static int32_t osd_get_sta_bin_value(struct osd_video_ctx *osd_ctx, unsigned lon
 		msleep(10);
 	}
 	if (i == OSD_STA_WAIT_CNT) {
-		pr_err("[S%d][C%d] timeout sta bin was null, now enable_index:%d\n",
+		osd_err("[CHN%d][CTX%d] timeout sta bin was null, now enable_index: %d\n",
 			sta_bin_info.chn_id, sta_bin_info.ctx_id, enable_index);
 		ret = -ETIMEDOUT;
 		goto exit_sta_null;
@@ -1361,11 +1358,11 @@ static int32_t osd_get_sta_bin_value(struct osd_video_ctx *osd_ctx, unsigned lon
 
 	ret = copy_to_user((void __user *)arg, (void *)&sta_bin_info, sizeof(struct osd_sta_bin_info));
 	if (ret) {
-		pr_err("%s: copy_to_user failed\n", __func__);
+		osd_err("copy_to_user failed\n");
 		return ret;
 	}
 
-	pr_info("[S%d][C%d] %s done\n", sta_bin_info.chn_id, sta_bin_info.ctx_id, __func__);
+	osd_debug("[CHN%d][CTX%d] done\n", sta_bin_info.chn_id, sta_bin_info.ctx_id);
 
 	return ret;
 
@@ -1945,16 +1942,15 @@ int32_t hb_osd_open(struct inode *inode, struct file *file)
 
 	if (atomic_inc_return(&osd_dev->open_cnt) == 1) {
 		ret = osd_subdev_init(osd_dev);
-		if (ret < 0) {
+		if (ret < 0)
 			goto exit_free;
-		}
+
 		ret = osd_start_worker(osd_dev);
-		if (ret < 0) {
+		if (ret < 0)
 			goto exit_free;
-		}
 	}
 
-	pr_info("osd open node, open count:%d\n", atomic_read(&osd_dev->open_cnt));
+	osd_debug("open done, open count: %d\n", atomic_read(&osd_dev->open_cnt));
 
 	return ret;
 exit_free:
@@ -2018,7 +2014,7 @@ int32_t hb_osd_close(struct inode *inode, struct file *file)
 		osd_ctx = NULL;
 	}
 
-	pr_info("osd close node, open count:%d\n", atomic_read(&osd_dev->open_cnt));
+	osd_debug("close done, open count: %d\n", atomic_read(&osd_dev->open_cnt));
 exit:
 	return ret;
 }

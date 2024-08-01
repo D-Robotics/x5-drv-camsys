@@ -70,7 +70,7 @@ struct osd_box {
 	u16 height;
 };
 
-//for osd draw, Y info sta
+//for osd Y info sta
 struct osd_sta_box {
 	u8 sta_en;
 	u16 start_x;
@@ -90,7 +90,6 @@ struct osd_alpha_map {
 };
 
 // vse hw osd cfg
-// todo: fix to vse hw cfg
 struct vse_osd_cfg {
 	bool osd_box_update;
 	struct osd_box osd_box[MAX_OSD_NUM];
@@ -148,6 +147,7 @@ struct vio_osd_info {
 	uint32_t ctx_id;
 	atomic_t frame_count;
 	void (*return_frame)(struct vio_osd_info *osd_info, struct vio_frame *frame);
+	int (*get_sta_val)(void *nat_inst, uint32_t chn_id, volatile uint16_t hist_num[8][4]);
 };
 
 struct osd_interface_ops {
