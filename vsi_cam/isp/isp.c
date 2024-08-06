@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
+#include <linux/of_reserved_mem.h>
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
@@ -1340,6 +1341,9 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 		if (rc < 0)
 			return rc;
 	}
+
+	if (of_reserved_mem_device_init_by_idx(dev, dev->of_node, 0))
+		dev_warn(dev, "no reserved DMA memory for ISP\n");
 
 	dev_dbg(dev, "VS ISP driver (base) probed done\n");
 	return 0;
