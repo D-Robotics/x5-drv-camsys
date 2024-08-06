@@ -105,6 +105,8 @@ typedef struct isp_exposure_manual_attr_s {
 	__u32 ispgain;
 	__u32 ae_exp;
 	__u32 cur_lux; // 环境照度
+	__u32 frame_id;
+	__u64 timestamps;
 } hbn_isp_exposure_manual_attr_t;
 
 typedef struct hbn_isp_exposure_attr_s {
