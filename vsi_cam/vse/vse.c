@@ -612,7 +612,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		{ "core", NULL },
 		{ "axi", NULL },
 		{ "ups", NULL },
-		{ "gdc_axi", NULL },
+		{ "gdc_core", NULL },
 		{ "gdc_hclk", NULL },
 		{},
 	};
@@ -646,7 +646,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->core = vse_dt.clks[0].clk;
 	vse->axi = vse_dt.clks[1].clk;
 	vse->ups = vse_dt.clks[2].clk;
-	vse->gdc_axi = vse_dt.clks[3].clk;
+	vse->gdc_core = vse_dt.clks[3].clk;
 	vse->gdc_hclk = vse_dt.clks[4].clk;
 	vse->rst = vse_dt.rsts[0].rst;
 	spin_lock_init(&vse->isc_lock);
@@ -851,16 +851,14 @@ int vse_runtime_suspend(struct device *dev)
 {
 	struct vse_device *vse = dev_get_drvdata(dev);
 
-	if (vse->axi)
-		clk_disable_unprepare(vse->axi);
-	if (vse->gdc_axi)
-		clk_disable_unprepare(vse->gdc_axi);
 	if (vse->gdc_hclk)
 		clk_disable_unprepare(vse->gdc_hclk);
 	if (vse->core)
 		clk_disable_unprepare(vse->core);
 	if (vse->ups)
 		clk_disable_unprepare(vse->ups);
+	if (vse->gdc_core)
+		clk_disable_unprepare(vse->gdc_core);
 	return 0;
 }
 
@@ -874,16 +872,6 @@ int vse_runtime_resume(struct device *dev)
 		if (rc)
 			return rc;
 	}
-	if (vse->gdc_axi) {
-		rc = clk_prepare_enable(vse->gdc_axi);
-		if (rc)
-			goto _gdc_axi_err;
-	}
-	if (vse->axi) {
-		rc = clk_prepare_enable(vse->axi);
-		if (rc)
-			goto _axi_err;
-	}
 	if (vse->core) {
 		rc = clk_prepare_enable(vse->core);
 		if (rc)
@@ -894,17 +882,19 @@ int vse_runtime_resume(struct device *dev)
 		if (rc)
 			goto _ups_err;
 	}
+	if (vse->gdc_core) {
+		rc = clk_prepare_enable(vse->gdc_core);
+		if (rc)
+			goto _gdc_core_err;
+	}
 	return 0;
+_gdc_core_err:
+	if (vse->ups)
+		clk_disable_unprepare(vse->ups);
 _ups_err:
 	if (vse->core)
 		clk_disable_unprepare(vse->core);
 _core_err:
-	if (vse->axi)
-		clk_disable_unprepare(vse->axi);
-_axi_err:
-	if (vse->gdc_axi)
-		clk_disable_unprepare(vse->gdc_axi);
-_gdc_axi_err:
 	if (vse->gdc_hclk)
 		clk_disable_unprepare(vse->gdc_hclk);
 	return rc;

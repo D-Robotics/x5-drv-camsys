@@ -78,8 +78,8 @@ s32 gdc_subdev_open(struct vio_video_ctx *vctx)
 		// vio_set_clk_rate("vse_axi", 600000000);
 		// vio_set_clk_rate("gdc_hclk", 199875000);
 		vio_clk_enable("gdc_core");
-		vio_clk_enable("gdc_axi");
-		vio_clk_enable("vse_axi");
+		vio_clk_enable("vse_core");
+		vio_clk_enable("vse_ups");
 		vio_clk_enable("gdc_hclk");
 #if defined CONFIG_HOBOT_J5
 		gdc_set_irq_mask(gdc->base_reg, 1);
@@ -118,8 +118,8 @@ static void gdc_device_close(struct vio_video_ctx *vctx, u32 rst_en)
 			vio_reset_module((u32)GDC_RST, SOFT_RST_ALL);
 		}
 		vio_clk_disable("gdc_core");
-		vio_clk_disable("gdc_axi");
-		vio_clk_disable("vse_axi");
+		vio_clk_disable("vse_core");
+		vio_clk_disable("vse_ups");
 		vio_clk_disable("gdc_hclk");
 	}
 }

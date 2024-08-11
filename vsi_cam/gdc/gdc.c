@@ -221,6 +221,8 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 		{ "core", NULL },
 		{ "axi", NULL },
 		{ "hclk", NULL },
+		{ "vse_core", NULL },
+		{ "vse_ups", NULL },
 		{},
 	};
 	struct rst_res gdc_rsts[] = {
@@ -253,6 +255,8 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	gdc->core = gdc_dt.clks[0].clk;
 	gdc->axi = gdc_dt.clks[1].clk;
 	gdc->hclk = gdc_dt.clks[2].clk;
+	gdc->vse_core = gdc_dt.clks[3].clk;
+	gdc->vse_ups = gdc_dt.clks[4].clk;
 	gdc->rst = gdc_dt.rsts[0].rst;
 	spin_lock_init(&gdc->isc_lock);
 
@@ -322,8 +326,10 @@ int gdc_runtime_suspend(struct device *dev)
 
 	if (gdc->core)
 		clk_disable_unprepare(gdc->core);
-	if (gdc->axi)
-		clk_disable_unprepare(gdc->axi);
+	if (gdc->vse_core)
+		clk_disable_unprepare(gdc->vse_core);
+	if (gdc->vse_ups)
+		clk_disable_unprepare(gdc->vse_ups);
 	if (gdc->hclk)
 		clk_disable_unprepare(gdc->hclk);
 	return 0;
@@ -334,15 +340,20 @@ int gdc_runtime_resume(struct device *dev)
 	struct gdc_device *gdc = dev_get_drvdata(dev);
 	int rc;
 
-	if (gdc->axi) {
-		rc = clk_prepare_enable(gdc->axi);
-		if (rc)
-			return rc;
-	}
 	if (gdc->core) {
 		rc = clk_prepare_enable(gdc->core);
 		if (rc)
-			goto _core_err;
+			return rc;
+	}
+	if (gdc->vse_core) {
+		rc = clk_prepare_enable(gdc->vse_core);
+		if (rc)
+			goto _vse_core_err;
+	}
+	if (gdc->vse_ups) {
+		rc = clk_prepare_enable(gdc->vse_ups);
+		if (rc)
+			goto _vse_ups_err;
 	}
 	if (gdc->hclk) {
 		rc = clk_prepare_enable(gdc->hclk);
@@ -351,11 +362,14 @@ int gdc_runtime_resume(struct device *dev)
 	}
 	return 0;
 _hclk_err:
+	if (gdc->vse_ups)
+		clk_disable_unprepare(gdc->vse_ups);
+_vse_ups_err:
+	if (gdc->vse_core)
+		clk_disable_unprepare(gdc->vse_core);
+_vse_core_err:
 	if (gdc->core)
 		clk_disable_unprepare(gdc->core);
-_core_err:
-	if (gdc->axi)
-		clk_disable_unprepare(gdc->axi);
 	return rc;
 }
 #endif

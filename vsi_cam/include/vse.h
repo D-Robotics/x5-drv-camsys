@@ -70,7 +70,7 @@ struct vse_device {
 	u32 id, num_insts;
 	struct device *dev;
 	void __iomem *base;
-	struct clk *core, *axi, *ups, *gdc_axi, *gdc_hclk;
+	struct clk *core, *axi, *ups, *gdc_core, *gdc_hclk;
 	struct reset_control *rst;
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */

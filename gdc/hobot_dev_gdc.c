@@ -562,13 +562,13 @@ static ssize_t gdc_reg_dump(struct device *dev, struct device_attribute *attr, c
 
 	gdc = (struct hobot_gdc_dev *)dev_get_drvdata(dev);
 	vio_clk_enable("gdc_core");
-	vio_clk_enable("gdc_axi");
-	vio_clk_enable("vse_axi");
+	vio_clk_enable("vse_core");
+	vio_clk_enable("vse_ups");
 	vio_clk_enable("gdc_hclk");
 	gdc_hw_dump(gdc->base_reg);
 	vio_clk_disable("gdc_core");
-	vio_clk_disable("gdc_axi");
-	vio_clk_disable("vse_axi");
+	vio_clk_disable("vse_core");
+	vio_clk_disable("vse_ups");
 	vio_clk_disable("gdc_hclk");
 
 	return 0;

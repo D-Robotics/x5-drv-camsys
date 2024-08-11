@@ -52,6 +52,8 @@ struct vio_clk vio_clk_list[] = {
 	REGISTER_CLK("gdc_axi"),
 	REGISTER_CLK("vse_axi"),
 	REGISTER_CLK("gdc_hclk"),
+	REGISTER_CLK("vse_core"),
+	REGISTER_CLK("vse_ups"),
         REGISTER_CLK("sensor0_mclk"),
         REGISTER_CLK("sensor1_mclk"),
         REGISTER_CLK("sensor2_mclk"),
