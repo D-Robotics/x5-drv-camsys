@@ -190,10 +190,12 @@ void gdc_frame_work(struct vio_node *vnode)
 	struct vio_framemgr *framemgr, *out_framemgr;
 	struct vio_frame *frame, *out_frame;
 	struct gdc_iommu_addr *map_addr;
+	gdc_settings_t *setting;
 
 	vdev = vnode->ich_subdev[0];
 	och_vdev = vnode->och_subdev[0];
 	subdev = container_of(vdev, struct gdc_subdev, vdev);/*PRQA S 2810,0497*/
+	setting = &subdev->gdc_setting;
 	framemgr = &vdev->framemgr;
 	out_framemgr = &och_vdev->framemgr;
 	map_addr = &subdev->map_addr;
@@ -216,6 +218,18 @@ void gdc_frame_work(struct vio_node *vnode)
 		framemgr_print_queues(framemgr);
 		vio_err("[S%d][C%d] %s: no src frame\n", vnode->flow_id, vnode->ctx_id, __func__);
 		return;
+	}
+
+	if (setting->n_in_one > 0u) {
+		if (osal_atomic_inc_return(&setting->n_cur) > 1u) {
+			vio_dbg("[S%d][C%d] %s: in 0x%x, 0x%x, out 0x%x, 0x%x, n_in_one%d n_cur%d\n",
+				vnode->flow_id, vnode->ctx_id, __func__,
+				map_addr->in_iommu_addr[0], map_addr->in_iommu_addr[1],
+				map_addr->out_iommu_addr[0], map_addr->out_iommu_addr[1],
+				setting->n_in_one, osal_atomic_read(&setting->n_cur));
+			gdc_subdev_process(vdev);
+			return;
+		}
 	}
 
 	vio_e_barrier_irqs(out_framemgr, flags);/*PRQA S 2996*/
@@ -371,6 +385,7 @@ void gdc_attr_trans_to_settings(gdc_attr_t *gdc_attr, gdc_ichn_attr_t *ichn_attr
 		gdc_setting->gdc_config.input_width = ichn_attr->input_width;
 		gdc_setting->gdc_config.input_height = ichn_attr->input_height;
 		gdc_setting->gdc_config.input_stride = ichn_attr->input_stride;
+		gdc_setting->n_in_one = ichn_attr->n_in_one;
 	}
 
 	if (ochn_attr != NULL) {
@@ -805,6 +820,9 @@ void gdc_handle_interrupt(struct hobot_gdc_dev *gdc, u32 status)
 	u32 ctx_id;
 	u32 gdc_status;
 	struct vio_node *vnode;
+	struct vio_subdev *vdev;
+	struct gdc_subdev *subdev;
+	gdc_settings_t *setting;
 
 #ifdef CONFIG_HOBOT_VIO_STL
 	if (status == 0) {
@@ -814,14 +832,23 @@ void gdc_handle_interrupt(struct hobot_gdc_dev *gdc, u32 status)
 #endif
 	ctx_id = (u32)osal_atomic_read(&gdc->ctx_id);
 	vnode = &gdc->vnode[ctx_id];
+	vdev = vnode->ich_subdev[0];
+	subdev = container_of(vdev, struct gdc_subdev, vdev);
+	setting = &subdev->gdc_setting;
+	gdc_status = gdc_get_status(gdc->base_reg);
 	vio_dbg("[S%d][C%d] %s: status 0x%x gdc_status = 0x%x\n", vnode->flow_id, ctx_id, __func__, status, gdc_status);
 
-	gdc_status = gdc_get_status(gdc->base_reg);
+	vio_dbg("%s vio_frame_done src begin\n", __func__);
 	vio_frame_done(vnode->ich_subdev[0]);
-	if (gdc_check_status(gdc_status) == 0)
-		vio_frame_done(vnode->och_subdev[0]);
-	else
+	vio_dbg("%s vio_frame_done src end\n", __func__);
+	if (gdc_check_status(gdc_status) == 0) {
+		if (osal_atomic_read(&setting->n_cur) == setting->n_in_one) {
+			vio_frame_done(vnode->och_subdev[0]);
+			osal_atomic_set(&setting->n_cur, 0);
+		}
+	} else {
 		vio_frame_ndone(vnode->och_subdev[0]);
+	}
 
 	vio_set_stat_info(vnode->flow_id, GDC_MODULE, STAT_FE, vnode->frameid.frame_id);
 

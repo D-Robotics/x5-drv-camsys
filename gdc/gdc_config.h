@@ -27,6 +27,7 @@ typedef struct gdc_ichn_attr_s {
 	uint32_t input_width;
 	uint32_t input_height;
 	uint32_t input_stride;
+	uint32_t n_in_one;
 } gdc_ichn_attr_t;
 
 typedef struct gdc_ochn_attr_s {
@@ -56,6 +57,8 @@ typedef struct gdc_settings {
 	gdc_config_t gdc_config; //array of gdc configuration and sizes
 	s32 binary_ion_id; //share id for config binary physical addr;
 	u64 binary_offset;
+	u32 n_in_one;
+	atomic_t n_cur;  // current send n frame when splice n_in_one frames to one frame;
 	u32 reserved[8];
 } gdc_settings_t;
 
