@@ -56,11 +56,6 @@ static struct vio_reg_def gdc_regs[NUM_OF_GDC_REG]={
 	{"GDC_AXI_SETTING_CONFIG_READER",   0x00a8, RW, 0x100F},
 	{"GDC_AXI_SETTING_TILE_READER",     0x00ac, RW, 0x100F},
 	{"GDC_AXI_SETTING_TILE_WRITER",     0x00b0, RW, 0x100F},
-	{"GDC_INT_STATUS",					0x0200, W1C, 0X0},
-	{"GDC_INT_MASK",				 	0x0204, RW, 0X0},
-	{"GDC_FUSA_PWD",				 	0x0300, RW, 0x0},
-	{"GDC_FUSA_INT_MASK",				0x0308, RW, 0x0},
-	{"GDC_FUSA_INT_STATUS",				0x0310, W1C, 0x0},
 };
 
 /**
@@ -81,7 +76,6 @@ static const struct vio_field_def gdc_fields[NUM_OF_GDC_FIELD] = {
 	{(u32)GDC_AXI_SETTING_TILE_WRITER,	(u32)GDC_F_TILE_WRITER_RXACT_MAXOSTAND,  16, 8 , 0},
 	{(u32)GDC_AXI_SETTING_TILE_WRITER,	(u32)GDC_F_TILE_WRITER_FIFO_WATERMARK,   8 , 8 , 16},
 	{(u32)GDC_AXI_SETTING_TILE_WRITER,	(u32)GDC_F_TILE_WRITER_MAX_ARLEN,   		0 , 4 , 15},
-	{(u32)GDC_FUSA_INT_MASK,	(u32)GDC_F_IRQ_MASK,   		27 , 1 , 1},
 };
 
 /* code review E1:register set operation, so no return */
@@ -232,46 +226,11 @@ u32 gdc_get_status(const void __iomem *base_addr)
 	return status;
 }
 
-/* code review E1:register set operation, so no return */
-void gdc_set_irq_mask(void __iomem *base_addr, u32 enable)
-{
-	vio_hw_set_reg(base_addr, &gdc_regs[GDC_INT_MASK], enable);
-}
-
-u32 gdc_get_irq_status(void __iomem *base_addr)
-{
-	u32 status;
-
-	status = vio_hw_get_reg(base_addr, &gdc_regs[GDC_INT_STATUS]);
-	vio_hw_set_reg(base_addr, &gdc_regs[GDC_INT_STATUS], status);
-
-	return status;
-}
-
-void gdc_fusa_set_pwd(void __iomem *base_addr, u32 pwd)
-{
-	vio_hw_set_reg(base_addr, &gdc_regs[GDC_FUSA_PWD], pwd);
-}
-
-void gdc_fusa_set_irq_mask(void __iomem *base_addr, u32 mask)
-{
-	vio_hw_set_field(base_addr, &gdc_regs[GDC_FUSA_INT_MASK],
-		&gdc_fields[GDC_F_IRQ_MASK], mask);
-}
-
-u32 gdc_fusa_get_irq_status(void __iomem *base_addr)
-{
-	u32 status;
-
-	status = vio_hw_get_reg(base_addr, &gdc_regs[GDC_FUSA_INT_STATUS]);
-	vio_hw_set_reg(base_addr, &gdc_regs[GDC_FUSA_INT_STATUS], status);
-
-	return status;
-}
 /* code review E1:register dump operation, so no return */
 void gdc_hw_dump(const void __iomem *base_reg)
 {
-	vio_hw_dump_regs(base_reg, gdc_regs, (u32)NUM_OF_GDC_REG);
+	printk("base_reg = 0x%p\n", base_reg);
+	vio_hw_dump_regs(base_reg, gdc_regs, (u32)NUM_OF_GDC_REG - 2);
 }
 
 /* code review E1: internal function and just assignment logic, so no need return */
@@ -282,19 +241,6 @@ void gdc_set_module_id(u16 module_id, u16 event_id)
 	for(i = 0; i < (u32)NUM_OF_GDC_REG; i++) {
 		gdc_regs[i].module_id = ((u32)module_id << SHIFT_16) | event_id;
 	}
-}
-
-/* code review E1:register set operation, so no return */
-void gdc_set_parity_inject_value(void __iomem *base_reg, u32 value)
-{
-	gdc_regs[GDC_INT_MASK].attr = FUSA_RW;
-	vio_hw_set_reg(base_reg, &gdc_regs[GDC_INT_MASK], value);
-	gdc_regs[GDC_INT_MASK].attr = RW;
-}
-
-u32 gdc_get_parity_inject_value(const void __iomem *base_reg)
-{
-	return vio_hw_get_reg(base_reg, &gdc_regs[GDC_INT_MASK]);
 }
 
 s32 gdc_check_default_value(const void __iomem *base_reg)

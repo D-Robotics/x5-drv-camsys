@@ -40,8 +40,6 @@ void gdc_set_default_ch1(void __iomem *base_addr, u32 default_ch);
 void gdc_set_default_ch2(void __iomem *base_addr, u32 default_ch);
 void gdc_set_default_ch3(void __iomem *base_addr, u32 default_ch);
 u32 gdc_get_status(const void __iomem *base_addr);
-void gdc_set_irq_mask(void __iomem *base_addr, u32 enable);
-u32 gdc_get_irq_status(void __iomem *base_addr);
 
 //j6e
 void gdc_fusa_set_pwd(void __iomem *base_addr, u32 pwd);

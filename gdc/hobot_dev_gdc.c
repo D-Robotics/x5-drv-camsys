@@ -357,11 +357,6 @@ static irqreturn_t gdc_isr(s32 irq, void *data)
 	struct hobot_gdc_dev *gdc;
 	bool is_done = false;
 	gdc = (struct hobot_gdc_dev *)data;
-#if defined CONFIG_HOBOT_J5
-	status = gdc_get_irq_status(gdc->base_reg);
-#elif defined (CONFIG_HOBOT_VIO_STL)
-	status = gdc_fusa_get_irq_status(gdc->base_reg);
-#endif
 
 	get_gdc_intr_stat_and_clear((struct cam_ctrl_device *)gdc->wrap, NULL, &is_done);
 	if (is_done)

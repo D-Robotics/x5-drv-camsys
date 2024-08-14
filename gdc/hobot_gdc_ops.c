@@ -81,14 +81,6 @@ s32 gdc_subdev_open(struct vio_video_ctx *vctx)
 		vio_clk_enable("vse_core");
 		vio_clk_enable("vse_ups");
 		vio_clk_enable("gdc_hclk");
-#if defined CONFIG_HOBOT_J5
-		gdc_set_irq_mask(gdc->base_reg, 1);
-#elif defined (CONFIG_HOBOT_VIO_STL)
-		gdc_fusa_set_pwd(gdc->base_reg, PASSWD_KEY);
-		gdc_fusa_set_irq_mask(gdc->base_reg, 0);
-		if (gdc->stl.stl_ops.stl_enable != NULL)
-			gdc->stl.stl_ops.stl_enable(gdc);
-#endif
 	}
 	osal_mutex_unlock(&gdc->mlock);
 	vctx->state = BIT((s32)VIO_VIDEO_OPEN);
@@ -106,14 +98,6 @@ static void gdc_device_close(struct vio_video_ctx *vctx, u32 rst_en)
 	gdc = (struct hobot_gdc_dev *)vctx->device;
 	if (osal_atomic_dec_return(&gdc->open_cnt) == 0) {
 		gdc_force_stop(vctx);
-#if defined CONFIG_HOBOT_J5
-		gdc_set_irq_mask(gdc->base_reg, 0);
-#elif defined (CONFIG_HOBOT_VIO_STL)
-		if (gdc->stl.stl_ops.stl_disable != NULL)
-			gdc->stl.stl_ops.stl_disable(gdc);
-		gdc_fusa_set_irq_mask(gdc->base_reg, 1);
-		gdc_fusa_set_pwd(gdc->base_reg, DEFAULT_PASSWD_KEY);
-#endif
 		if (rst_en == 1) {
 			vio_reset_module((u32)GDC_RST, SOFT_RST_ALL);
 		}
@@ -753,18 +737,6 @@ s32 gdc_force_stop(struct vio_video_ctx *vctx)
 	return ret;
 }
 
-#ifdef CONFIG_HOBOT_VIO_STL
-void gdc_interrupt_missing(struct hobot_gdc_dev *gdc)
-{
-	u32 status;
-
-	status = gdc_get_irq_status(gdc->base_reg);
-	if (status == 1u) {
-		vio_err("gdc interrupt missing\n");
-	}
-}
-#endif
-
 /**
 * @NO{S09E03C01}
 * @ASIL{B}
@@ -838,9 +810,7 @@ void gdc_handle_interrupt(struct hobot_gdc_dev *gdc, u32 status)
 	gdc_status = gdc_get_status(gdc->base_reg);
 	vio_dbg("[S%d][C%d] %s: status 0x%x gdc_status = 0x%x\n", vnode->flow_id, ctx_id, __func__, status, gdc_status);
 
-	vio_dbg("%s vio_frame_done src begin\n", __func__);
 	vio_frame_done(vnode->ich_subdev[0]);
-	vio_dbg("%s vio_frame_done src end\n", __func__);
 	if (gdc_check_status(gdc_status) == 0) {
 		if (osal_atomic_read(&setting->n_cur) == setting->n_in_one) {
 			vio_frame_done(vnode->och_subdev[0]);
