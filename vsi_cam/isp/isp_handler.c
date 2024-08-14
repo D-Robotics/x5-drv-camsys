@@ -233,7 +233,7 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct isp_instance *inst)
+static inline void frame_done(struct isp_instance *inst, bool timeout)
 {
 	struct isp_irq_ctx *ctx = &inst->ctx;
 	struct cam_list_node *node;
@@ -247,7 +247,7 @@ static inline void frame_done(struct isp_instance *inst)
 	node = list_first_entry_or_null(ctx->src_buf_list3,
 					struct cam_list_node, entry);
 	if (node) {
-		if (cam_get_frame_status(ctx->src_ctx)) {
+		if (cam_get_frame_status(ctx->src_ctx) || timeout) {
 			cam_drop(ctx->src_ctx);
 		} else {
 			if (ctx->is_sink_online_mode)
@@ -433,7 +433,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 	u32 cur_mi_irq_ctx = INVALID_MCM_SCH_INST;
 	struct isp_irq_ctx *ctx;
 	int rc;
-	u32 ris, isp_ris;
+	u32 ris, isp_ris, value;
 
 	pr_debug("+\n");
 	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
@@ -504,7 +504,21 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
 		}
 
+		if (mi_mis.miv2_mis1 & 0x1) {
+			/** If mp bus timeout occurs, we report an artificial
+			 *  interrupt status and drop the current frame data.
+			 */
+			mi_mis.miv2_mis = 0x800025;
+			pr_info("mp bus timed-out!\n");
+		}
+
 		if (mi_mis.miv2_mis & 0x1) {
+			value = isp_read(isp, MI_MP_BUS_TIMEO);
+			value |= 0x1;
+			isp_write(isp, MI_MP_BUS_TIMEO, value);
+			value = isp_read(isp, MIV2_IMSC1);
+			value &= ~0x1;
+			isp_write(isp, MIV2_IMSC1, value);
 			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
 			if (rc) {
 				if (cur_mi_irq_ctx == INVALID_MCM_SCH_INST)
@@ -515,7 +529,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				// handle isp frame end intr
 				ins = &isp->insts[isp->cur_mi_irq_ctx];
 				if (ins->state == CAM_STATE_STARTED) {
-					frame_done(ins);
+					frame_done(ins, !!(mi_mis.miv2_mis1 & 0x1));
 					if (ins->online_mcm) {
 						struct ibuf *ib;
 

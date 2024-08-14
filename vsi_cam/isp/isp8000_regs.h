@@ -31,8 +31,8 @@
 #define ISP_FE_CTL  (0x00003d60)
 
 /* MI MP buffer related */
-#define MI_CTRL         (0x00001300)
 #define MI_MP_CTRL      (0x00001310)
+#define MI_MP_BUS_TIMEO (0x00001320)
 #define MI_MP_Y_ADDR    (0x00001324)
 #define MI_MP_Y_SIZE    (0x00001328)
 #define MI_MP_Y_OFFS    (0x0000132c)

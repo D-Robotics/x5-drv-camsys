@@ -417,9 +417,9 @@ void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr)
 	mcm_mi_ctrl |= BIT(6);
 	isp_write(isp, MI_MCM_CTRL, mcm_mi_ctrl); /* force update */
 
-	mi_ctrl = isp_read(isp, MI_CTRL);
+	mi_ctrl = isp_read(isp, MIV2_CTRL);
 	mi_ctrl |= BIT(15);
-	isp_write(isp, MI_CTRL, mi_ctrl); /* start rdma */
+	isp_write(isp, MIV2_CTRL, mi_ctrl); /* start rdma */
 
 	dev_dbg(isp->dev, "rdma_addr %llu\n", rdma_addr);
 }
@@ -1008,7 +1008,7 @@ int isp_get_schedule(struct isp_device *isp, u32 *inst)
 	}
 
 	node = list_first_entry_or_null(&isp->mcm_sch_busy_list, struct mcm_sch_node, entry);
-	if (WARN_ON(!node)) {
+	if (!node) {
 		rc = -ENOMEM;
 		goto _exit;
 	}
