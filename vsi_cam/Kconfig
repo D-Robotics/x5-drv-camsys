@@ -64,6 +64,11 @@ config VIDEO_VS_CAM_CTRL
 	help
 	  This is a driver that for VeriSilicon's camera subsystem register control.
 
+config VIDEO_VS_CAM_PULSE
+	tristate "VeriSilicon Camera Pulse Generater Support"
+	help
+	  This is a driver that for VeriSilicon's camera subsystem pulse generater control.
+
 config VIDEO_VS_SW_ISC
 	bool "VeriSilicon Software Communication Support"
 	default y

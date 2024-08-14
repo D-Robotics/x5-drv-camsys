@@ -30,6 +30,10 @@ obj-m += vs_isc.o
 vs_cam_ctrl-objs += base/cam_ctrl.o
 obj-$(CONFIG_VIDEO_VS_CAM_CTRL) += vs_cam_ctrl.o
 
+# cam pulse gen
+vs_cam_pulse-objs += base/cam_pulse.o
+obj-$(CONFIG_VIDEO_VS_CAM_PULSE) += vs_cam_pulse.o
+
 # csi wrapper
 vs_csi_wrapper-objs += csi/csi_wrapper.o
 obj-$(CONFIG_VIDEO_VS_CSI_WRAPPER) += vs_csi_wrapper.o
