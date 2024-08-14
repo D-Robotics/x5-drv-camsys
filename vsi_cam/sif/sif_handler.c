@@ -152,7 +152,8 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 	if (ins->hsize_err_count_pre != SIF_HSIZE_ERR(val)
 	    && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
 		// meet Hsize error drop frame.
-		cam_set_frame_status(ins->ctx.buf_ctx, HSIZE_ERR);
+		if (cam_get_frame_status(sif->insts[inst].ctx.buf_ctx) != DQ_FAIL)
+			cam_set_frame_status(ins->ctx.buf_ctx, HSIZE_ERR);
 	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
 		   && ins->vsize_err_count_pre != SIF_VSIZE_ERR(val)) {
 		// when hsync is more than exception, post warning.
@@ -162,7 +163,8 @@ static void sif_handle_frame_size_err(struct sif_device *sif, u32 inst)
 	} else if (ins->hsize_err_count_pre == SIF_HSIZE_ERR(val)
 		   && ins->vsize_err_count_pre == SIF_VSIZE_ERR(val)) {
 		// corner case, drop frame for safety.
-		cam_set_frame_status(ins->ctx.buf_ctx, BOTH_ERR);
+		if (cam_get_frame_status(sif->insts[inst].ctx.buf_ctx) != DQ_FAIL)
+			cam_set_frame_status(ins->ctx.buf_ctx, BOTH_ERR);
 	}
 
 	ins->hsize_err_count_pre = SIF_HSIZE_ERR(val);
@@ -243,8 +245,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 
 	spin_lock_irqsave(&ins->lock, flags);
 	ctx = &ins->ctx;
-	if (ctx->buf_ctx)
-		ins->frame_start_cnt++;
+
 	dev_dbg(sif->dev, "sif(%d-%d), FS sink ctx %p buf ctx %p buf %p\n",
 		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 	if (ins->state == CAM_STATE_STARTED) {
@@ -255,12 +256,16 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 		if (ctx->buf_ctx)
 			ctx->next_buf = cam_dqbuf_irq(ctx->buf_ctx, true);
 		if (ctx->next_buf) {
+			if (cam_get_frame_status(ctx->buf_ctx) == DQ_FAIL)
+				cam_set_frame_status(ctx->buf_ctx, NO_ERR);
 			p_addr = get_phys_addr(ctx->next_buf, 0);
 			if (ins->fmt.format == CAM_FMT_NV12 || ins->fmt.format == CAM_FMT_NV16
 				|| (sif->ipi_channel_num != 1 && inst == sif->ipi_base))
 				p_uv_addr = p_addr + (ins->fmt.stride * ins->fmt.height);
 		} else {
 			cam_set_frame_status(ctx->buf_ctx, DQ_FAIL);
+			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail\n",
+					sif->id, inst, __func__);
 		}
 	}
 	spin_unlock_irqrestore(&ins->lock, flags);
@@ -295,24 +300,27 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 	ins = &sif->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
 	ctx = &ins->ctx;
-	if (ctx->buf_ctx)
-		ins->frame_start_cnt--;
-	dev_dbg(sif->dev, "sif(%d-%d), FE sink ctx %p buf ctx %p buf %p \n",
-		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
-	if (ctx->buf) {
-		frame_status = cam_get_frame_status(ctx->buf_ctx);
-		if (frame_status || (ins->frame_start_cnt != 0)) {
-			cam_drop(ctx->buf_ctx);
-			cam_dec_frame_status(ctx->buf_ctx);
-		} else {
-			cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
-		}
-	}
+	if (ctx->buf_ctx) {
+		dev_dbg(sif->dev, "sif(%d-%d), FE sink ctx %p buf ctx %p buf %p \n",
+			sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 
-	ctx->buf = ctx->next_buf;
-	ctx->next_buf = NULL;
-	if (ctx->buf_ctx)
-		ins->frame_start_cnt = 0;
+		frame_status = cam_get_frame_status(ctx->buf_ctx);
+		if (frame_status == DQ_FAIL) {
+			cam_set_frame_status(ctx->buf_ctx, NO_ERR);
+			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail, skip peek PROCESS\n",
+				sif->id, inst, __func__);
+		} else {
+			if (frame_status) {
+				cam_drop(ctx->buf_ctx);
+				cam_dec_frame_status(ctx->buf_ctx);
+			} else {
+				cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
+			}
+		}
+
+		ctx->buf = ctx->next_buf;
+		ctx->next_buf = NULL;
+	}
 	spin_unlock_irqrestore(&ins->lock, flags);
 }
 
@@ -360,27 +368,37 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 		if (!status)
 			continue;
 
+		sif->insts[i].overlap = 0;
+		if ((status & SIF_IRQ_FS) && (status & SIF_IRQ_DONE)) {
+			dev_dbg(sif->dev, "sif(%d-%d), frame start/frame done overlapped", sif->id, i);
+			sif->insts[i].overlap = 1;
+		}
+
 		if (status & SIF_FRAME_SIZE_ERROR_EN)
 			sif_handle_frame_size_err(sif, i);
 
 		sif_write(sif, SIF_IPI_IRQ_CLR(i), status);
 
-		if (status & (SIF_IRQ_OF | SIF_PIXEL_BUF_AFULL_IRQ_EN))
+		if ((status & (SIF_IRQ_OF | SIF_PIXEL_BUF_AFULL_IRQ_EN)) &&
+			cam_get_frame_status(sif->insts[i].ctx.buf_ctx) != DQ_FAIL) {
 			cam_set_frame_status(sif->insts[i].ctx.buf_ctx, IPI_OF);
+			dev_err(sif->dev, "sif(%d-%d), ipi overflow", sif->id, i);
+		}
 
-		if (status & SIF_IRQ_FS)
+		if ((status & SIF_IRQ_FS) && (sif->insts[i].overlap == 0))
 			sif_handle_frame_start(sif, i);
+
 		if (status & SIF_IPI_FRAME_END_EN)
 			cam_set_stat_info(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
-
-		if (!((status & SIF_IRQ_DONE) || (status & SIF_IRQ_EBD_DMA_DONE)))
-			continue;
 
 		if (status & SIF_IRQ_DONE)
 			sif_handle_frame_done(sif, i);
 
 		if (status & SIF_IRQ_EBD_DMA_DONE)
 			sif_handle_emb_done(sif, i);
+
+		if ((status & SIF_IRQ_FS) && (sif->insts[i].overlap == 1))
+			sif_handle_frame_start(sif, i);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;

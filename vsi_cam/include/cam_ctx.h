@@ -7,12 +7,12 @@
 #include "cam_buf.h"
 
 enum cam_frame_status {
-	NO_ERR = 0,
+	NO_ERR    = 0,
 	VSIZE_ERR = 1,
 	HSIZE_ERR = 1,
-	BOTH_ERR = 1,
-	DQ_FAIL = 1,
-	IPI_OF = 2,
+	BOTH_ERR  = 1,
+	IPI_OF    = 2,
+	DQ_FAIL   = 3,
 };
 
 int cam_trigger(struct cam_ctx *ctx);

@@ -280,7 +280,6 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&sif->lock, flags);
-	sif->frame_start_cnt = 0;
 	ctx = &sif->ctx;
 	if (ctx->buf_ctx)
 		ctx->buf = cam_dqbuf_irq(ctx->buf_ctx, true);
