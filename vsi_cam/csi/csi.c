@@ -702,7 +702,7 @@ int csi_ipi_stop(struct csi_device *csi, u32 ipi_id)
 	if (csi->is_bypass)
 		set_idi_bypass_select(csi->cam_ctl_dev, csi->id, false);
 
-	csi_write(csi, CSI_RESETN, 0);
+	// csi_write(csi, CSI_RESETN, 0);
 	return 0;
 }
 

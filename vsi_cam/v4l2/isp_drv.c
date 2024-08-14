@@ -349,6 +349,9 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 			cam_reqbufs(&isp->sink_ctx, 0, NULL);
 		else
 			isp_set_stream_idx(isp->dev, isp->id, -1);
+		rc = isp_close(isp->dev, isp->id);
+		if (rc < 0)
+			return rc;
 	}
 	return 0;
 }
@@ -413,27 +416,17 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 		break;
 	}
 
-#ifdef WITH_LEGACY_ISP
-	inst->dev->insts[inst->id].online_mcm = true; /*enable mcm by default*/
-	inst->dev->mode = MCM_WORK_MODE;
-#endif
-	pr_info("%s *** inst->dev->insts[%d].online_mcm=%d, mode=%d ***\n", __func__,
-		inst->id, inst->dev->insts[inst->id].online_mcm, inst->dev->mode);
-
-	{
-		// FIXME
-		isp_set_state(inst->dev, inst->id, CAM_STATE_INITED);
+	if (inst->id < ISP_SINK_ONLINE_PATH_MAX) {
+		isp->online_mcm = true;
+		inst->dev->mode = ISP_STRM_MODE;
+	} else {
+		isp->online_mcm = false;
+		inst->dev->mode = ISP_MCM_MODE;
 	}
+	pr_debug("isp inst%d online_mcm=%d, mode=%d\n", inst->id, isp->online_mcm, inst->dev->mode);
 
-	{
-		// FIXME
-		struct cam_input in;
-
-		in.index = inst->id;
-		in.type = CAM_INPUT_SENSOR;
-		snprintf(in.sens.name, sizeof(in.sens.name), "sc1330t");
-		isp_set_input(inst->dev, inst->id, &in);
-	}
+	// FIXME
+	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED);
 
 	f.ifmt.width  = fmt->format.width;
 	f.ifmt.height = fmt->format.height;
@@ -441,7 +434,18 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	f.ofmt.width  = fmt->format.width;
 	f.ofmt.height = fmt->format.height;
 	f.ofmt.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
-	return isp_set_format(inst->dev, inst->id, &f);
+	rc = isp_set_format(inst->dev, inst->id, &f);
+	if (rc < 0)
+		return rc;
+	{
+		// FIXME
+		struct cam_input in;
+
+		in.index = inst->id;
+		in.type = CAM_INPUT_SENSOR;
+		snprintf(in.sens.name, sizeof(in.sens.name), "ov5640");
+		return isp_set_input(inst->dev, inst->id, &in);
+	}
 }
 
 static int isp_get_fmt(struct v4l2_subdev *sd,
