@@ -8,7 +8,7 @@
 
 #include "cam_dev.h"
 #include "cam_uapi.h"
-
+#include "v4l2_usr_api.h"
 #include "isp_drv.h"
 
 #define ISP_OFFLINE_IN_BUF_NUM (4)
@@ -247,6 +247,72 @@ static struct cam_buf_ops isp_buf_ops = {
 	.queue_setup = isp_queue_setup,
 };
 
+static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
+{
+	struct v4l2_ext_control ext_ctrl;
+	int ret;
+
+	ret = copy_from_user(&ext_ctrl, arg, sizeof(struct v4l2_ext_control));
+	if (ret) {
+		pr_err("%s: ctrl_data copy_from_user failed!\n", __func__);
+		return ret;
+	}
+	u32 size = 0;
+	switch (ext_ctrl.id) {
+		case V4L2_CID_DR_EXPOSURE:
+			size = sizeof(hbn_isp_exposure_attr_t);
+			break;
+		case V4L2_CID_DR_AWB:
+			size = sizeof(hbn_isp_awb_attr_t);
+			break;
+		default:
+			return -1;
+	}
+	return isp_set_subctrl(isp->dev, isp->id, ext_ctrl.id,
+				       (void *)ext_ctrl.ptr, size);
+}
+
+static int isp_g_ctrl(struct isp_v4l_instance *isp, void *arg)
+{
+	struct v4l2_ext_control ext_ctrl;
+	int ret;
+
+	ret = copy_from_user(&ext_ctrl, arg, sizeof(struct v4l2_ext_control));
+	if (ret) {
+		pr_err("%s: ctrl_data copy_from_user failed!\n", __func__);
+		return ret;
+	}
+
+	u32 size = 0;
+	switch (ext_ctrl.id) {
+		case V4L2_CID_DR_EXPOSURE:
+			size = sizeof(hbn_isp_exposure_attr_t);
+			break;
+		case V4L2_CID_DR_AWB:
+			size = sizeof(hbn_isp_awb_attr_t);
+			break;
+		default:
+			return -1;
+	}
+	return isp_get_subctrl(isp->dev, isp->id, ext_ctrl.id,
+				       (void *)ext_ctrl.ptr, size);
+}
+
+static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+        int rc = 0;
+
+	if (cmd)
+		rc = isp_s_ctrl(isp, arg);
+	else
+		rc = isp_g_ctrl(isp, arg);
+	if (rc < 0)
+		pr_err("%s call isp ctrl failed\n", __func__);
+
+	return rc;
+}
+
 static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
@@ -406,6 +472,10 @@ static int isp_enum_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static const struct v4l2_subdev_core_ops isp_core_ops = {
+	.command = isp_command,
+};
+
 static const struct v4l2_subdev_video_ops isp_video_ops = {
 	.s_stream = isp_s_stream,
 	.g_frame_interval = isp_g_frame_interval,
@@ -423,6 +493,7 @@ static const struct v4l2_subdev_pad_ops isp_pad_ops = {
 static const struct v4l2_subdev_ops isp_subdev_ops = {
 	.video = &isp_video_ops,
 	.pad = &isp_pad_ops,
+	.core = &isp_core_ops,
 };
 
 static void isp_inst_remove(struct isp_v4l_instance *insts, u32 num)

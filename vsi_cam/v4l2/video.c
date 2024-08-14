@@ -6,8 +6,8 @@
 #include "cam_uapi.h"
 #include "utils.h"
 #include "video_fmt.h"
-
 #include "video.h"
+#include "v4l2_usr_api.h"
 
 static int scene;
 module_param(scene, int, 0644);
@@ -480,6 +480,52 @@ static long vid_ioctl(struct file *file, void *fh, bool valid_prio, unsigned int
 	return rc;
 }
 
+static int vid_s_ctrl(struct file *file, void *fh, struct v4l2_control *a)
+{
+	return 0;
+}
+
+static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
+{
+	return 0;
+}
+
+static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	int rc = 0;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = v4l2_subdev_call(sd, core, command, true, a->controls);
+
+	return rc;
+}
+
+static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	int rc = 0;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = v4l2_subdev_call(sd, core, command, false, a->controls);
+
+	return rc;
+}
+
 static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_querycap = vid_querycap,
 	.vidioc_enum_fmt_vid_cap = vid_enum_fmt,
@@ -496,6 +542,10 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_dqbuf = vb2_ioctl_dqbuf,
 	.vidioc_expbuf = vb2_ioctl_expbuf,
 	.vidioc_default = vid_ioctl,
+	.vidioc_s_ctrl = vid_s_ctrl,
+	.vidioc_g_ctrl = vid_g_ctrl,
+	.vidioc_s_ext_ctrls = vid_s_ext_ctrls,
+	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
 };
 
 static int vid_link_setup(struct media_entity *entity,
