@@ -19,6 +19,8 @@
 #include <linux/string.h>
 #include <linux/mutex.h>
 #include <linux/hrtimer.h>
+#include <linux/mfd/syscon.h>
+#include <linux/regmap.h>
 #include "hobot_dev_vin_node.h"
 #include "hobot_lpwm_hw_reg.h"
 #include "hobot_lpwm_ops.h"
@@ -35,7 +37,7 @@ inline struct hobot_lpwm_ins *lpwm_ins_ptr(uint32_t i_id)
 /**
  * @NO{S10E05C01}
  * @ASIL{B}
- * @brief function that hrtimer will call 
+ * @brief function that hrtimer will call
  * @param[in] *hrt: The pointer of hrtimer
  * @retval HRTIMER_RESTART: hrtimer will restart itself
  * @data_read None
@@ -75,31 +77,31 @@ static enum hrtimer_restart swtig_timer_func(struct hrtimer *hrt)
  * @callergraph
  * @design
  */
-// static int32_t lpwm_reset_peri(const struct platform_device *pdev)
-// {
+//static int32_t lpwm_reset_peri(const struct platform_device *pdev)
+//{
 // 	struct device_node *node = pdev->dev.of_node;
 // 	struct reset_control *lpwm_reset_control = NULL;
 // 	int32_t ret = LPWM_RET_OK;
 
-// 	lpwm_reset_control = of_reset_control_array_get_exclusive(node);
-// 	if (IS_ERR(lpwm_reset_control)) {
+//	lpwm_reset_control = of_reset_control_array_get_exclusive(node);
+//	if (IS_ERR(lpwm_reset_control)) {
 // 		lpwm_err(NULL, "Get reset control fail\n");
 // 		return PTR_ERR(lpwm_reset_control);
 // 	}
 
-// 	ret = reset_control_assert(lpwm_reset_control);
+//	ret = reset_control_assert(lpwm_reset_control);
 // 	if (ret != 0) {
 // 		goto err_put;
 // 	}
-// 	osal_msleep(1);
-// 	ret = reset_control_deassert(lpwm_reset_control);
+//	osal_msleep(1);
+//	ret = reset_control_deassert(lpwm_reset_control);
 // 	if (ret != 0) {
 // 		goto err_put;
 // 	}
-// err_put:
+//err_put:
 // 	reset_control_put(lpwm_reset_control);
 // 	return ret;
-// }
+//}
 
 /**
  * @NO{S10E05C01}
@@ -121,11 +123,11 @@ static int32_t lpwm_preinit(struct platform_device *pdev, struct hobot_lpwm_ins 
 {
 	int32_t ret = LPWM_RET_OK;
 
-	// ret = lpwm_reset_peri(pdev);
-	// if (ret != LPWM_RET_OK) {
-	// 	lpwm_err(NULL, "Reset failed!\n");
+	//ret = lpwm_reset_peri(pdev);
+	//if (ret != LPWM_RET_OK) {
+	//	lpwm_err(NULL, "Reset failed!\n");
 	// 	return ret;
-	// }
+	//}
 
 	lpwm->sclk = devm_clk_get(&pdev->dev, "lpwm_sclk");
 	if (IS_ERR(lpwm->sclk)) {
@@ -213,8 +215,13 @@ static int32_t lpwm_preinit(struct platform_device *pdev, struct hobot_lpwm_ins 
 static irqreturn_t lpwm_irq_handler(int32_t irq, void *data)
 {
 	struct hobot_lpwm_ins *lpwm = (struct hobot_lpwm_ins *)data;
+	struct lpwm_vs *lpwm_priv = lpwm->priv;
 
 	lpwm_info(lpwm, "Irq handled\n");
+
+	//clear irq flag
+	regmap_write(lpwm_priv->syscon, lpwm_priv->ctrl_reg, 1);
+
 	return IRQ_HANDLED;
 }
 
@@ -246,6 +253,7 @@ static int32_t lpwm_platform_init(struct platform_device *pdev, struct hobot_lpw
 	int32_t ret = LPWM_RET_OK;
 	struct resource *lpwm_res = NULL;
 	struct device_node *node = NULL;
+	struct lpwm_vs *lpwm_priv = NULL;
 
 	lpwm_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (lpwm_res == NULL) {
@@ -284,11 +292,31 @@ static int32_t lpwm_platform_init(struct platform_device *pdev, struct hobot_lpw
 		return ret;
 	}
 
+	lpwm_priv = devm_kzalloc(&pdev->dev, sizeof(*lpwm_priv), GFP_KERNEL);
+	if (!lpwm_priv) {
+		lpwm_err(lpwm, "Unable to devm lpwm priv!\n");
+		return -ENOMEM;
+	}
+
+	lpwm_priv->syscon = syscon_regmap_lookup_by_phandle(node, "lpwm-int-status");
+	if (IS_ERR(lpwm_priv->syscon))
+		return PTR_ERR(lpwm_priv->syscon);
+
+	ret = of_property_read_u32_index(node, "lpwm-int-status",
+                                 1, &lpwm_priv->ctrl_reg);
+	lpwm_info(lpwm, "ctrl_reg = %d\n", lpwm_priv->ctrl_reg);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"couldn't get ctrl_reg reg index\n");
+		return PTR_ERR(lpwm_priv->syscon);
+	}
+
 	hrtimer_init(&lpwm->swtrigger_timer, CLOCK_MONOTONIC,
 		     HRTIMER_MODE_REL | HRTIMER_MODE_PINNED);
 	lpwm->swtrigger_timer.function = swtig_timer_func;
 
 	osal_mutex_init(&lpwm->con_lock);
+	lpwm->priv = lpwm_priv;
 	lpwm->utype = INIT_STATE;
 	lpwm->chip.dev = &pdev->dev;
 	lpwm->chip.ops = &pwm_lite_ops;
@@ -636,7 +664,7 @@ static void lpwm_chip_cdev_remove(struct hobot_lpwm_ins *lpwm)
  */
 static void lpwm_kernel_remove(struct platform_device *pdev)
 {
-	struct hobot_lpwm_ins *lpwm = 
+	struct hobot_lpwm_ins *lpwm =
 		(struct hobot_lpwm_ins *)platform_get_drvdata(pdev);
 
 	if (hrtimer_active(&lpwm->swtrigger_timer))

@@ -72,6 +72,12 @@ typedef enum chip_type {
 	BACKLIGHT,
 } chip_type_t;
 
+struct lpwm_vs {
+        struct regmap       *syscon;
+        unsigned int        ctrl_reg;
+        u32                 cs_bit_offset;
+};
+
 /**
  * @struct hobot_lpwm_ins
  * Define the descriptor of lpwm instance device
@@ -95,6 +101,7 @@ struct hobot_lpwm_ins {
 	osal_mutex_t		con_lock;		/**< protect lpwm_attr */
 	struct hrtimer		swtrigger_timer;	/**< software trigger timer struct */
 	struct vio_callback_ops	*cim_cops;		/**< callback ops register by cim */
+	void *priv;
 };
 
 extern inline struct hobot_lpwm_ins *lpwm_ins_ptr(uint32_t i_id);
