@@ -245,7 +245,8 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 
 	spin_lock_irqsave(&ins->lock, flags);
 	ctx = &ins->ctx;
-
+	if (ctx->buf_ctx)
+		ins->frame_start_cnt++;
 	dev_dbg(sif->dev, "sif(%d-%d), FS sink ctx %p buf ctx %p buf %p\n",
 		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 	if (ins->state == CAM_STATE_STARTED) {
@@ -301,6 +302,7 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 	spin_lock_irqsave(&ins->lock, flags);
 	ctx = &ins->ctx;
 	if (ctx->buf_ctx) {
+		ins->frame_start_cnt--;
 		dev_dbg(sif->dev, "sif(%d-%d), FE sink ctx %p buf ctx %p buf %p \n",
 			sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 
@@ -308,6 +310,9 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 		if (frame_status == DQ_FAIL) {
 			cam_set_frame_status(ctx->buf_ctx, NO_ERR);
 			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail, skip peek PROCESS\n",
+				sif->id, inst, __func__);
+		} else if (ins->frame_start_cnt < 0) {
+			dev_dbg(sif->dev, "sif(%d-%d), %s meet continue frame done skip it\n",
 				sif->id, inst, __func__);
 		} else {
 			if (frame_status) {
@@ -320,6 +325,7 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 
 		ctx->buf = ctx->next_buf;
 		ctx->next_buf = NULL;
+		ins->frame_start_cnt = 0;
 	}
 	spin_unlock_irqrestore(&ins->lock, flags);
 }

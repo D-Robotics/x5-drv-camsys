@@ -101,6 +101,7 @@ struct sif_instance {
 	ktime_t last_frame_done, frame_interval;
 	u32 frame_count;
 	u32 overlap;
+	int frame_start_cnt;
 };
 
 struct sif_device {
