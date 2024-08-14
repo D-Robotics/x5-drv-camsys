@@ -106,8 +106,7 @@ static int vid_probe(struct platform_device *pdev)
 
 	rc = media_device_register(mdev);
 	if (rc < 0) {
-		dev_err(dev,
-			"register media device failed (err=%d)\n", rc);
+		dev_err(dev, "register media device failed (err=%d)\n", rc);
 		return rc;
 	}
 

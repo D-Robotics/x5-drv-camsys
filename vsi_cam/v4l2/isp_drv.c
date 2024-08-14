@@ -323,8 +323,7 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		if (!isp->node.bctx.is_sink_online_mode)
 			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
 		else
-			isp_set_stream_idx(isp->dev, isp->id, isp->id);
-
+			isp_set_input_select(isp->dev, isp->id, isp->id, 0);  //FIXME
 		fill_irq_ctx(isp, &ctx);
 		isp_set_ctx(isp->dev, isp->id, &ctx);
 	} else {
@@ -394,8 +393,7 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	isp = &inst->dev->insts[inst->id];
 	for (i = 0; i < ARRAY_SIZE(in_fmt_preferred_list); i++) {
 		f.ifmt.format    = in_fmt_preferred_list[i];
-		s_f.format.code =
-				cam_format_to_mbus_code(in_fmt_preferred_list[i], isp->input_bayer_format);
+		s_f.format.code = cam_format_to_mbus_code(f.ifmt.format, isp->input_bayer_format);
 
 		rc = subdev_set_fmt(sd, state, &s_f);
 		if (!rc)
@@ -416,14 +414,15 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 		break;
 	}
 
+	inst->dev->mode = ISP_MCM_MODE;
 	if (inst->id < ISP_SINK_ONLINE_PATH_MAX) {
 		isp->online_mcm = true;
-		inst->dev->mode = ISP_STRM_MODE;
+		isp_set_stream_idx(inst->dev, inst->id, inst->id);
 	} else {
 		isp->online_mcm = false;
-		inst->dev->mode = ISP_MCM_MODE;
 	}
-	pr_debug("isp inst%d online_mcm=%d, mode=%d\n", inst->id, isp->online_mcm, inst->dev->mode);
+	pr_debug("isp inst%d online_mcm=%d, mode=%d, stream_idx=%d\n",
+		 inst->id, isp->online_mcm, inst->dev->mode, inst->id);
 
 	// FIXME
 	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED);
