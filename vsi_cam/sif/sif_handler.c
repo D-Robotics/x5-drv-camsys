@@ -244,6 +244,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	cam_set_stat_info(ins->ctx.sink_ctx, CAM_STAT_FS);
 
 	spin_lock_irqsave(&ins->lock, flags);
+	ins->prev_irq_stat = START_STATUS;
 	ctx = &ins->ctx;
 	if (ctx->buf_ctx)
 		ins->frame_start_cnt++;
@@ -301,6 +302,7 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 
 	ins = &sif->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
+	ins->prev_irq_stat = DONE_STATUS;
 	ctx = &ins->ctx;
 	if (ctx->buf_ctx) {
 		ins->frame_start_cnt--;
@@ -377,8 +379,10 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 
 		sif->insts[i].overlap = 0;
 		if ((status & SIF_IRQ_FS) && (status & SIF_IRQ_DONE)) {
-			dev_dbg(sif->dev, "sif(%d-%d), frame start/frame done overlapped", sif->id, i);
-			sif->insts[i].overlap = 1;
+			if (sif->insts[i].prev_irq_stat == START_STATUS) {
+				sif->insts[i].overlap = 1;
+				dev_dbg(sif->dev, "sif(%d-%d), frame start/frame done overlapped", sif->id, i);
+			}
 		}
 
 		if (status & SIF_FRAME_SIZE_ERROR_EN)

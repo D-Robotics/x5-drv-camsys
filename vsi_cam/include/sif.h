@@ -71,6 +71,12 @@ enum pps_trigger_source {
 	PPS_SRC_SW,
 };
 
+enum pre_irq_status {
+	NULL_STATUS,
+	START_STATUS,
+	DONE_STATUS,
+};
+
 struct sif_irq_ctx {
 	struct cam_ctx *sink_ctx;
 	struct cam_ctx *buf_ctx;
@@ -102,6 +108,7 @@ struct sif_instance {
 	u32 frame_count;
 	u32 overlap;
 	int frame_start_cnt;
+	int prev_irq_stat;
 };
 
 struct sif_device {
