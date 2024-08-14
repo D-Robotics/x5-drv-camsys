@@ -488,9 +488,22 @@ static s32 vse_ochn_attr_check(u32 ochn_id, vse_ichn_attr_t *vse_ichn_attr, vse_
 
 	/* check upscale output size */
 	if (ochn_id == VSE_UP_SCALE_4K) {
+		uint32_t in_total_size = 0;
+		uint32_t up_total_size = 0;
+
 		vpf_param_range_check(attr->target_w, attr->roi.w, 4096);
 		vpf_param_range_check(attr->target_h, attr->roi.h, 3076);
+
+		in_total_size = attr->roi.h * attr->roi.w;
+		up_total_size = attr->target_h * attr->target_w;
+
+		if (up_total_size > in_total_size * 4) {
+			vio_err("max upscale ratio is 4x, exceed valid range\n");
+			return -EINVAL;
+		}
 	}
+
+
 	return 0;
 }
 
