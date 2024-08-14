@@ -142,7 +142,7 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 
 		rc = vse_close(&inst->dev->vse_dev, vctx->ctx_id);
 		if (rc < 0) {
-			pr_err("%s failed to call vse_close(err=%d).\n", __func__, rc);
+			pr_err("%s vse_close(ret=%d).\n", __func__, rc);
 			return rc;
 		}
 	}

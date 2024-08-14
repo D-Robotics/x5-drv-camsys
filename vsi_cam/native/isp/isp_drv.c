@@ -114,6 +114,7 @@ static void isp_frame_work(struct vio_node *vnode)
 	vdev = vnode->ich_subdev[0];
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
 
+	pr_debug("%s, isp_add_job:%d\n", __func__, vnode->ctx_id);
 	rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id, false);
 	if (rc)
 		pr_err("%s: failed to call isp_add_job.\n", __func__);
