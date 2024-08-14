@@ -250,23 +250,24 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	dev_dbg(sif->dev, "sif(%d-%d), FS sink ctx %p buf ctx %p buf %p\n",
 		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 	if (ins->state == CAM_STATE_STARTED) {
-		if (ctx->next_buf) {
-			cam_drop(ctx->buf_ctx);
-			ctx->buf = ctx->next_buf;
-		}
-		if (ctx->buf_ctx)
+		if (ctx->buf_ctx) {
+			if (ctx->next_buf) {
+				cam_drop(ctx->buf_ctx);
+				ctx->buf = ctx->next_buf;
+			}
 			ctx->next_buf = cam_dqbuf_irq(ctx->buf_ctx, true);
-		if (ctx->next_buf) {
-			if (cam_get_frame_status(ctx->buf_ctx) == DQ_FAIL)
-				cam_set_frame_status(ctx->buf_ctx, NO_ERR);
-			p_addr = get_phys_addr(ctx->next_buf, 0);
-			if (ins->fmt.format == CAM_FMT_NV12 || ins->fmt.format == CAM_FMT_NV16
-				|| (sif->ipi_channel_num != 1 && inst == sif->ipi_base))
-				p_uv_addr = p_addr + (ins->fmt.stride * ins->fmt.height);
-		} else {
-			cam_set_frame_status(ctx->buf_ctx, DQ_FAIL);
-			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail\n",
-					sif->id, inst, __func__);
+			if (ctx->next_buf) {
+				if (cam_get_frame_status(ctx->buf_ctx) == DQ_FAIL)
+					cam_set_frame_status(ctx->buf_ctx, NO_ERR);
+				p_addr = get_phys_addr(ctx->next_buf, 0);
+				if (ins->fmt.format == CAM_FMT_NV12 || ins->fmt.format == CAM_FMT_NV16
+					|| (sif->ipi_channel_num != 1 && inst == sif->ipi_base))
+					p_uv_addr = p_addr + (ins->fmt.stride * ins->fmt.height);
+			} else {
+				cam_set_frame_status(ctx->buf_ctx, DQ_FAIL);
+				dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail\n",
+						sif->id, inst, __func__);
+			}
 		}
 	}
 	spin_unlock_irqrestore(&ins->lock, flags);
