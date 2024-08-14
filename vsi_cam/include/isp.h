@@ -110,7 +110,6 @@ struct isp_device {
 	int stream_idx_mapping[ISP_SINK_ONLINE_PATH_MAX];
 	struct list_head hdr_buf_list;
 	struct mem_buf hdr_bufs[HDR_BUF_NUM];
-	u32 in_counts[ISP_SINK_ONLINE_PATH_MAX];
 	u32 cur_mi_irq_ctx, next_mi_irq_ctx;
 	refcount_t set_state_refcnt;
 	enum cam_error error;

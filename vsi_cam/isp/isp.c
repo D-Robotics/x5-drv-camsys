@@ -398,11 +398,7 @@ void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path_id,
 	u32 base = MI_MCMn_RAW_BASE(path_id);
 
 	isp_write(isp, MI_MCMn_RAW_ADDR(base), phys_addr);
-#ifdef WITH_LEGACY_ISP
-	isp_write(isp, MI_MCMn_RAW_SIZE(base), fmt->stride * fmt->height * MCM_BUF_NUM);
-#else
 	isp_write(isp, MI_MCMn_RAW_SIZE(base), fmt->stride * fmt->height);
-#endif
 	isp_write(isp, MI_MCMn_RAW_OFFS(base), 0x00000000);
 }
 
@@ -924,13 +920,7 @@ int isp_set_schedule_offline(struct isp_device *isp, u32 inst, bool isp_irq_call
 			goto _exit;
 		}
 	}
-#ifdef WITH_LEGACY_ISP
-	isp_set_mp_buffer(isp, get_phys_addr(list_node->data, 0), &ins->fmt.ofmt);
-	if (ctx->sink_buf) {
-		isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
-		isp->error = 0;
-	}
-#else
+
 	if (ctx->sink_buf) {
 		sch.id = inst;
 		if (list_node) {
@@ -982,7 +972,6 @@ int isp_set_schedule_offline(struct isp_device *isp, u32 inst, bool isp_irq_call
 			pr_debug("%s: ins->state != CAM_STATE_STARTED\n", __func__);
 		}
 	}
-#endif
 
 _exit:
 	spin_unlock_irqrestore(&isp->mcm_sch_lock, flags);

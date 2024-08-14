@@ -253,70 +253,6 @@ void vse_set_mi_buffer(struct vse_device *vse, u32 chnl,
 	vse_write(vse, VSE_MIn_CTRL(base), 0x38);
 }
 
-#ifdef WITH_LEGACY_VSE
-static void vse_start(struct vse_device *vse, struct cam_format *fmt)
-{
-	__u8 chnl;
-	__u32 base;
-
-	vse_write(vse, 0xd40, 0xffffffff);
-	vse_write(vse, 0xcec, (fmt->width << 16));
-	vse_write(vse, 0x304, 0x0000403f);
-	vse_write(vse, 0x304, 0x0000c03f);
-	vse_write(vse, 0xce8, (1 << 2) | 1);
-
-	for (chnl = 0; chnl < VSE_OUT_CHNL_MAX; chnl++) {
-		if (chnl == 3) /* exclude path3 in all scenarios */
-			continue;
-		base = VSE_OSDn_BASE(chnl);
-		vse_write(vse, VSE_OSDn_CTRL(base), 0x0000047f);
-	}
-}
-
-void vse_set_cmd(struct vse_device *vse, u32 inst)
-{
-	struct vse_irq_ctx *ctx;
-	struct vse_instance *ins;
-	phys_addr_t phys_addr = {0};
-	u32 i;
-
-	if(!vse)
-		return;
-
-	vse->error = 0;
-	vse->is_completed = false;
-	ins = &vse->insts[inst];
-	ctx = &ins->ctx;
-
-	if (ins->cmd_buf_va && ins->cmd_buf_va->ready) {
-		for (i = 0; i < ins->cmd_buf_va->num; i++)
-			vse_write(vse, ins->cmd_buf_va->regs[i].offset, ins->cmd_buf_va->regs[i].value);
-	}
-
-	if (ctx->sink_buf) {
-		phys_addr = get_phys_addr(ctx->sink_buf, 0);
-		vse_set_rdma_buffer(vse, phys_addr, &ins->ifmt);
-	}
-
-	ins->sch.ochn_en_mask = 0;
-	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-		struct vse_stitching *stitch = &ctx->stitches[i];
-
-		if (stitch->enabled && ctx->src_buf[stitch->left_top]) {
-			phys_addr = get_phys_addr(ctx->src_buf[stitch->left_top], 0);
-			vse_set_stitch_buffer(vse, i, stitch, phys_addr, &ins->ofmt[i]);
-		}
-	}
-
-	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-		if (ctx->src_buf[i] && !ctx->stitches[i].enabled) {
-			phys_addr = get_phys_addr(ctx->src_buf[i], 0);
-			vse_set_mi_buffer(vse, i, phys_addr, &ins->ofmt[i]);
-		}
-	}
-	vse_start(vse, &ins->ifmt);
-}
-#else
 void vse_set_cmd(struct vse_device *vse, u32 inst)
 {
 	struct vse_irq_ctx *ctx;
@@ -351,7 +287,6 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	vse_server_trigger(vse, inst);
 	pr_debug("inst %d\n", inst);
 }
-#endif
 
 int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32 total_cnt)
 {

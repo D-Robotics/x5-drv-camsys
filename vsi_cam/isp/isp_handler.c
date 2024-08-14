@@ -358,6 +358,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 {
 	u32 inst = isp->stream_idx_mapping[path];
 	struct isp_instance *ins;
+	struct ibuf *ib;
 
 	pr_debug("%s: path[%d], inst:%d\n", __func__, path, inst);
 	if (unlikely(inst >= isp->num_insts))
@@ -367,29 +368,24 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 	if (!ins->online_mcm || ins->state != CAM_STATE_STARTED)
 		return -EFAULT;
 
-#ifndef WITH_LEGACY_ISP
-	{
-		struct ibuf *ib = list_first_entry_or_null(&isp->ibm[inst].list1,
-							   struct ibuf, entry);
-		if (ib) {
-			if (!error) {
-				list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list2);
-			} else {
-				list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list1);
-				pr_debug("mcm%d frame done but buf full\n", path);
-			}
-			list_del(&ib->entry);
-			ins->mcm_ib = ins->mcm_ib1;
-			ins->mcm_ib1 = ib;
+	ib = list_first_entry_or_null(&isp->ibm[inst].list1,
+				      struct ibuf, entry);
+	if (ib) {
+		if (!error) {
+			list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list2);
 		} else {
-			ib = ins->mcm_ib1;
+			list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list1);
+			pr_debug("mcm%d frame done but buf full\n", path);
 		}
-
-		isp_set_mcm_raw_buffer(isp, path, ib->buf.addr, &ins->fmt.ifmt);
+		list_del(&ib->entry);
+		ins->mcm_ib = ins->mcm_ib1;
+		ins->mcm_ib1 = ib;
+	} else {
+		ib = ins->mcm_ib1;
 	}
-#else
-	isp->in_counts[inst]++;
-#endif
+
+	isp_set_mcm_raw_buffer(isp, path, ib->buf.addr, &ins->fmt.ifmt);
+
 	pr_debug("isp_add_job:%d\n", inst);
 	isp_add_job(isp, inst, true);
 	return 0;
@@ -556,25 +552,6 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			if (!ctx)
 				goto _post;
 
-#ifdef WITH_LEGACY_ISP
-			{
-				bool is_completed = true;
-
-				if (ctx->is_src_online_mode) {
-					is_completed = cam_is_completed(ctx->src_ctx);
-					pr_debug("isp:%d->%d,vse:%d\n", isp->cur_mi_irq_ctx,
-						 isp->next_mi_irq_ctx, is_completed);
-				} else {
-					pr_debug("isp:%d->%d\n", isp->cur_mi_irq_ctx, isp->next_mi_irq_ctx);
-				}
-
-				if (!is_completed)
-					goto _post;
-				else if (ctx->is_src_online_mode)
-					cam_trigger(ctx->src_ctx);
-			}
-#endif
-
 			ins = &isp->insts[isp->next_mi_irq_ctx];
 			if (isp->mode == ISP_MCM_MODE && !ins->online_mcm) {
 				irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
@@ -597,12 +574,8 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					}
 				}
 			}
-#ifdef WITH_LEGACY_ISP
-			if (0)
-#else
-			if (node)
-#endif
-			{
+
+			if (node) {
 				if (isp->mode != ISP_STRM_MODE) {
 					sch.id = isp->next_mi_irq_ctx;
 					sch.mp_buf.mem.addr = get_phys_addr(node->data, 0);
@@ -633,18 +606,6 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				goto _post;
 			}
 			if (isp->mode != ISP_STRM_MODE) {
-#ifdef WITH_LEGACY_ISP
-				u32 count, size;
-
-				count = isp->in_counts[isp->next_mi_irq_ctx] % MCM_BUF_NUM;
-				if (count > 0)
-					count--;
-				else
-					count = MCM_BUF_NUM - 1;
-				size = ins->fmt.ifmt.stride * ins->fmt.ifmt.height;
-				isp_set_rdma_buffer(isp, isp->in_bufs[isp->next_mi_irq_ctx].addr +
-							count * size);
-#else
 				struct ibuf *mcm_ib;
 
 				mcm_ib = list_first_entry_or_null
@@ -665,7 +626,6 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 					isp_set_schedule(isp, &sch, true);
 					goto _exit;
 				}
-#endif
 			} else if (ctx->sink_buf) {
 				isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
 				irq_notify(isp, cur_mi_irq_ctx, &mi_mis);

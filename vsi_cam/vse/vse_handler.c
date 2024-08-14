@@ -292,6 +292,7 @@ struct vse_irq_ctx *get_next_irq_ctx(struct vse_device *vse)
 irqreturn_t vse_irq_handler(int irq, void *arg)
 {
 	struct vse_device *vse = (struct vse_device *)arg;
+	struct vse_msg msg = { .id = VSE_MSG_IRQ_STAT };
 	struct vse_instance *inst;
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
@@ -363,17 +364,11 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}
 
-#ifndef WITH_LEGACY_VSE
-		{
-			struct vse_msg msg = { .id = VSE_MSG_IRQ_STAT };
-
-			msg.inst = -1;
-			msg.channel = -1;
-			msg.irq.num = VSE_MI_MIS;
-			msg.irq.stat = mis;
-			vse_post(vse, &msg, false);
-		}
-#endif
+		msg.inst = -1;
+		msg.channel = -1;
+		msg.irq.num = VSE_MI_MIS;
+		msg.irq.stat = mis;
+		vse_post(vse, &msg, false);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;
