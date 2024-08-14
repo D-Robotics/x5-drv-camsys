@@ -167,44 +167,78 @@ static u64 vnode_path_show(u8 *buf, u64 offset, struct vio_node *vnode)
     return offset;
 }
 
+static s32 vio_search_vnode_path(char *buf, struct vio_node *vnode)
+{
+	u32 i;
+	s32 len;
+	s32 offset = 0;
+	struct vio_node *tmp_vnode;
+	struct vio_subdev *vdev;
+
+	len = vnode_path_show(buf, (size_t)offset, vnode);
+	offset += len;
+	if (osal_test_bit((u32)VIO_NODE_OTF_OUTPUT, &vnode->state)) {
+		tmp_vnode = vnode->next;
+		len = vio_search_vnode_path(&buf[offset], tmp_vnode);
+		offset += len;
+
+	}
+
+	if (osal_test_bit((u32)VIO_NODE_M2M_OUTPUT, &vnode->state)) {
+		for (i = 0; i < MAXIMUM_CHN; i++) {
+			if ((vnode->active_och & (u32)1u << i) == 0u)
+				continue;
+			vdev = vnode->och_subdev[i];
+			if (vdev->next != NULL) {
+				tmp_vnode = vdev->next->vnode;
+				len = vio_search_vnode_path(&buf[offset], tmp_vnode);
+				offset += len;
+			}
+		}
+	}
+
+	return offset;
+}
+
 void vio_chain_path_show(struct vio_chain *vchain)
 {
-    s32 i, j;
+	s32 i, j;
 	u64 offset = 0;
-    u64 len;
-    struct vio_node_mgr *vnode_mgr;
-    struct vio_node *vnode, *tmp_vnode;
+	u64 len;
+	struct vio_node_mgr *vnode_mgr;
+	struct vio_node *vnode;
 
-    if (vchain == NULL) {
-        vio_info("%s: feedback independent mode", __func__);
-        return;
-    }
+	if (vchain == NULL) {
+		vio_info("%s: feedback independent mode", __func__);
+		return;
+	}
 
-    if (vchain->path_print == 1)
-        return;
+	if (vchain->path_print == 1)
+		return;
 
-    vchain->path_print = 1;
-    len = snprintf(&vchain->path[offset], PATH_SIZE - offset, "[S%d] ", vchain->id);
-    offset += len;
+	vchain->path_print = 1;
+	len = snprintf(&vchain->path[offset], PATH_SIZE - offset, "[S%d] ", vchain->id);
+	offset += len;
 
-    for (i = 0; i < MODULE_NUM; i++) {
-        vnode_mgr = &vchain->vnode_mgr[i];
-        for (j = 0; j < MAX_VNODE_NUM; j++) {/*PRQA S 2810,0497*/
+	for (i = 0; i < MODULE_NUM; i++) {
+		vnode_mgr = &vchain->vnode_mgr[i];
+		for (j = 0; j < MAX_VNODE_NUM; j++) {/*PRQA S 2810,0497*/
 			vnode = vnode_mgr->vnode[j];
 			if (vnode == NULL)
 				continue;
 
-            tmp_vnode = vnode->head;
-            while (tmp_vnode != NULL) {
-                offset = vnode_path_show(vchain->path, offset, tmp_vnode);
-                tmp_vnode = tmp_vnode->next;
-            }
-		}
-    }
-    len = snprintf(&vchain->path[offset], PATH_SIZE - offset, "\n");
-    offset += len;
+			if (osal_test_bit((u32)VIO_NODE_OTF_INPUT, &vnode->state) ||
+					osal_test_bit((u32)VIO_NODE_M2M_INPUT, &vnode->state))
+				continue;
 
-    vio_info("%s: %s", __func__, vchain->path);
+			len = vio_search_vnode_path(&vchain->path[offset], vnode);
+			offset += (size_t)len;
+		}
+	}
+	len = snprintf(&vchain->path[offset], PATH_SIZE - offset, "\n");
+	offset += len;
+
+	vio_info("%s: %s", __func__, vchain->path);
 }
 
 struct vio_node *vio_get_vnode(u32 flow_id, u32 module_id)
