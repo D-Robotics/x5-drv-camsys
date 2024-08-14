@@ -384,7 +384,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 		ib = ins->mcm_ib1;
 	}
 
-	isp_set_mcm_raw_buffer(isp, path, ib->buf.addr, &ins->fmt.ifmt);
+	isp_set_mcm_buffer(isp, path, ib->buf.addr);
 
 	pr_debug("isp_add_job:%d\n", inst);
 	isp_add_job(isp, inst, true);

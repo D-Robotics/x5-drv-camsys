@@ -392,14 +392,34 @@ int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt)
 	return isp_post(isp, &msg, true);
 }
 
-void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path_id,
-			    phys_addr_t phys_addr, struct cam_format *fmt)
+void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr)
 {
-	u32 base = MI_MCMn_RAW_BASE(path_id);
+	u32 base = MI_MCMn_RAW_BASE(path);
 
 	isp_write(isp, MI_MCMn_RAW_ADDR(base), phys_addr);
-	isp_write(isp, MI_MCMn_RAW_SIZE(base), fmt->stride * fmt->height);
-	isp_write(isp, MI_MCMn_RAW_OFFS(base), 0x00000000);
+}
+
+static void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path,
+				   phys_addr_t phys_addr, struct cam_format *fmt)
+{
+	u32 base = MI_MCMn_RAW_BASE(path);
+	u32 size;
+
+	isp_write(isp, MI_MCMn_RAW_ADDR(base), phys_addr);
+	/* configure mcm raw buffer size, unaligned by default. */
+	switch (fmt->format) {
+	case CAM_FMT_RAW10:
+		size = fmt->width * fmt->height * 10 / 8;
+		break;
+	case CAM_FMT_RAW12:
+		size = fmt->width * fmt->height * 12 / 8;
+		break;
+	default:
+		size = fmt->stride * fmt->height;
+		break;
+	}
+	isp_write(isp, MI_MCMn_RAW_SIZE(base), size);
+	isp_write(isp, MI_MCMn_RAW_OFFS(base), 0x0);
 }
 
 void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr)
@@ -704,7 +724,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	if (state == CAM_STATE_STARTED) {
 		if (isp->mode != ISP_STRM_MODE) {
 			if (ib) {
-				isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr, &ins->fmt.ifmt);
+				isp_set_mcm_buffer(isp, ins->stream_idx, ib->buf.addr);
 				ins->mcm_ib1 = ib;
 				list_del(&ib->entry);
 			}

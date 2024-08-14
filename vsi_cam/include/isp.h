@@ -132,8 +132,7 @@ struct isp_device {
 #endif
 };
 
-void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path_id,
-			    phys_addr_t phys_addr, struct cam_format *fmt);
+void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr);
 void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr);
 void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam_format *fmt);
 int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync);
