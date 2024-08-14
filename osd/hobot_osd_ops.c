@@ -261,11 +261,12 @@ static void handle_update_buffer(struct osd_handle *handle, int32_t index)
 static enum osd_process_type osd_hw_check_limit(struct osd_subdev *subdev,
 						struct osd_handle *handle, struct osd_bind *bind)
 {
+	/* HW in X5 donot limit y */
 	if ((subdev->osd_hw_cfg == NULL) ||
 		// 1 ||
 		subdev->chn_id == OSD_VSE_DS4 ||
 		(bind->bind_info.show_en == 0) || (bind->bind_info.osd_level > 0)||
-		(bind->bind_info.start_point.y < subdev->osd_hw_limit_y) ||
+		// (bind->bind_info.start_point.y < subdev->osd_hw_limit_y) ||
 		(atomic_read(&subdev->osd_hw_cnt) >= OSD_HW_PROC_NUM)) {
 		return OSD_PROC_VGA8;
 	} else {
