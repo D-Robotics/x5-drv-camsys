@@ -453,8 +453,6 @@ void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam
 	isp_write(isp, MI_MP_CR_SIZE, 0x00000000);
 	isp_write(isp, MI_MP_CR_OFFS, 0x00000000);
 
-	isp_write(isp, MI_MP_CTRL, 0x00000038); /* force update */
-
 	dev_dbg(isp->dev, "stride %d, height %d, phys_addr %llx\n", fmt->stride, fmt->height, phys_addr);
 }
 
@@ -470,8 +468,9 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	bool state_check = false;
 	int cur_state;
 	struct ibuf *ib = NULL;
+	struct isp_irq_ctx *ctx;
 	unsigned long flags;
-	struct mcm_sch_node *node = NULL;
+	struct cam_list_node *node = NULL;
 
 	if (!isp || inst >= isp->num_insts)
 		return -EINVAL;
@@ -502,12 +501,14 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 			if (!state_check) {
 				isp_reset_schedule(isp);
 			} else if (isp->next_mi_irq_ctx == inst) {
+				struct mcm_sch_node *sch_node = NULL;
+
 				spin_lock_irqsave(&isp->mcm_sch_lock, flags);
-				node = list_first_entry_or_null(&isp->mcm_sch_busy_list, struct mcm_sch_node,
-									entry);
-				if (node && node->inst == inst) {
-					list_del(&node->entry);
-					list_add_tail(&node->entry, &isp->mcm_sch_idle_list);
+				sch_node = list_first_entry_or_null(&isp->mcm_sch_busy_list,
+								    struct mcm_sch_node, entry);
+				if (sch_node && sch_node->inst == inst) {
+					list_del(&sch_node->entry);
+					list_add_tail(&sch_node->entry, &isp->mcm_sch_idle_list);
 				}
 				isp->error = 1;
 				isp->rdma_busy = false;
@@ -525,10 +526,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 		}
 
 		if (isp->mode == ISP_STRM_MODE) {
-			struct isp_irq_ctx *ctx;
-			unsigned long flags;
-			struct cam_list_node *node = NULL;
-
 			ins->state = CAM_STATE_STARTED;
 			spin_lock_irqsave(&ins->lock, flags);
 			ctx = &ins->ctx;
@@ -538,22 +535,59 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 				rc = -ENOMEM;
 				goto _exit;
 			} else {
-				node = list_first_entry_or_null(ctx->src_buf_list2,
-								struct cam_list_node, entry);
-				if (node) {
-					list_del(&node->entry);
-					list_add_tail(&node->entry, ctx->src_buf_list3);
-					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
-					isp_set_schedule(isp, &sch, false);
-				} else {
-					// for SIF stream to ISP online to VSE without ISP ddr output
-					if (ctx->is_src_online_mode) {
-						isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
-						isp_set_schedule(isp, &sch, false);
-					} else {
+				if (!ctx->is_src_online_mode || ctx->ddr_en) {
+					node = list_first_entry_or_null(ctx->src_buf_list2,
+									struct cam_list_node, entry);
+					if (!node) {
 						rc = -EINVAL;
 						goto _exit;
 					}
+					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+					/* force update */
+					value = isp_read(isp, MI_MP_CTRL);
+					value |= 0x38;
+					isp_write(isp, MI_MP_CTRL, value);
+					isp_set_schedule(isp, &sch, false);
+					list_del(&node->entry);
+					list_add_tail(&node->entry, ctx->src_buf_list3);
+					ins->shd_src_node = node;
+				} else {
+					isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
+					/* force update */
+					value = isp_read(isp, MI_MP_CTRL);
+					value |= 0x38;
+					isp_write(isp, MI_MP_CTRL, value);
+					isp_set_schedule(isp, &sch, false);
+				}
+			}
+
+			spin_lock_irqsave(&ins->lock, flags);
+			rc = new_frame(ctx);
+			spin_unlock_irqrestore(&ins->lock, flags);
+			if (rc) {
+				if (ins->shd_src_node) {
+					list_del(&ins->shd_src_node->entry);
+					list_add_tail(&ins->shd_src_node->entry, ctx->src_buf_list1);
+					ins->shd_src_node = NULL;
+				}
+				rc = -ENOMEM;
+				goto _exit;
+			} else {
+				if (!ctx->is_src_online_mode || ctx->ddr_en) {
+					node = list_first_entry_or_null(ctx->src_buf_list2,
+									struct cam_list_node, entry);
+					if (!node) {
+						if (ins->shd_src_node) {
+							list_del(&ins->shd_src_node->entry);
+							list_add_tail(&ins->shd_src_node->entry, ctx->src_buf_list1);
+							ins->shd_src_node = NULL;
+						}
+						rc = -EINVAL;
+						goto _exit;
+					}
+					list_del(&node->entry);
+					list_add_tail(&node->entry, ctx->src_buf_list3);
+					ins->src_node = node;
 				}
 			}
 		} else {
@@ -669,11 +703,22 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	msg.inst = inst;
 	msg.state = state;
 	rc = isp_post(isp, &msg, true);
-	if (state == CAM_STATE_STARTED && isp->mode != ISP_STRM_MODE) {
-		if (ib) {
-			isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr, &ins->fmt.ifmt);
-			ins->mcm_ib1 = ib;
-			list_del(&ib->entry);
+
+	if (state == CAM_STATE_STARTED) {
+		if (isp->mode != ISP_STRM_MODE) {
+			if (ib) {
+				isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr, &ins->fmt.ifmt);
+				ins->mcm_ib1 = ib;
+				list_del(&ib->entry);
+			}
+		} else {
+			if (!ctx->is_src_online_mode || ctx->ddr_en) {
+				if (ins->src_node)
+					isp_set_mp_buffer(isp, get_phys_addr(ins->src_node->data, 0),
+							  &ins->fmt.ofmt);
+			} else {
+				isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
+			}
 		}
 		ins->state = CAM_STATE_STARTED;
 	}

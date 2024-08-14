@@ -59,6 +59,7 @@ struct isp_instance {
 	struct list_head src_buf_list1, src_buf_list2, src_buf_list3;
 	struct cam_list_node src_bufs[SRC_BUF_NUM];
 	struct ibuf *mcm_ib, *mcm_ib1, *prev_mcm_ib;
+	struct cam_list_node *shd_src_node, *src_node;
 	struct isp_format_cap fmt_cap[ISP_FMT_MAX];
 	struct isp_format fmt;
 	struct cam_input in;
