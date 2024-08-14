@@ -24,6 +24,37 @@ static s32 vse_video_get_version(struct vio_version_info *version)
 	return 0;
 }
 
+int vse_get_sta_val(void *arg, uint32_t chn_id, volatile uint16_t hist_num[VSE_HIST_MAX][BIN_LEVEL_NUM + 1])
+{
+	u32 inst_id;
+	struct vse_nat_instance *nat_inst;
+	struct vse_instance *vse_inst;
+	struct vse_hist_num *vse_hist;
+	unsigned long flags;
+	int i, j;
+
+	if (!arg)
+		return -EINVAL;
+
+	nat_inst = (struct vse_nat_instance *)arg;
+	inst_id = nat_inst->id;
+	vse_inst = &nat_inst->dev->vse_dev.insts[inst_id];
+	vse_hist = &vse_inst->hist_num[chn_id];
+
+	if (!vse_inst->is_hist_num_updated)
+		return -EBUSY;
+
+	spin_lock_irqsave(&vse_inst->hist_lock, flags);
+	for(i = 0; i < VSE_HIST_MAX; i++) {
+		for (j = 0; j < BIN_LEVEL_NUM + 1; j++) {
+			hist_num[i][j] = vse_hist->range_num[i][j];
+		}
+	}
+	spin_unlock_irqrestore(&vse_inst->hist_lock, flags);
+
+	return 0;
+}
+
 int32_t vse_video_get_struct_size(struct vio_struct_size *vio_size)
 {
 	int32_t ret = 0;
@@ -772,6 +803,7 @@ static int vse_set_osd_cfg(struct cam_ctx *ctx, u32 ochn_id)
 	struct vse_nat_instance *vse_ins = NULL;
 	struct vse_osd_cfg *osd_hw_cfg = NULL;
 	struct vse_osd_info osd_info;
+	struct vse_hist_info hist_info[VSE_HIST_MAX];
 	int ret = 0;
 	int i = 0;
 
@@ -815,8 +847,57 @@ static int vse_set_osd_cfg(struct cam_ctx *ctx, u32 ochn_id)
 		osd_hw_cfg->color_map.color_map_update = false;
 	}
 
+	if (osd_hw_cfg->osd_sta_update) {
+		memset(&hist_info, 0, sizeof(hist_info));
+		for (i = 0; i < VSE_HIST_MAX; i++) {
+			hist_info[i].histId = i;
+			hist_info[i].histEnable = osd_hw_cfg->osd_sta[i].sta_en;
+			hist_info[i].histStartX = osd_hw_cfg->osd_sta[i].start_x;
+			hist_info[i].histStartY = osd_hw_cfg->osd_sta[i].start_y;
+			hist_info[i].histHsize  = osd_hw_cfg->osd_sta[i].width;
+			hist_info[i].histVsize  = osd_hw_cfg->osd_sta[i].height;
+		}
+		ret |= vse_set_hist_info(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, hist_info);
+		osd_hw_cfg->osd_sta_update = false;
+		vse_ins->dev->vse_dev.insts[vse_ins->id].is_need_read_hist = true;
+		vse_ins->dev->vse_dev.insts[vse_ins->id].is_hist_num_updated = false;
+	}
+
+	if (osd_hw_cfg->osd_sta_level_update) {
+		ret |= vse_set_bin_level(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, osd_hw_cfg->osd_sta_level);
+		osd_hw_cfg->osd_sta_level_update = false;
+		vse_ins->dev->vse_dev.insts[vse_ins->id].is_need_read_hist = true;
+		vse_ins->dev->vse_dev.insts[vse_ins->id].is_hist_num_updated = false;
+	}
+
 	return ret;
 }
+
+static int vse_read_hist(struct cam_ctx *ctx, u32 ochn_id)
+{
+	struct vio_subdev *subdev = NULL;
+	struct vse_nat_instance *nat_inst = NULL;
+	struct vse_osd_cfg *osd_hw_cfg = NULL;
+	struct vse_instance *vse_inst = NULL;
+	unsigned long flags;
+	int ret = 0;
+	int i;
+
+	subdev = (struct vio_subdev *)ctx;
+	nat_inst = container_of(subdev, struct vse_nat_instance, vdev);
+	osd_hw_cfg = &nat_inst->osd_hw_cfg;
+	vse_inst = &nat_inst->dev->vse_dev.insts[nat_inst->id];
+
+	spin_lock_irqsave(&vse_inst->hist_lock, flags);
+	for (i = 0; i < MAX_STA_NUM; i++) {
+			if (nat_inst->osd_hw_cfg.osd_sta[i].sta_en)
+				ret |= vse_get_hist_num(&nat_inst->dev->vse_dev, nat_inst->id, ochn_id, i);
+	}
+	spin_unlock_irqrestore(&vse_inst->hist_lock, flags);
+
+	return ret;
+}
+
 
 static int vse_set_mode(struct cam_ctx *ctx, u32 mode)
 {
@@ -847,6 +928,7 @@ static const struct cam_ops vse_ops = {
 	.is_completed = vse_is_completed,
 	.osd_update = vse_osd_update,
 	.osd_set_cfg = vse_set_osd_cfg,
+	.read_hist = vse_read_hist,
 	.set_mode = vse_set_mode,
 };
 
@@ -999,6 +1081,7 @@ static int vse_nat_probe(struct platform_device *pdev)
 			osd_info->chn_id = j;
 			osd_info->ctx_id = i;
 			osd_info->return_frame = vse_return_frame;
+			osd_info->get_sta_val = vse_get_sta_val;
 		}
 		nat_dev->src_instance[i].vdev.vnode = &nat_dev->vnode[i];
 		nat_dev->src_instance[i].dev = nat_dev;

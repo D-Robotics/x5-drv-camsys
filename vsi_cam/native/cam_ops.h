@@ -10,6 +10,7 @@ struct cam_ops {
 	int (*trigger)(struct cam_ctx *ctx);
 	bool (*osd_update)(struct cam_ctx *ctx);
 	int (*osd_set_cfg)(struct cam_ctx *ctx, u32 ochn_id);
+	int (*read_hist)(struct cam_ctx *ctx, u32 ochn_id);
 	int (*set_mode)(struct cam_ctx *ctx, u32 mode);
 };
 

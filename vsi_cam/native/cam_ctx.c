@@ -174,6 +174,27 @@ int cam_osd_set_cfg(struct cam_ctx *ctx, u32 ochn_id)
 	return ret;
 }
 
+int cam_read_hist(struct cam_ctx *ctx, u32 ochn_id)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+	struct vio_node *vnode;
+	const struct cam_ops *ops = NULL;
+	int ret = 0;
+
+	if (unlikely(!subdev))
+		return  -EINVAL;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode && vnode->id < MODULE_NUM) {
+		ops = get_ops(vnode->id);
+		if (ops && ops->read_hist)
+			ret = ops->read_hist(ctx, ochn_id);
+	}
+
+	return ret;
+}
+
 int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;

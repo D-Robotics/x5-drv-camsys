@@ -9,21 +9,26 @@
 #include "mem_helper_uapi.h"
 
 #define LUT_NUM 64
+#define BIN_LEVEL_NUM (3)
+#define VSE_OSD_MAX   (4)
+#define VSE_HIST_MAX  (8)
 
 #define VSE_UID(n) cam_fourcc('v', 's', 'e', (n) + '0')
 
 #define VSE_MSG_ALLOC_CMD_BUF (0x1)
 #define VSE_MSG_SET_OSD_BUF   (0x2)
 
-#define VSE_MSG_IRQ_STAT        (0x1 << 8)
-#define VSE_MSG_SRC_ALT         (0x2 << 8)
-#define VSE_MSG_MCM_SCH         (0x3 << 8)
-#define VSE_MSG_CASCADE_UPDATE  (0x4 << 8)
-#define VSE_MSG_SKIP_FRAME      (0x5 << 8)
-#define VSE_MSG_OSD_INFO        (0x6 << 8)
-#define VSE_MSG_OSD_SCH         (0x7 << 8)
-#define VSE_MSG_LOAD_LUT        (0x8 << 8)
-#define VSE_MSG_MODE_CHANGED    (0x9 << 8)
+#define VSE_MSG_IRQ_STAT         (0x1 << 8)
+#define VSE_MSG_SRC_ALT          (0x2 << 8)
+#define VSE_MSG_MCM_SCH          (0x3 << 8)
+#define VSE_MSG_CASCADE_UPDATE   (0x4 << 8)
+#define VSE_MSG_SKIP_FRAME       (0x5 << 8)
+#define VSE_MSG_OSD_INFO         (0x6 << 8)
+#define VSE_MSG_OSD_SCH          (0x7 << 8)
+#define VSE_MSG_LOAD_LUT         (0x8 << 8)
+#define VSE_MSG_MODE_CHANGED     (0x9 << 8)
+#define VSE_MSG_HIST_UPDATE      (0x10 << 8)
+#define VSE_MSG_BIN_LEVEL_UPDATE (0x11 << 8)
 
 #define VSE_OUT_CHNL_MAX (6)
 
@@ -52,6 +57,15 @@ struct vse_format {
 			__u32 scale_type; /* enum scale_type */
 		} out;
 	};
+};
+
+struct vse_hist_info {
+    __u8  histId;
+    __u8  histEnable;
+    __u32 histHsize;
+    __u32 histVsize;
+    __u32 histStartX;
+    __u32 histStartY;
 };
 
 struct vse_osd_info {
@@ -123,6 +137,8 @@ struct vse_msg {
 			__u32 num;
 			__u32 stat;
 		} irq;
+		struct vse_hist_info hist_info[VSE_HIST_MAX];
+		__u8   bin_level[BIN_LEVEL_NUM];
 		struct vse_format fmt;
 		struct vse_osd_info osd_info;
 		struct vse_lut_tbl lut_tbl;

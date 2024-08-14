@@ -384,7 +384,8 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 	return 0;
 }
 
-int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info) {
+int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info)
+{
 	struct vse_msg msg;
 
 	if (!vse || inst >= vse->num_insts)
@@ -398,7 +399,8 @@ int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_
 	return vse_post(vse, &msg, false);
 }
 
-int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf) {
+int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf)
+{
 	struct vse_msg msg;
 
 	if (!vse || inst >= vse->num_insts)
@@ -412,7 +414,8 @@ int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_b
 	return vse_post(vse, &msg, false);
 }
 
-int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl) {
+int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl)
+{
 	struct vse_msg msg;
 
 	if (!vse || inst >= vse->num_insts)
@@ -424,6 +427,60 @@ int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_t
 	memcpy(&msg.lut_tbl, lut_tbl, sizeof(struct vse_lut_tbl));
 
 	return vse_post(vse, &msg, false);
+}
+
+int vse_set_hist_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_hist_info info[VSE_HIST_MAX])
+{
+	struct vse_msg msg;
+
+	if (!vse || inst >= vse->num_insts)
+		return -EINVAL;
+
+	msg.id = VSE_MSG_HIST_UPDATE;
+	msg.inst = inst;
+	msg.channel = chnl;
+	memcpy(&msg.hist_info, info, sizeof(msg.hist_info));
+
+	return vse_post(vse, &msg, false);
+}
+
+int vse_set_bin_level(struct vse_device *vse, u32 inst, u32 chnl, u8 bin_level[BIN_LEVEL_NUM])
+{
+	struct vse_msg msg;
+
+	if (!vse || inst >= vse->num_insts)
+		return -EINVAL;
+
+	msg.id = VSE_MSG_BIN_LEVEL_UPDATE;
+	msg.inst = inst;
+	msg.channel = chnl;
+	memcpy(&msg.bin_level, bin_level, sizeof(u8)*BIN_LEVEL_NUM);
+
+	return vse_post(vse, &msg, false);
+}
+
+int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id)
+{
+	u32 base_addr, val;
+	struct vse_instance *vse_ins;
+
+	if (!vse)
+		return -1;
+
+	vse_ins = &vse->insts[inst];
+	base_addr = VSE_HISTn_BASE(chnl);
+
+	if (!vse_ins)
+		return -1;
+
+	val = vse_read(vse, VSE_HISTn_ROIn_RANGE01(base_addr, hist_id));
+	vse_ins->hist_num[chnl].range_num[hist_id][0] = val & 0xffff;
+	vse_ins->hist_num[chnl].range_num[hist_id][1] = (val >> 16) & 0xffff;
+	val = vse_read(vse, VSE_HISTn_ROIn_RANGE23(base_addr, hist_id));
+	vse_ins->hist_num[chnl].range_num[hist_id][2] = val & 0xffff;
+	vse_ins->hist_num[chnl].range_num[hist_id][3] = (val >> 16) & 0xffff;
+
+	return 0;
 }
 
 int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx)
@@ -563,6 +620,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	memset(&ins->osd, 0, sizeof(ins->osd));
 	ins->error = 1;
 	memset(ins->fps, 0, sizeof(ins->fps));
+	memset(ins->hist_num, 0, sizeof(ins->hist_num));
 	if (ins->cmd_buf_va) {
 		dma_free_coherent(vse->dev, ins->cmd_buf.size, ins->cmd_buf_va, ins->cmd_buf.addr);
 		ins->cmd_buf_va = NULL;
@@ -678,8 +736,10 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		return rc;
 	}
 
-	for (i = 0; i < vse_dt.num_insts; i++)
+	for (i = 0; i < vse_dt.num_insts; i++) {
 		spin_lock_init(&vse->insts[i].lock);
+		spin_lock_init(&vse->insts[i].hist_lock);
+	}
 
 	dev_dbg(dev, "VS VSE driver (base) probed done\n");
 	return 0;

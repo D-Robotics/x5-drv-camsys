@@ -313,13 +313,22 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		mis = BIT(13);
 
 	if (mis & BIT(13)) {
+		inst = &vse->insts[vse->next_irq_ctx];
+		if (inst->is_need_read_hist && !(mis1 & 0x5)) {
+			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
+				if (inst->ctx.src_buf[i])
+					cam_read_hist(inst->ctx.src_ctx[i], i);
+			}
+			inst->is_need_read_hist = false;
+			inst->is_hist_num_updated = true;
+		}
+
 		value = vse_read(vse, VSE_MI0_BUS_CFG);
 		value &= ~BIT(21);
 		vse_write(vse, VSE_MI0_BUS_CFG, value);
 		value = vse_read(vse, VSE_MI_IMSC1);
 		value &= ~0x5;
 		vse_write(vse, VSE_MI_IMSC1, value);
-		inst = &vse->insts[vse->next_irq_ctx];
 		spin_lock_irqsave(&inst->lock, flags);
 		frame_done(inst, !!(mis1 & 0x5));
 		spin_unlock_irqrestore(&inst->lock, flags);

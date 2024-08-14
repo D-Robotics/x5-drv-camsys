@@ -98,6 +98,11 @@ int cam_osd_set_cfg(struct cam_ctx *ctx, u32 ochn_id)
 	return 0;
 }
 
+int cam_read_hist(struct cam_ctx *ctx, u32 ochn_id)
+{
+	return 0;
+}
+
 int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 {
 	return 0;

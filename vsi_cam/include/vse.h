@@ -47,12 +47,18 @@ struct vse_format_cap {
 	struct cam_res_cap res[VSE_OUT_CHNL_MAX][VSE_RES_MAX];
 };
 
+struct vse_hist_num {
+    __u16  range_num[VSE_HIST_MAX][BIN_LEVEL_NUM + 1];
+};
+
 struct vse_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct vse_irq_ctx ctx;
 	struct vse_format_cap fmt_cap[VSE_FMT_MAX];
 	struct cam_format ifmt, ofmt[VSE_OUT_CHNL_MAX];
 	struct cam_rect crop[VSE_OUT_CHNL_MAX];
+	struct vse_hist_num hist_num[VSE_OUT_CHNL_MAX];
+	spinlock_t hist_lock; /* lock for handling ctx */
 	struct vse_cmd_buf *cmd_buf_va;
 	struct mem_buf cmd_buf;
 	struct mem_buf osd[VSE_OUT_CHNL_MAX][4];
@@ -64,6 +70,8 @@ struct vse_instance {
 	ktime_t last_frame_done[VSE_OUT_CHNL_MAX];
 	ktime_t frame_interval[VSE_OUT_CHNL_MAX];
 	u32 frame_count[VSE_OUT_CHNL_MAX];
+	bool is_need_read_hist;
+	bool is_hist_num_updated;
 };
 
 struct vse_device {
@@ -109,6 +117,9 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info);
 int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf);
 int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl);
+int vse_set_hist_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_hist_info info[VSE_HIST_MAX]);
+int vse_set_bin_level(struct vse_device *vse, u32 inst, u32 chnl, u8 bin_level[BIN_LEVEL_NUM]);
+int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id);
 int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx);
 int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_add_job(struct vse_device *vse, u32 inst);

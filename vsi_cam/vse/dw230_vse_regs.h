@@ -42,4 +42,11 @@
 #define VSE_OSDn_ROI2_ADDR(__base)      ((__base) + 0x30)
 #define VSE_OSDn_ROI3_ADDR(__base)      ((__base) + 0x40)
 
+#define VSE_HISTn_BASE(n)               (n == 0 ? 0x1800: (n == 1 ? 0x1900:\
+                                        (n == 2 ? 0x1a00: (n == 3 ? 0x1b00:\
+                                        (n == 4 ? 0x1c00:0x1d00)))))
+#define VSE_HISTn_ROIn_RANGE01(__base, roi)    ((__base) + 0x90 + (roi) *0x8)
+#define VSE_HISTn_ROIn_RANGE23(__base, roi)    ((__base) + 0x90 + (roi) *0x8 + 0x4)
+
+
 #endif /* _DW230_VSE_REGS_H_ */
