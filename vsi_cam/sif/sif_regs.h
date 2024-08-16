@@ -144,22 +144,22 @@ static inline u32 SIF_PPS_TIMEOUT_INTVAL(unsigned int n)
 
 static inline u32 SIF_IPI_TS_VSYNC_LO(unsigned int n)
 {
-	return (0x208 + (n) * 0x08);
+	return (0x208 + (n) * 0x10);
 }
 
 static inline u32 SIF_IPI_TS_VSYNC_HI(unsigned int n)
 {
-	return (0x20c + (n) * 0x08);
+	return (0x20c + (n) * 0x10);
 }
 
 static inline u32 SIF_IPI_TS_TRIG_LO(unsigned int n)
 {
-	return (0x210 + (n) * 0x08);
+	return (0x210 + (n) * 0x10);
 }
 
 static inline u32 SIF_IPI_TS_TRIG_HI(unsigned int n)
 {
-	return (0x214 + (n) * 0x08);
+	return (0x214 + (n) * 0x10);
 }
 
 static inline u32 SIF_PPS_TS_LO(unsigned int n)
