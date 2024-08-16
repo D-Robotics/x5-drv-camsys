@@ -582,7 +582,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 
 	reset_job_queue(vse->jq);
 
-	vse_reset(vse);
+	/* vse_reset(vse); */
 	vse->is_completed = true;
 	vse->error = 1;
 	return vse_runtime_suspend(vse->dev);
