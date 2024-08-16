@@ -83,7 +83,7 @@ static int start_cam_pulse_gen(struct cam_pulse_device *dev)
 	ctrl_0.pulse_width = cam_pulse_ctrl->cam_pulse_width;
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_0, ctrl_0.value);
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_TAR_H, (u32)(cam_pulse_ctrl->cam_pulse_wait >> 32));
-	cam_pulse_write(dev, REG_CAM_SEC_PULSE_TAR_H, (u32)(cam_pulse_ctrl->cam_pulse_wait & (0xffffffff)));
+	cam_pulse_write(dev, REG_CAM_SEC_PULSE_TAR_L, (u32)(cam_pulse_ctrl->cam_pulse_wait & (0xffffffff)));
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_INTVAL, cam_pulse_ctrl->cam_pulse_interval);
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_OFFSET, cam_pulse_ctrl->cam_pulse_offset);
 
