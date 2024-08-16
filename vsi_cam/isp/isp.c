@@ -399,8 +399,9 @@ void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr)
 	isp_write(isp, MI_MCMn_RAW_ADDR(base), phys_addr);
 }
 
-static void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path,
-				   phys_addr_t phys_addr, struct cam_format *fmt)
+static inline void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path,
+					  phys_addr_t phys_addr, struct cam_format *fmt,
+					  bool aligned)
 {
 	u32 base = MI_MCMn_RAW_BASE(path);
 	u32 size;
@@ -409,10 +410,16 @@ static void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path,
 	/* configure mcm raw buffer size, unaligned by default. */
 	switch (fmt->format) {
 	case CAM_FMT_RAW10:
-		size = fmt->width * fmt->height * 10 / 8;
+		if (aligned)
+			size = fmt->width * fmt->height * 2;
+		else
+			size = fmt->width * fmt->height * 10 / 8;
 		break;
 	case CAM_FMT_RAW12:
-		size = fmt->width * fmt->height * 12 / 8;
+		if (aligned)
+			size = fmt->width * fmt->height * 2;
+		else
+			size = fmt->width * fmt->height * 12 / 8;
 		break;
 	default:
 		size = fmt->stride * fmt->height;
@@ -615,7 +622,8 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 					rc = -ENOMEM;
 					goto _exit;
 				}
-				isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr, &ins->fmt.ifmt);
+				isp_set_mcm_raw_buffer(isp, ins->stream_idx, ib->buf.addr,
+						       &ins->fmt.ifmt, ins->hdr_en || ins->tile_en);
 				ins->mcm_ib = ib;
 				list_del(&ib->entry);
 
