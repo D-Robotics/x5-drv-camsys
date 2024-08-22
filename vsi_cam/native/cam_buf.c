@@ -45,6 +45,10 @@ struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 			trans_frame(framemgr, frame, FS_PROCESS);
 			vio_x_barrier_irqr(framemgr, flags);
 			vnode = (struct vio_node *)subdev->vnode;
+			if (subdev->id == VNODE_ID_SRC) {
+				(void)memcpy(&vnode->frameid, &frame->frameinfo.frameid,
+					sizeof(struct frame_id_desc));
+			}
 			vio_set_stat_info(vnode->flow_id, vnode->id, STAT_DQ,
 					  vnode->frameid.frame_id);
 		}

@@ -163,7 +163,8 @@ static struct vio_frame *vpf_get_sched_work(struct vio_group_task *gtask)
 	return frame;
 }
 
-static struct vio_node *vpf_get_ready_vnode(struct vio_group_task *gtask)
+static struct vio_node *vpf_get_ready_vnode(struct vio_group_task *gtask,
+	struct frame_id_desc *frameid)
 {
 	u64 flags = 0;
 	struct vio_node *vnode = NULL;
@@ -185,7 +186,7 @@ static struct vio_node *vpf_get_ready_vnode(struct vio_group_task *gtask)
 	gtask->rcount--;
 	gtask->last_work = vnode->ctx_id;
 	vio_x_barrier_irqr(gtask, flags);/*PRQA S 2996*/
-	(void)memcpy(&vnode->frameid, &frame->frameinfo.frameid, sizeof(struct frame_id_desc));
+	(void)memcpy(frameid, &frame->frameinfo.frameid, sizeof(struct frame_id_desc));
 
 	vio_dbg("[C%d] %s next config ready, rcount %d\n", vnode->ctx_id, __func__, gtask->rcount);
 
@@ -195,13 +196,14 @@ static struct vio_node *vpf_get_ready_vnode(struct vio_group_task *gtask)
 static void vio_update_hw_config(struct vio_group_task *gtask)
 {
 	struct vio_node *leader, *vnode;
+	struct frame_id_desc frameid;
 
-	leader = vpf_get_ready_vnode(gtask);
+	leader = vpf_get_ready_vnode(gtask, &frameid);
 	if (leader != NULL) {
 		osal_atomic_dec(&leader->rcount);
 		vnode = leader->next;
 		while (vnode != NULL && vnode->leader == 0) {
-			(void)memcpy(&vnode->frameid, &leader->frameid, sizeof(vnode->frameid));
+			(void)memcpy(&vnode->frameid, &frameid, sizeof(vnode->frameid));
 			vio_dbg("[S%d][%s]%s #1\n", leader->flow_id, leader->name, __func__);/*PRQA S 0685,1294*/
 			if (vnode->frame_work != NULL)
 				vnode->frame_work(vnode);
