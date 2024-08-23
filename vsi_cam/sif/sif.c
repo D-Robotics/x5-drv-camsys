@@ -593,9 +593,9 @@ static ssize_t sif_debugfs_fps_read(struct file *f, char __user *buf,
 	char *output = NULL;
 	size_t output_size = 0;
 	size_t output_len = 0;
-	ssize_t all_bytes_read = 0;
 	ssize_t targets_read;
-	u32 i, fps;
+	u32 i;
+	u64 fps;
 
 	output_size = 40 * sif->num_insts;
 	output = kmalloc(output_size, GFP_KERNEL);
@@ -607,22 +607,24 @@ static ssize_t sif_debugfs_fps_read(struct file *f, char __user *buf,
 	for (i = 0; i < sif->num_insts; i++) {
 		ins = &sif->insts[i];
 		if (ins->frame_interval)
-			fps = 100000 * (ins->frame_count - 1) / ins->frame_interval;
+			fps = 1000 * (ins->frame_count - 1) / ins->frame_interval;
 		else
 			fps = 0;
 		output_len += snprintf(output + output_len, output_size - output_len,
-				       "ipi[%d] fps:%d  ", i, fps / 100);
+				       "ipi[%d] fps:%lld  ", i, fps);
 	}
 	output_len += snprintf(output + output_len, output_size - output_len, "\n");
 
-	all_bytes_read = output_len;
-
-	if (*pos >= all_bytes_read)
+	if (*pos >= output_len) {
+		kfree(output);
 		return 0;
+	}
 
-	targets_read = min(size, (size_t)(all_bytes_read - *pos));
-	if (copy_to_user(buf, output + *pos, targets_read))
+	targets_read = min(size, (size_t)(output_len - *pos));
+	if (copy_to_user(buf, output + *pos, targets_read)) {
+		kfree(output);
 		return -EFAULT;
+	}
 
 	*pos += targets_read;
 	kfree(output);
