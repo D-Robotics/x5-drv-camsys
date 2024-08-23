@@ -104,7 +104,7 @@ struct isp_device {
 	struct job_queue *jq; /* offline job queue */
 	struct isp_instance *insts;
 	struct list_head in_buf_list;
-	struct mem_buf in_bufs[ISP_SINK_ONLINE_PATH_MAX];
+	struct mem_buf in_bufs[ISP_SINK_ONLINE_PATH_MAX][MCM_BUF_NUM];
 	struct ibuf_manage ibm[ISP_SINK_ONLINE_PATH_MAX];
 	struct ibuf ib[ISP_SINK_ONLINE_PATH_MAX][MCM_BUF_NUM];
 	int stream_idx_mapping[ISP_SINK_ONLINE_PATH_MAX];

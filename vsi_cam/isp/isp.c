@@ -287,28 +287,27 @@ static int alloc_mcm_buf(struct isp_device *isp, u32 id, struct cam_format *fmt)
 	u32 size, i, rc;
 	struct mem_buf *buf;
 
-	size = fmt->stride * fmt->height * MCM_BUF_NUM;
+	size = fmt->stride * fmt->height;
 	if (!size)
 		return -EINVAL;
-	buf = &isp->in_bufs[id];
-	if (buf->size > 0 && buf->size != size) {
-		rc = mem_free(isp->dev, &isp->in_buf_list, buf);
-		if (unlikely(rc)) {
-			pr_err("mem_free fail, (err=%d)\n", rc);
-			return rc;
+	for (i = 0; i < MCM_BUF_NUM; i++) {
+		buf = &isp->in_bufs[id][i];
+		if (buf->size > 0 && buf->size != size) {
+			rc = mem_free(isp->dev, &isp->in_buf_list, buf);
+			if (unlikely(rc)) {
+				pr_err("mem_free fail, (err=%d)\n", rc);
+				return rc;
+			}
 		}
-	}
-	if (buf->size != size) {
-		buf->size = size;
-		rc = mem_alloc(isp->dev, &isp->in_buf_list, buf);
-		if (unlikely(rc)) {
-			pr_err("mem_alloc fail, (err=%d)\n", rc);
-			return rc;
-		}
+		if (buf->size != size) {
+			buf->size = size;
+			rc = mem_alloc(isp->dev, &isp->in_buf_list, buf);
+			if (unlikely(rc)) {
+				pr_err("mem_alloc fail, (err=%d)\n", rc);
+				return rc;
+			}
 
-		size = fmt->stride * fmt->height;
-		for (i = 0; i < MCM_BUF_NUM; i++) {
-			isp->ib[id][i].buf.addr = buf->addr + i * size;
+			isp->ib[id][i].buf.addr = buf->addr;
 			isp->ib[id][i].buf.size = size;
 			list_add_tail(&isp->ib[id][i].entry, &isp->ibm[id].list1);
 		}
@@ -1198,9 +1197,11 @@ int isp_close(struct isp_device *isp, u32 inst)
 		INIT_LIST_HEAD(&isp->ibm[inst].list1);
 		INIT_LIST_HEAD(&isp->ibm[inst].list2);
 		INIT_LIST_HEAD(&isp->ibm[inst].list3);
-		if (isp->in_bufs[inst].size > 0) {
-			mem_free(isp->dev, &isp->in_buf_list, &isp->in_bufs[inst]);
-			isp->in_bufs[inst].size = 0;
+		for (i = 0; i < MCM_BUF_NUM; i++) {
+			if (isp->in_bufs[inst][i].size > 0) {
+				mem_free(isp->dev, &isp->in_buf_list, &isp->in_bufs[inst][i]);
+				isp->in_bufs[inst][i].size = 0;
+			}
 		}
 	}
 	if (inst < HDR_BUF_NUM && isp->hdr_bufs[inst].size > 0) {
