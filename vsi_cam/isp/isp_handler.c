@@ -504,7 +504,8 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			/** If mp bus timeout occurs, we report an artificial
 			 *  interrupt status and drop the current frame data.
 			 */
-			mi_mis.miv2_mis = 0x800025;
+			mi_mis.miv2_mis = 0x1800025;
+			isp->frame_done_status = (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END);
 			pr_info("mp bus timed-out!\n");
 		}
 
