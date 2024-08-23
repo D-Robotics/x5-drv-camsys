@@ -540,6 +540,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	struct vse_instance *ins;
 	struct vse_msg msg;
 	bool dis_clk = false;
+	u32 value;
 	int rc;
 
 	if (!vse)
@@ -581,6 +582,11 @@ int vse_close(struct vse_device *vse, u32 inst)
 		return 0;
 
 	reset_job_queue(vse->jq);
+
+	/* switch to a hardware unconnected input source while closed */
+	vse_write(vse, VSE_IN_CTRL, 0x3ffff000);
+	value = vse_read(vse, VSE_CTRL);
+	vse_write(vse, VSE_CTRL, value | BIT(15));
 
 	/* vse_reset(vse); */
 	vse->is_completed = true;

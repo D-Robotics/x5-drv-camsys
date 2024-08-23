@@ -3,6 +3,7 @@
 #define _DW230_VSE_REGS_H_
 
 #define VSE_CTRL                        (0x0304)
+#define VSE_IN_CTRL                     (0x0308)
 
 /* MI IRQ */
 #define VSE_FE_MIS                      (0x0114)
