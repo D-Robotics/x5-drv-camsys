@@ -27,6 +27,7 @@ config VIDEO_VS_SIF_NAT
 	depends on OF && HAS_DMA && HOBOT_VIN_NODE
 	select VIDEO_VS_CSI2_SNPS_NAT
 	select VIDEO_VS_SW_ISC
+	select VIDEO_VS_CAM_PULSE
 	help
 	  This is a driver that is complying with customers' native framework
 	  for VeriSilicon's camera sensor interface integrated processor. It

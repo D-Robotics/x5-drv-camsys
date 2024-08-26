@@ -71,7 +71,7 @@ static int cam_pulse_parse_dt(struct platform_device *pdev, struct cam_pulse_gen
 	return rc;
 }
 
-static int start_cam_pulse_gen(struct cam_pulse_device *dev)
+int start_cam_pulse_gen(struct cam_pulse_device *dev)
 {
 	union cam_sec_pulse_ctrl_0 ctrl_0;
 	struct cam_pulse_gen *cam_pulse_ctrl = &dev->cam_pulse_ctrl;
@@ -80,6 +80,10 @@ static int start_cam_pulse_gen(struct cam_pulse_device *dev)
 		return -ENODEV;
 
 	ctrl_0.value       = cam_pulse_read(dev, REG_CAM_SEC_PULSE_CTRL_0);
+	if (ctrl_0.value & 0x01) {
+		dev_info(dev->dev, "cam pulse has enabled \n");
+		return 0;
+	}
 	ctrl_0.pulse_width = cam_pulse_ctrl->cam_pulse_width;
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_0, ctrl_0.value);
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_TAR_H, (u32)(cam_pulse_ctrl->cam_pulse_wait >> 32));
@@ -92,10 +96,13 @@ static int start_cam_pulse_gen(struct cam_pulse_device *dev)
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_0, ctrl_0.value);
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_1, 0x4 | BIT(cam_pulse_ctrl->cam_pulse_start_mode));
 
+	dev_info(dev->dev,"%s\n",__func__);
+
 	return 0;
 }
+EXPORT_SYMBOL(start_cam_pulse_gen);
 
-static int stop_cam_pulse_gen(struct cam_pulse_device *dev)
+int stop_cam_pulse_gen(struct cam_pulse_device *dev)
 {
 	union cam_sec_pulse_ctrl_0 ctrl_0;
 
@@ -103,13 +110,27 @@ static int stop_cam_pulse_gen(struct cam_pulse_device *dev)
 		return -ENODEV;
 
 	ctrl_0.value = cam_pulse_read(dev, REG_CAM_SEC_PULSE_CTRL_0);
+	if (ctrl_0.enable == 0) {
+		dev_info(dev->dev, "cam pulse has disabled \n");
+		return 0;
+	}
 	ctrl_0.enable = 0;
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_0, ctrl_0.value);
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_0, 0);
 	cam_pulse_write(dev, REG_CAM_SEC_PULSE_CTRL_1, 0);
 
+	dev_info(dev->dev,"%s\n",__func__);
+
 	return 0;
 }
+EXPORT_SYMBOL(stop_cam_pulse_gen);
+
+void put_cam_pulse_device(struct cam_pulse_device *dev)
+{
+	if (dev)
+		put_device(dev->dev);
+}
+EXPORT_SYMBOL(put_cam_pulse_device);
 
 static int cam_pulse_probe(struct platform_device *pdev)
 {
@@ -137,12 +158,6 @@ static int cam_pulse_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = start_cam_pulse_gen(cam_pulse);
-	if (rc < 0) {
-		dev_err(&pdev->dev, "start cam pulse failed!\n");
-		return rc;
-	}
-
 	dev_info(&pdev->dev, "%s successfully done!\n", __func__);
 
 	return 0;
@@ -150,16 +165,6 @@ static int cam_pulse_probe(struct platform_device *pdev)
 
 static int cam_pulse_remove(struct platform_device *pdev)
 {
-	int rc;
-	struct cam_pulse_device *cam_pulse;
-
-	cam_pulse = platform_get_drvdata(pdev);
-	rc = stop_cam_pulse_gen(cam_pulse);
-	if (rc < 0) {
-		dev_err(&pdev->dev, "cam pulse stop failed!\n");
-		return rc;
-	}
-
 	return 0;
 }
 

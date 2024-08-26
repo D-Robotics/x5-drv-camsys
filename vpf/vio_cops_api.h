@@ -61,6 +61,8 @@ struct cim_interface_ops {
 	s32 (*cim_isp_read_reg)(uint32_t flow_id, uint32_t offset, uint32_t *value);
 	s32 (*cim_isp_update_calib_param)(uint32_t flow_id, uint32_t module_type, void *param);
 	u64 (*cim_get_lpwm_timestamps)(uint32_t lpwm_chn);
+	int32_t (*set_cam_pulse_gen)(uint32_t enable);
+
 };
 
 struct isp_interface_ops {

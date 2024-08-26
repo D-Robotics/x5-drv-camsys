@@ -532,8 +532,33 @@ void cim_video_get_frameid(struct vio_node *vnode, struct frame_id_desc *frameid
 	}
 }
 
+int32_t cim_set_cam_pulse_gen(uint32_t enable)
+{
+	uint8_t index = 0;
+	uint32_t ret = 0;
+	struct j6_cim_dev *cim_dev = NULL;
+
+	for (index = 0; index < VIN_NODE_MAX_DEVICE; index ++) {
+		cim_dev = cim_get_dev(index);
+		if (cim_dev && cim_dev->sif.pulse_dev)
+			break;
+		if (index == (VIN_NODE_MAX_DEVICE - 1)) {
+			vio_err("%s cannot get pulse_dev, check your code \n", __func__);
+			return -EFAULT;
+		}
+	}
+
+	if (enable == 1)
+		ret = sif_set_cam_pulse_gen(cim_dev->sif.pulse_dev, true);
+	else if (enable == 0)
+		ret = sif_set_cam_pulse_gen(cim_dev->sif.pulse_dev, false);
+
+	return ret;
+}
+
 struct cim_interface_ops cim_cops = {
 	.get_frame_id = cim_video_get_frameid,
+	.set_cam_pulse_gen = cim_set_cam_pulse_gen,
 	// .cim_get_lpwm_timestamps = cim_get_lpwm_timestamps,
 };
 
@@ -916,6 +941,7 @@ static s32 cim_probe(struct platform_device *pdev)
 		vio_get_callback_ops(&g_cim_sensor_cops, VIN_MODULE, COPS_5);
 #endif
 	vio_register_callback_ops(&cb_cim_interface, VIN_MODULE, COPS_0);
+	vio_register_callback_ops(&cb_cim_interface, VIN_MODULE, COPS_9);	/*for lpwm*/
 
 	platform_set_drvdata(pdev, (void *)cim);
 	osal_spin_init(&cim->slock);
@@ -993,7 +1019,7 @@ static s32 cim_remove(struct platform_device *pdev)
 	vio_unregister_callback_ops(VIN_MODULE, COPS_0);
 	vio_unregister_callback_ops(VIN_MODULE, COPS_1);
 	// vio_unregister_callback_ops(VIN_MODULE, COPS_8);
-	// vio_unregister_callback_ops(VIN_MODULE, COPS_9);
+	vio_unregister_callback_ops(VIN_MODULE, COPS_9);
 	vin_node_device_node_deinit(cim->hw_id);
 #ifdef CONFIG_DEBUG_FS
 	sif_debugfs_remo(&cim->sif);

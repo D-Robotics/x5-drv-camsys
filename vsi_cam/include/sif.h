@@ -126,6 +126,7 @@ struct sif_device {
 	spinlock_t isc_lock; /* lock for sending msg */
 	spinlock_t cfg_reg_lock; /* lock for cfg register*/
 	struct cam_ctrl_device *ctrl_dev;
+	struct cam_pulse_device *pulse_dev;
 	struct sif_instance *insts;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
@@ -168,5 +169,6 @@ int sif_runtime_resume(struct device *dev);
 
 s32 sif_msg_handler(void *msg, u32 len, void *arg);
 irqreturn_t sif_irq_handler(int irq, void *arg);
+int sif_set_cam_pulse_gen(struct cam_pulse_device *dev, bool enable);
 
 #endif /* _SIF_H_ */

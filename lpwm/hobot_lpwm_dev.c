@@ -540,8 +540,15 @@ static uint64_t get_timestamp_null(uint32_t lpwm_chn)
 	return 0;
 }
 
+static int32_t set_cam_pulse_gen_null(uint32_t enable)
+{
+	lpwm_info(NULL, "func null\n");
+	return 0;
+}
+
 struct cim_interface_ops cim_ops = {
 	.cim_get_lpwm_timestamps = get_timestamp_null,
+	.set_cam_pulse_gen = set_cam_pulse_gen_null,
 };
 
 /**

@@ -22,17 +22,17 @@
 #define LPWM_ADJUST_STEP_SHIFT	16
 
 /* LPWM trigger source */
-#define TRIGGER_AON_RTC		0
-#define TRIGGER_SOFTWARE_RTC0	1
-#define TRIGGER_SOFTWARE_RTC1	2
-#define TRIGGER_SOFTWARE_RTC2	3
-#define TRIGGER_SOFTWARE_RTC3	4
-#define TRIGGER_PAD0		5
-#define TRIGGER_PAD1		6
-#define TRIGGER_PAD2		7
-#define TRIGGER_PAD3		8
-#define PCIE_ETH		9
-#define MCU_ETH			10
+#define TRIGGER_PAD0		0	/* IO */
+#define TRIGGER_PAD1		1	/* IO */
+#define TRIGGER_PAD2		2	/* IO */
+#define TRIGGER_PAD3		3	/* IO */
+#define TRIGGER_NENT_PTP_PPS	4
+#define TRIGGER_SOFTWARE	5
+#define TRIGGER_TIME_SYNC2	6	/* gps */ /* IO */
+#define TRIGGER_TIME_SYNC1	7	/* mcu */ /* IO */
+#define TRIGGER_TIME_SYNC3	8	/* IO */
+#define TRIGGER_TIME_SYNC4	9	/* IO */
+#define TRIGGER_SIF_PPS		10	/* camera 1sec pulse out */
 #define LPWM_TRIG_SOURCE_MAX	11
 
 /* lpwm config range */

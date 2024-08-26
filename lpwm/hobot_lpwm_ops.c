@@ -30,12 +30,29 @@ static struct pwm_device *gpwm_dev[LPWM_ID_MAX];
 static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_id, uint32_t enable)
 {
 	uint32_t trmode;
+	uint32_t trsource;
+	int32_t ret = 0;
 
 	osal_mutex_lock(&lpwm->con_lock);
 	trmode = lpwm->lpwm_attr[0].trigger_mode;
+	trsource = lpwm->lpwm_attr[0].trigger_source;
 	osal_mutex_unlock(&lpwm->con_lock);
 
 	if (enable) {
+		if (osal_atomic_read(&lpwm->enable_sif_pps_cnt) == 0) {
+			if (trsource == TRIGGER_SIF_PPS) {
+				if (lpwm->cim_cops != NULL) {
+					ret = ((struct cim_interface_ops *)
+						(lpwm->cim_cops->cops))->set_cam_pulse_gen(1);
+					if (ret < 0) {
+						lpwm_err(lpwm, "Enable sif pps failed\n");
+						return ;
+					}
+				}
+			}
+		}
+		osal_atomic_inc(&lpwm->enable_sif_pps_cnt);
+
 		if (osal_atomic_read(&lpwm->enable_cnt[c_id]) == 0) {
 			lpwm_channel_enable_single(lpwm->base, c_id, 1);
 
@@ -54,6 +71,20 @@ static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_i
 		if (osal_atomic_dec_return(&lpwm->enable_cnt[c_id]) == 0) {
 			lpwm_channel_enable_single(lpwm->base, c_id, 0);
 		}
+
+		if (osal_atomic_dec_return(&lpwm->enable_sif_pps_cnt) == 0) {
+			if (trsource == TRIGGER_SIF_PPS) {
+				if (lpwm->cim_cops != NULL) {
+					ret = ((struct cim_interface_ops *)
+						(lpwm->cim_cops->cops))->set_cam_pulse_gen(0);
+					if (ret < 0) {
+						lpwm_err(lpwm, "Disable sif pps failed\n");
+						return ;
+					}
+				}
+			}
+		}
+
 		lpwm_debug(lpwm, "Channel-%d disable, remaining count %d\n",
 			   c_id, osal_atomic_read(&lpwm->enable_cnt[c_id]));
 	}

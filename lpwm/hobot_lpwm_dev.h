@@ -95,6 +95,7 @@ struct hobot_lpwm_ins {
 	struct lpwm_chip_cdev	*lpwm_cdev;		/**< Pointer of char dev */
 	osal_atomic_t		rcount[LPWM_CNUM];	/**< request count */
 	osal_atomic_t		enable_cnt[LPWM_CNUM];	/**< enable count */
+	osal_atomic_t		enable_sif_pps_cnt;
 	int32_t			irq;			/**< Interrupt id */
 	int32_t			dev_idx;		/**< instance id */
 	chip_type_t		utype;			/**< which sys occupy lpwm */

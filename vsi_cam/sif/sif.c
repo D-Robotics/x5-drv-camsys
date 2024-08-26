@@ -11,6 +11,7 @@
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
+#include "cam_pulse.h"
 #include "isc.h"
 #include "sif_uapi.h"
 #include "sif_regs.h"
@@ -435,6 +436,21 @@ int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx)
 	return 0;
 }
 
+int sif_set_cam_pulse_gen(struct cam_pulse_device *dev, bool enable)
+{
+	int rc = 0;
+
+	if (!dev)
+		return -EINVAL;
+
+	if (enable)
+		rc = start_cam_pulse_gen(dev);
+	else
+		rc = stop_cam_pulse_gen(dev);
+
+	return rc;
+}
+
 static void sif_bound(struct isc_handle *isc, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
@@ -530,6 +546,10 @@ int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 	if (IS_ERR(sif->ctrl_dev))
 		return PTR_ERR(sif->ctrl_dev);
 
+	sif->pulse_dev = get_cam_pulse_device(pdev);
+	if (IS_ERR(sif->pulse_dev))
+		return PTR_ERR(sif->pulse_dev);
+
 	rc = of_property_read_u32(pdev->dev.of_node, "timestamp-clk", &sif->timestamp_clk);
 	if (rc) {
 		dev_err(&pdev->dev, "couldn't get timestamp-clk value\n");
@@ -571,6 +591,7 @@ int sif_remove(struct platform_device *pdev, struct sif_device *sif)
 			rc);
 
 	put_cam_ctrl_device(sif->ctrl_dev);
+	put_cam_pulse_device(sif->pulse_dev);
 	dev_dbg(&pdev->dev, "VS SIF driver #%d (base) removed\n", sif->id);
 	return 0;
 }
