@@ -32,6 +32,7 @@ typedef struct os_dev {
 	struct miscdevice  miscdev;
 	struct i2c_client *client;
 	struct i2c_board_info board_info;
+	uint32_t no_new_client;
 } os_dev_t;
 
 /**
