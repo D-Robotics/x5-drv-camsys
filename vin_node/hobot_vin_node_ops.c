@@ -99,12 +99,6 @@ s32 vin_node_attr_check(struct vio_video_ctx *vctx, vin_node_attr_t *vin_node_at
 		return -EINVAL;
 	}
 
-	if (cim_attr->cim_isp_flyby + cim_attr->cim_pym_flyby > 1) {
-		vio_err("[S%d] cim otf attr error isp_flyby(%d) pym_flyby(%d)\n", vctx->ctx_id,
-				cim_attr->cim_isp_flyby, cim_attr->cim_pym_flyby);
-		return -EINVAL;
-	}
-
 	if (func->skip_frame == CIM_HW_SKIP) {
 		if ((func->hw_extract_m != 1 && func->hw_extract_n != 1) ||
 				func->hw_extract_m > MAX_HW_EXTRACT_FRAME ||
@@ -812,7 +806,7 @@ s32 vin_node_bind_check(struct vio_subdev *vdev, struct vio_subdev *remote_vdev,
 	id = vdev->vctx[0]->id;
 
 	if (online) {
-		if (id != VNODE_ID_CAP || (cim_attr->cim_isp_flyby | cim_attr->cim_pym_flyby) == 0) {
+		if (id != VNODE_ID_CAP) {
 			vio_err("[V%d] unsuport otf bind\n", id);
 			ret = -1;
 		}
