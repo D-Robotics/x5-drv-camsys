@@ -316,10 +316,12 @@ void vio_frame_done(struct vio_subdev *vdev)
 			trans_frame(framemgr, frame, FS_COMPLETE);
 		}
 		vio_x_barrier_irqr(framemgr, flags);
-
-		metadata = vio_get_metadata(vnode->flow_id, vnode->frameid.frame_id);
-		if (metadata != NULL && frame->vbuf.metadata != NULL)
-			memcpy(frame->vbuf.metadata, metadata, METADATA_SIZE);
+		/* set metadata to output node */
+		if (vdev->id >= VNODE_ID_CAP) {
+			metadata = vio_get_metadata(vnode->flow_id, vnode->frameid.frame_id);
+			if (metadata != NULL && frame->vbuf.metadata != NULL)
+				memcpy(frame->vbuf.metadata, metadata, METADATA_SIZE);
+		}
 	} else {
 		vio_x_barrier_irqr(framemgr, flags);
 		event = VIO_FRAME_NDONE;

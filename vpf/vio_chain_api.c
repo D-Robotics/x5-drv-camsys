@@ -417,8 +417,9 @@ void *vio_get_metadata(u32 flow_id, u32 frame_id)
 		meta_mgr->max_frameid = frame_id;
 	} else {
 		if ((meta_mgr->max_frameid - frame_id) >= META_OVERFLOW_EWARN)
-			vio_warn("%s: overflow early warning, max frameid %d, frame id %d, please check!\n",
-				__func__, meta_mgr->max_frameid, frame_id);
+			vio_warn_ratelimited("%s: overflow early warning,"
+					"max frameid %d, frame id %d, please check!\n",
+					__func__, meta_mgr->max_frameid, frame_id);
 	}
 
 	cur_index = frame_id % CMN_META_NUM;
@@ -429,7 +430,7 @@ void *vio_get_metadata(u32 flow_id, u32 frame_id)
 	} else if (meta_mgr->frameid[cur_index] == frame_id) {
 		metadata = meta_mgr->metadata + cur_index * METADATA_SIZE;
 	} else {
-		vio_warn("%s: frame id %d not match\n", __func__, frame_id);
+		vio_warn_ratelimited("%s: frame id %d not match\n", __func__, frame_id);
 	}
 	vio_x_barrier_irqr(meta_mgr, flags);
 
