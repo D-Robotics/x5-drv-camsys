@@ -675,6 +675,24 @@ s32 vin_node_set_ochn_attr(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_att
 	return ret;
 }
 
+s32 vin_node_get_ochn_attr(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_attr)
+{
+	u32 ochn_id;
+	struct vio_subdev *vdev;
+	struct vin_node_subdev *subdev;
+
+	vdev = vctx->vdev;
+
+	subdev = container_of(vdev, struct vin_node_subdev, vdev);
+	ochn_id = vctx->id - VNODE_ID_CAP;
+
+	memcpy(ochn_attr, &subdev->vin_attr.vin_ochn_attr[ochn_id],
+		sizeof(vin_ochn_attr_t));
+
+	vio_info("[S%d]%s done\n", vctx->ctx_id, __func__);
+	return 0;
+}
+
 /**
  * @NO{S10E01C01}
  * @ASIL{B}

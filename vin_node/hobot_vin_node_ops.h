@@ -26,6 +26,7 @@ s32 vin_node_set_attr(struct vio_video_ctx *vctx, vin_node_attr_t *vin_node_attr
 s32 vin_node_set_attr_ex(struct vio_video_ctx *vctx, vin_attr_ex_t *vin_attr_ex);
 s32 vin_node_set_internal_attr(struct vio_video_ctx *vctx, void *mipi_attr);
 s32 vin_node_set_ochn_attr(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_attr);
+s32 vin_node_get_ochn_attr(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_attr);
 s32 vin_node_set_ichn_attr(struct vio_video_ctx *vctx, vin_ichn_attr_t *ichn_attr);
 s32 vin_node_set_ochn_buff_attr(struct vio_video_ctx *vctx,
 		vin_ochn_buff_attr_t *ochn_buff_attr);

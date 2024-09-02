@@ -365,6 +365,29 @@ s32 vin_node_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg)
 	return ret;
 }
 
+s32 vin_node_video_get_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg)
+{
+	s32 ret;
+	u64 copy_ret;
+	vin_ochn_attr_t vin_ochn_attr;
+
+	ret = vin_node_get_ochn_attr(vctx, &vin_ochn_attr);
+	if (ret < 0) {
+		vio_err("%s: vin node get ochn attr error\n", __func__);
+		return ret;
+	}
+
+	copy_ret = osal_copy_to_app((void __user *) arg,
+			(void *)&vin_ochn_attr, sizeof(vin_ochn_attr_t));
+	if (copy_ret != 0u) {
+		vio_err("%s: failed to copy to user, ret = %lld\n", __func__, copy_ret);
+		return -EFAULT;
+	}
+
+	vio_info("[C%d]%s done\n", vctx->ctx_id, __func__);
+	return ret;
+}
+
 /**
  * @NO{S10E01C01}
  * @ASIL{B}
@@ -802,6 +825,7 @@ struct vio_common_ops vin_node_vops = {
 	.video_set_inter_attr = vin_node_video_set_internal_attr,
 	.video_set_ichn_attr = vin_node_video_set_ichn_attr,
 	.video_set_ochn_attr = vin_node_video_set_ochn_attr,
+	.video_get_ochn_attr = vin_node_video_get_ochn_attr,
 	.video_set_obuf = vin_node_video_set_ochn_buff_attr,
 	.video_start = vin_node_video_streamon,
 	.video_stop = vin_node_video_streamoff,
