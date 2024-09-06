@@ -157,12 +157,48 @@ EXPORT_SYMBOL(get_virt_addr);
 
 int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf)
 {
+	struct _mem_buf *b, *_buf = NULL;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return -EINVAL;
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr/* && b->size == buf->size*/) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return -EINVAL;
+
+	dma_sync_single_for_device(g_ion_client->dev->dev.this_device,
+						_buf->addr, _buf->size, DMA_TO_DEVICE);
+
 	return 0;
 }
 EXPORT_SYMBOL(mem_cache_flush);
 
 int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf)
 {
+	struct _mem_buf *b, *_buf = NULL;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return -EINVAL;
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr/* && b->size == buf->size*/) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return -EINVAL;
+
+	dma_sync_single_for_cpu(g_ion_client->dev->dev.this_device, _buf->addr,
+					_buf->size, DMA_FROM_DEVICE);
+
 	return 0;
 }
 EXPORT_SYMBOL(mem_cache_invalid);
