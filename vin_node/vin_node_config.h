@@ -43,11 +43,11 @@
 #define MAX_IPI_CHANNELS	2
 
 #ifdef X5_CHIP
-#define MAX_CIM_WIDTH		4656
+#define MAX_CIM_WIDTH		8192
 #else
 #define MAX_CIM_WIDTH		4096
 #endif
-#define MAX_CIM_HEIGHT		4096
+#define MAX_CIM_HEIGHT		8192
 #define MAX_HW_EXTRACT_FRAME	63
 
 #define CIM_STRIDE_ALIGN	16

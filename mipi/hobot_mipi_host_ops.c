@@ -84,11 +84,11 @@ static const mipi_host_cfg_union_t mipi_host_cfg_max = {
 		.mclk = 65535u,
 		.mipiclk = 23940u,
 #ifdef X5_CHIP
-		.width = 4656u,
+		.width = 8192u,
 #else
 		.width = 4096u,
 #endif
-		.height = 4096u,
+		.height = 8192u,
 		.linelenth = 65535u,
 		.framelenth = 65535u,
 		.settle = 127u,
