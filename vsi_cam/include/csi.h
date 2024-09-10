@@ -110,6 +110,8 @@ enum csi_ipi_info {
 	CSI_IPI_INFO_NUM,
 };
 
+int csi_open(struct csi_device *csi, u32 inst);
+int csi_close(struct csi_device *csi, u32 inst);
 int csi_probe(struct platform_device *pdev, struct csi_device *csi, bool is_native);
 int csi_remove(struct platform_device *pdev, struct csi_device *csi);
 void csi_set_tpg_mode(struct csi_device *csi, u32 tpg_en, u32 pkt2pkt_time, u8 horizontal, u8 vc, u8 datatype);

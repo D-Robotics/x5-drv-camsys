@@ -128,6 +128,8 @@ struct sif_device {
 	struct cam_ctrl_device *ctrl_dev;
 	struct cam_pulse_device *pulse_dev;
 	struct sif_instance *insts;
+	struct mutex open_lock; /* lock for open_cnt */
+	refcount_t open_cnt;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_fps_file;
@@ -149,6 +151,8 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 		   bool post, enum sif_channel_type channel_type);
 int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post);
 int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx);
+int sif_open(struct sif_device *sif, u32 inst);
+int sif_close(struct sif_device *sif, u32 inst);
 int sif_probe(struct platform_device *pdev, struct sif_device *sif);
 int sif_remove(struct platform_device *pdev, struct sif_device *sif);
 #ifdef CONFIG_DEBUG_FS

@@ -408,6 +408,25 @@ static const struct v4l2_subdev_ops csi_subdev_ops = {
 	.pad = &csi_pad_ops,
 };
 
+static int csi_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct csi_v4l_instance *inst = sd_to_csi_v4l_instance(sd);
+
+	return csi_open(inst->dev, inst->id);
+}
+
+static int csi_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct csi_v4l_instance *inst = sd_to_csi_v4l_instance(sd);
+
+	return csi_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops csi_internal_ops = {
+	.open = csi_v4l_open,
+	.close = csi_v4l_close,
+};
+
 static void csi_inst_remove(struct csi_v4l_instance *insts, u32 num)
 {
 	u32 i;
@@ -505,6 +524,7 @@ static int csi_v4l_probe(struct platform_device *pdev)
 			csi_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &csi_internal_ops;
 
 		/* the last one is for idi-control */
 		if (i == v4l_dev->csi_dev.num_insts - 1) {
@@ -557,7 +577,7 @@ static int csi_v4l_remove(struct platform_device *pdev)
 	}
 
 	rc = csi_runtime_suspend(dev);
-		if (rc) {
+	if (rc) {
 		dev_err(dev, "failed to call csi_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}

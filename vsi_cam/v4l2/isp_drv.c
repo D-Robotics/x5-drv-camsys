@@ -3,7 +3,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/pm_runtime.h>
 #include <media/v4l2-device.h>
 
 #include "cam_dev.h"
@@ -359,9 +358,6 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 			cam_reqbufs(&isp->sink_ctx, 0, NULL);
 		else
 			isp_set_stream_idx(isp->dev, isp->id, -1);
-		rc = isp_close(isp->dev, isp->id);
-		if (rc < 0)
-			return rc;
 	}
 	return 0;
 }
@@ -516,6 +512,35 @@ static const struct v4l2_subdev_ops isp_subdev_ops = {
 	.core = &isp_core_ops,
 };
 
+static int isp_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct isp_v4l_instance *inst = sd_to_isp_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_open(sd);
+	if (rc < 0)
+		return rc;
+
+	return isp_open(inst->dev, inst->id);
+}
+
+static int isp_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct isp_v4l_instance *inst = sd_to_isp_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_close(sd);
+	if (rc < 0)
+		return rc;
+
+	return isp_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops isp_internal_ops = {
+	.open = isp_v4l_open,
+	.close = isp_v4l_close,
+};
+
 static void isp_inst_remove(struct isp_v4l_instance *insts, u32 num)
 {
 	u32 i;
@@ -629,6 +654,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 			isp_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &isp_internal_ops;
 
 		if (i < ISP_SINK_ONLINE_PATH_MAX)
 			n->bctx.is_sink_online_mode = true;
@@ -648,19 +674,6 @@ static int isp_v4l_probe(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	isp_debugfs_init(&v4l_dev->isp_dev);
 #endif
-
-	pm_runtime_set_active(dev);
-	rc = pm_runtime_get_sync(dev);
-	if (rc < 0) {
-		pm_runtime_disable(dev);
-		return rc;
-	}
-
-	rc = isp_runtime_resume(dev);
-	if (rc) {
-		dev_err(dev, "failed to call isp_runtime_resume (err=%d)\n", rc);
-		return rc;
-	}
 
 	if (v4l_dev->isp_dev.axi)
 		dev_dbg(dev, "axi clock: %ld Hz\n", clk_get_rate(v4l_dev->isp_dev.axi));
@@ -691,16 +704,6 @@ static int isp_v4l_remove(struct platform_device *pdev)
 		cam_ctx_release(&v4l_dev->insts[i].src_ctx);
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}
-
-	isp_reset(isp_dev);
-
-	rc = isp_runtime_suspend(dev);
-	if (rc < 0)
-		return rc;
-
-	rc = pm_runtime_put_sync(dev);
-	if (rc < 0)
-		return rc;
 
 	rc = isp_remove(pdev, &v4l_dev->isp_dev);
 	if (rc < 0) {

@@ -18,6 +18,8 @@
 
 #include "sif.h"
 
+#define REFCNT_INIT_VAL (1)
+
 void sif_post(struct sif_device *sif, void *msg, u32 len)
 {
 	struct isc_post_param param = {
@@ -487,6 +489,54 @@ static struct isc_notifier_ops sif_notifier_ops = {
 	.got = sif_msg_handler,
 };
 
+int sif_open(struct sif_device *sif, u32 inst)
+{
+	bool en_clk = false;
+	int rc = 0;
+
+	if (!sif)
+		return -EINVAL;
+
+	mutex_lock(&sif->open_lock);
+	if (refcount_read(&sif->open_cnt) == REFCNT_INIT_VAL)
+		en_clk = true;
+	refcount_inc(&sif->open_cnt);
+
+	if (en_clk)
+		rc = sif_runtime_resume(sif->dev);
+	mutex_unlock(&sif->open_lock);
+	return rc;
+}
+
+int sif_close(struct sif_device *sif, u32 inst)
+{
+	bool dis_clk = false;
+	int rc;
+
+	if (!sif)
+		return -EINVAL;
+
+	if (inst >= sif->num_insts)
+		return -EINVAL;
+
+	mutex_lock(&sif->open_lock);
+	if (refcount_read(&sif->open_cnt) > REFCNT_INIT_VAL) {
+		refcount_dec(&sif->open_cnt);
+		if (refcount_read(&sif->open_cnt) == REFCNT_INIT_VAL)
+			dis_clk = true;
+	}
+
+	if (dis_clk)
+		goto _exit;
+
+	sif_reset(sif);
+	rc = sif_runtime_suspend(sif->dev);
+
+_exit:
+	mutex_unlock(&sif->open_lock);
+	return rc;
+}
+
 int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 {
 	struct device *dev = &pdev->dev;
@@ -536,6 +586,8 @@ int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 	sif->rst = sif_dt.rsts[0].rst;
 	spin_lock_init(&sif->isc_lock);
 	spin_lock_init(&sif->cfg_reg_lock);
+	mutex_init(&sif->open_lock);
+	refcount_set(&sif->open_cnt, REFCNT_INIT_VAL);
 
 	sif->insts = devm_kcalloc(dev, sif_dt.num_insts, sizeof(*sif->insts),
 				  GFP_KERNEL);

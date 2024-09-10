@@ -206,6 +206,16 @@ static struct isc_notifier_ops gdc_notifier_ops = {
 	.got = gdc_msg_handler,
 };
 
+int gdc_open(struct gdc_device *gdc, u32 inst)
+{
+	return 0;
+}
+
+int gdc_close(struct gdc_device *gdc, u32 inst)
+{
+	return 0;
+}
+
 int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 {
 	struct device *dev = &pdev->dev;

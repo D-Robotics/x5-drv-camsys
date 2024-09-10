@@ -3,7 +3,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/pm_runtime.h>
 #include <media/v4l2-device.h>
 
 #include "cam_dev.h"
@@ -642,6 +641,35 @@ static const struct v4l2_subdev_ops vse_subdev_ops = {
 	.pad = &vse_pad_ops,
 };
 
+static int vse_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_open(sd);
+	if (rc < 0)
+		return rc;
+
+	return vse_open(inst->dev, inst->id);
+}
+
+static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_close(sd);
+	if (rc < 0)
+		return rc;
+
+	return vse_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops vse_internal_ops = {
+	.open = vse_v4l_open,
+	.close = vse_v4l_close,
+};
+
 static void vse_inst_remove(struct vse_v4l_instance *insts, u32 num)
 {
 	u32 i;
@@ -757,6 +785,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 			vse_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &vse_internal_ops;
 
 		if (i < VSE_SINK_ONLINE_PATH_MAX)
 			n->bctx.is_sink_online_mode = true;
@@ -775,12 +804,6 @@ static int vse_v4l_probe(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	vse_debugfs_init(&v4l_dev->vse_dev);
 #endif
-
-	rc = vse_runtime_resume(dev);
-		if (rc) {
-		dev_err(dev, "failed to call vse_runtime_resume (err=%d)\n", rc);
-		return rc;
-	}
 
 	if (v4l_dev->vse_dev.axi)
 		dev_dbg(dev, "axi clock: %ld Hz\n", clk_get_rate(v4l_dev->vse_dev.axi));
@@ -818,12 +841,6 @@ static int vse_v4l_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	vse_debugfs_remo(&v4l_dev->vse_dev);
 #endif
-
-	rc = vse_runtime_suspend(dev);
-		if (rc) {
-		dev_err(dev, "failed to call vse_runtime_suspend (err=%d)\n", rc);
-		return rc;
-	}
 
 	dev_dbg(dev, "VS VSE driver (v4l) removed\n");
 	return 0;

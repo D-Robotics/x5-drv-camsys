@@ -403,6 +403,35 @@ static const struct v4l2_subdev_ops gdc_subdev_ops = {
 	.pad = &gdc_pad_ops,
 };
 
+static int gdc_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_open(sd);
+	if (rc < 0)
+		return rc;
+
+	return gdc_open(inst->dev, inst->id);
+}
+
+static int gdc_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_close(sd);
+	if (rc < 0)
+		return rc;
+
+	return gdc_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops gdc_internal_ops = {
+	.open = gdc_v4l_open,
+	.close = gdc_v4l_close,
+};
+
 static void gdc_inst_remove(struct gdc_v4l_instance *insts, u32 num)
 {
 	u32 i;
@@ -511,6 +540,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 			gdc_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &gdc_internal_ops;
 	}
 
 	v4l_dev->insts = insts;

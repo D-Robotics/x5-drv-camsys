@@ -3,7 +3,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/pm_runtime.h>
 #include <media/v4l2-device.h>
 
 #include "cam_uapi.h"
@@ -369,6 +368,35 @@ static const struct v4l2_subdev_ops sif_subdev_ops = {
 	.pad = &sif_pad_ops,
 };
 
+static int sif_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_open(sd);
+	if (rc < 0)
+		return rc;
+
+	return sif_open(inst->dev, inst->id);
+}
+
+static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_close(sd);
+	if (rc < 0)
+		return rc;
+
+	return sif_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops sif_internal_ops = {
+	.open = sif_v4l_open,
+	.close = sif_v4l_close,
+};
+
 static void sif_inst_remove(struct sif_v4l_instance *insts, u32 num)
 {
 	u32 i;
@@ -477,6 +505,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 			sif_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &sif_internal_ops;
 	}
 	v4l_dev->insts = insts;
 
@@ -488,12 +517,6 @@ static int sif_v4l_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, v4l_dev);
-
-	rc = sif_runtime_resume(dev);
-		if (rc) {
-		dev_err(dev, "failed to call sif_runtime_resume (err=%d)\n", rc);
-		return rc;
-	}
 
 	if (v4l_dev->sif_dev.axi)
 		dev_dbg(dev, "axi clock: %ld Hz\n", clk_get_rate(v4l_dev->sif_dev.axi));
@@ -522,12 +545,6 @@ static int sif_v4l_remove(struct platform_device *pdev)
 	rc = sif_remove(pdev, &v4l_dev->sif_dev);
 	if (rc < 0) {
 		dev_err(dev, "failed to call sif_remove (err=%d)\n", rc);
-		return rc;
-	}
-
-	rc = sif_runtime_suspend(dev);
-		if (rc) {
-		dev_err(dev, "failed to call sif_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}
 

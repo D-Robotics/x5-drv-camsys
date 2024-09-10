@@ -77,6 +77,8 @@ int subdev_set_fmt(struct v4l2_subdev *sd,
 		   struct v4l2_subdev_state *state,
 		   struct v4l2_subdev_format *fmt);
 int subdev_set_stream(struct v4l2_subdev *sd, int enable);
+int subdev_open(struct v4l2_subdev *sd);
+int subdev_close(struct v4l2_subdev *sd);
 u32 pixelformat_to_cam_format(u32 format);
 u32 cam_format_to_pixelformat(u32 format, u32 bayer_format);
 u32 mbus_code_to_cam_format(u32 format);

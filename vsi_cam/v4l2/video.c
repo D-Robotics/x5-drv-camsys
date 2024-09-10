@@ -149,6 +149,7 @@ struct vid_video_device {
 	spinlock_t irqlock; /* lock for cam buf */
 	u32 buf_sequence;
 	u32 id;
+	bool opened, closed;
 	struct list_head queued_list;
 	struct list_head entry;
 };
@@ -553,6 +554,63 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
 };
 
+static int vid_open(struct file *file)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
+		return 0;
+
+	if (!vdev->opened) {
+		vdev->opened = true;
+		return 0;
+	}
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	if (sd->internal_ops && sd->internal_ops->open)
+		sd->internal_ops->open(sd, NULL/*subdev_fh*/);
+	return 0;
+}
+
+static int vid_release(struct file *file)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
+		return 0;
+
+	if (!vdev->closed) {
+		vdev->closed = true;
+		return 0;
+	}
+
+	if (WARN_ON(vdev->queue.num_buffers > 0))
+		return -EFAULT;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	if (sd->internal_ops && sd->internal_ops->close)
+		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+
+	INIT_LIST_HEAD(&vdev->queued_list);
+	memset(&vdev->fmt, 0, sizeof(vdev->fmt));
+	vdev->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	vdev->fmt.fmt.pix.field = V4L2_FIELD_NONE;
+	vdev->fmt.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+	return 0;
+}
+
 static int vid_link_setup(struct media_entity *entity,
 			  const struct media_pad *local,
 			  const struct media_pad *remote, u32 flags)
@@ -570,15 +628,13 @@ static const struct media_entity_operations vid_media_ops = {
 	.link_validate = vid_link_validate,
 };
 
-static void vid_video_device_release(struct video_device *vdev)
-{
-}
-
 static const struct v4l2_file_operations video_ops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = video_ioctl2,
 	.poll = vb2_fop_poll,
 	.mmap = vb2_fop_mmap,
+	.open = vid_open,
+	.release = vid_release,
 };
 
 static struct vid_video_device *create_video_device(struct vid_device *vdev,
@@ -597,15 +653,16 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 
 	v->id = id;
 
+	mutex_init(&v->lock);
+
 	v->video.v4l2_dev = &vdev->v4l2_dev;
-	v->video.release = vid_video_device_release;
+	v->video.release = video_device_release_empty;
 	v->video.fops = &video_ops;
 	v->video.ioctl_ops = &vid_ioctl_ops;
 	v->video.minor = -1;
-	v->video.vfl_type = VFL_TYPE_VIDEO;
 	v->video.device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
-
-	mutex_init(&v->lock);
+	v->video.lock = &v->lock;
+	v->video.dev_parent = dev->parent;
 
 	v->queue.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	v->queue.drv_priv = v;
@@ -648,7 +705,7 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 		goto _media_pads_init_err;
 	}
 
-	rc = video_register_device(&v->video, v->video.vfl_type, -1);
+	rc = video_register_device(&v->video, VFL_TYPE_VIDEO, -1);
 	if (rc < 0) {
 		dev_err(dev, "failed to register video device (err=%d).\n", rc);
 		goto _video_dev_reg_err;

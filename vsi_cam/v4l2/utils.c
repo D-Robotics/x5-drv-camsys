@@ -176,6 +176,68 @@ int subdev_enum_frame_size(struct v4l2_subdev *sd,
 	return 0;
 }
 
+int subdev_open(struct v4l2_subdev *sd)
+{
+	struct media_entity *ent;
+	struct media_pad *pad;
+	u16 i = 0;
+	int rc;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			sd = media_entity_to_v4l2_subdev(pad->entity);
+			if (sd->internal_ops && sd->internal_ops->open) {
+				rc = sd->internal_ops->open(sd, NULL/*subdev_fh*/);
+				if (rc < 0)
+					return rc;
+			}
+		}
+		i++;
+	}
+	return 0;
+}
+
+int subdev_close(struct v4l2_subdev *sd)
+{
+	struct media_entity *ent;
+	struct media_pad *pad;
+	u16 i = 0;
+	int rc;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			sd = media_entity_to_v4l2_subdev(pad->entity);
+			if (sd->internal_ops && sd->internal_ops->close) {
+				rc = sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+				if (rc < 0)
+					return rc;
+			}
+		}
+		i++;
+	}
+	return 0;
+}
+
 u32 pixelformat_to_cam_format(u32 format)
 {
 	switch (format) {
