@@ -552,8 +552,8 @@ s32 cim_subdev_init(struct vio_video_ctx *vctx, cim_attr_t *cim_attr)
 
 	// framemgr = vdev->cur_fmgr;
 
-	vio_info("[S%d][C%d][ipi%d]%s\n", vnode->flow_id, vnode->ctx_id,
-		 cim_priv_attr->ipi_index, __func__);
+	vio_info("[S%d][C%d][ipi%d]%s hw_id = %d\n", vnode->flow_id, vnode->ctx_id,
+		 cim_priv_attr->ipi_index, __func__, vin_node_dev->hw_id);
 
 	return ret;
 }
@@ -632,6 +632,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	cim_priv_attr->sw_frameid = 0;
 	cim_priv_attr->force_drop = 0;
 	ipi_index = cim_priv_attr->ipi_index;
+	osal_mutex_lock(&cim->mlock);
 	osal_atomic_set(&cim->enable_cnt[ipi_index], 0);
 	cim->cur_output_flag[ipi_index] = 0;
 	osal_atomic_set(&cim->backup_fcount[ipi_index], 0);
@@ -663,7 +664,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	if (rc < 0)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
-
+	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
 	return ret;
 }
@@ -707,7 +708,7 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 	cim_priv_attr = cim_get_priv_by_subdev(subdev);
 	cim_priv_attr->start_flag = 0;
 	ipi_index = cim_priv_attr->ipi_index;
-
+	osal_mutex_lock(&cim->mlock);
 	cim_check_exit_state(subdev);
 
 	rc = sif_set_state(&cim->sif, ipi_index, 0, false);
@@ -733,6 +734,7 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 	osal_atomic_set(&vnode->rcount, 0);
 	memset(&cim_priv_attr->fps[0], 0, sizeof(struct fps_stats));
 	memset(&cim_priv_attr->fps[1], 0, sizeof(struct fps_stats));
+	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
 
 	return ret;
@@ -953,7 +955,8 @@ static void cim_subdev_close(struct vio_subdev *vdev)
 		memset(&subdev->vin_attr, 0, sizeof(vin_attr_t));
 	}
 
-	vio_info("[S%d] %s\n", flow_id, __func__);
+	vio_info("[S%d] %s hw_id = %d, refcount = %d\n", flow_id, __func__, subdev->vin_node_dev->hw_id,
+		osal_atomic_read(&vdev->refcount));
 }
 
 /**

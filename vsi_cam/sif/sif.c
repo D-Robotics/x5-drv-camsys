@@ -281,6 +281,8 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	u32 val;
 	u32 irq_val;
 
+	dev_dbg(dev->dev,"%s sif(%d-%d)+\n", __func__, dev->id, inst);
+
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&sif->lock, flags);
 	sif->frame_start_cnt = 0;
@@ -328,7 +330,7 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 
 	sif_write(dev, SIF_IPI_IRQ_CLR(inst), irq_val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
-
+	dev_dbg(dev->dev, "%s irq_val=0x%x\n", __func__, sif_read(dev, SIF_IPI_IRQ_EN(inst)));
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 }
 
@@ -338,6 +340,8 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	unsigned long flags;
 	u32 val;
 	u32 irq_val;
+
+	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
@@ -355,6 +359,8 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+
+	dev_dbg(dev->dev, "%s-\n", __func__);
 }
 
 int sif_reset_ipi(struct sif_device *sif, u32 inst)
@@ -650,11 +656,13 @@ int sif_remove(struct platform_device *pdev, struct sif_device *sif)
 
 void sif_reset(struct sif_device *sif)
 {
+	dev_dbg(sif->dev, "%s sif(%d)+\n", __func__, sif->id);
 	if (sif->rst) {
 		reset_control_assert(sif->rst);
 		udelay(2);
 		reset_control_deassert(sif->rst);
 	}
+	dev_dbg(sif->dev, "%s sif(%d)-\n", __func__, sif->id);
 }
 
 #ifdef CONFIG_DEBUG_FS
