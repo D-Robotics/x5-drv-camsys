@@ -10,7 +10,8 @@ struct job_queue;
 
 int push_job(struct job_queue *q, struct irq_job *job);
 int pop_job(struct job_queue *q, struct irq_job *job);
-int remove_job(struct job_queue *q, u32 index);
+int remove_job(struct job_queue *q, struct irq_job *job);
+int query_job(struct job_queue *q, struct irq_job *job);
 struct job_queue *create_job_queue(unsigned int nmem);
 void destroy_job_queue(struct job_queue *q);
 void reset_job_queue(struct job_queue *q);

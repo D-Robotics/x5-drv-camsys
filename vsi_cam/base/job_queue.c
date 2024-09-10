@@ -72,26 +72,50 @@ _exit:
 	return rc;
 }
 
-int remove_job(struct job_queue *q, u32 index)
+int remove_job(struct job_queue *q, struct irq_job *ij)
 {
-	struct job *job = NULL, *temp_job;
-	struct irq_job ij;
+	struct job *cur_job = NULL, *temp_job;
+	struct irq_job cur_ij;
 	unsigned long flags;
 	int rc = 0;
 
-	if (!q)
+	if (!q || !ij)
 		return -EINVAL;
 
 	spin_lock_irqsave(&q->lock, flags);
 
-	list_for_each_entry_safe(job, temp_job, &q->done_queue, entry) {
-		memcpy(&ij, job->data, sizeof(ij));
-		if (ij.irq_ctx_index == index) {
-			list_del(&job->entry);
-			list_add_tail(&job->entry, &q->idle_queue);
+	list_for_each_entry_safe(cur_job, temp_job, &q->done_queue, entry) {
+		memcpy(&cur_ij, cur_job->data, sizeof(cur_ij));
+		if (cur_ij.irq_ctx_index == ij->irq_ctx_index) {
+			list_del(&cur_job->entry);
+			list_add_tail(&cur_job->entry, &q->idle_queue);
 		}
 	}
 
+	spin_unlock_irqrestore(&q->lock, flags);
+	return rc;
+}
+
+int query_job(struct job_queue *q, struct irq_job *ij)
+{
+	struct job *job;
+	unsigned long flags;
+	int rc = 0;
+
+	if (!q || !ij)
+		return -EINVAL;
+
+	spin_lock_irqsave(&q->lock, flags);
+
+	job = list_first_entry_or_null(&q->done_queue, struct job, entry);
+	if (!job) {
+		rc = -EBUSY;
+		goto _exit;
+	}
+
+	memcpy(ij, job->data, sizeof(*ij));
+
+_exit:
 	spin_unlock_irqrestore(&q->lock, flags);
 	return rc;
 }

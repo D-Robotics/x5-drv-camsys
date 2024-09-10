@@ -116,9 +116,9 @@ static void isp_frame_work(struct vio_node *vnode)
 
 	pr_debug("%s, isp_add_job:%d\n", __func__, vnode->ctx_id);
 	if (!inst->metadata_en) {
-		rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id, false);
+		rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id);
 		if (rc)
-			pr_err("%s: failed to call isp_add_job.\n", __func__);
+			// pr_err("%s: failed to call isp_add_job.\n", __func__);
 	} else {
 		pr_info("%s:%d isp%d metadata enabled\n", __func__, __LINE__, inst->id);
 	}

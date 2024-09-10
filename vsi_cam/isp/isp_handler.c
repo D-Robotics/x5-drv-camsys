@@ -103,14 +103,14 @@ static inline void isp_post_frame_end(struct isp_device *isp, u32 inst)
 	if (!isp)
 		return;
 
-	status = isp->frame_done_status;
+	status = isp->sch.frame_status;
 
 	if (status & ISP_RDMA_END && status & ISP_MP_FRAME_END && status & ISP_MIS_FRAME_END) {
 		memset(&msg, 0, sizeof(msg));
 		msg.id = ISP_MSG_FRAME_DONE;
 		msg.inst = inst;
 		isp_post(isp, &msg, false);
-		isp->frame_done_status = 0;
+		isp->sch.frame_status = 0;
 		pr_debug("post frame end inst:%d", inst);
 	}
 }
@@ -285,35 +285,18 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 {
 	struct isp_instance *inst;
 	struct isp_irq_ctx *ctx = NULL;
-	struct irq_job job;
 	unsigned long flags;
 	u32 id;
 	int rc;
 	struct ibuf *mcm_ib;
 
-	if (isp->mode == ISP_STRM_MODE) {
-		inst = &isp->insts[0];
-		if (inst->state != CAM_STATE_STARTED)
-			return NULL;
-		spin_lock_irqsave(&inst->lock, flags);
-		ctx = &inst->ctx;
-		rc = new_frame(ctx);
-		spin_unlock_irqrestore(&inst->lock, flags);
-		if (!rc) {
-			if (!ctx->is_src_online_mode || ctx->ddr_en)
-				inst->shd_src_node = inst->src_node;
-		}
-		return ctx;
-	}
-
 	for (;;) {
-		rc = pop_job(isp->jq, &job);
-		if (rc < 0) {
+		rc = isp_fetch_job(isp, &id);
+		if (rc < 0 || id == INVALID_INST) {
 			ctx = NULL;
 			break;
 		}
-		pr_debug("isp %s: pop_job[%d]\n", __func__, job.irq_ctx_index);
-		id = job.irq_ctx_index;
+		pr_debug("isp %s: pop_job[%d]\n", __func__, id);
 		inst = &isp->insts[id];
 		if (inst->state != CAM_STATE_STARTED)
 			continue;
@@ -330,7 +313,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 		rc = new_frame(ctx);
 		spin_unlock_irqrestore(&inst->lock, flags);
 		if (!rc) {
-			isp->next_mi_irq_ctx = job.irq_ctx_index;
+			isp->next_mi_irq_ctx = id;
 			break;
 		}
 	}
@@ -403,7 +386,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 	isp_set_mcm_buffer(isp, path, ib->buf.addr);
 
 	pr_debug("isp_add_job:%d\n", inst);
-	isp_add_job(isp, inst, true);
+	isp_add_job(isp, inst);
 	return 0;
 }
 
@@ -427,12 +410,12 @@ static inline void irq_notify(struct isp_device *isp, u32 inst, struct mi_mis_gr
 	}
 
 	if (mi_mis->miv2_mis & BIT(24))
-		isp->frame_done_status |= ISP_RDMA_END;
+		isp->sch.frame_status |= ISP_RDMA_END;
 
 	if (mi_mis->miv2_mis & 0x1)
-		isp->frame_done_status |= ISP_MP_FRAME_END;
+		isp->sch.frame_status |= ISP_MP_FRAME_END;
 
-	if (!isp->unit_test && (mi_mis->miv2_mis & 0x1) && inst != INVALID_MCM_SCH_INST)
+	if (!isp->unit_test && isp->sch.frame_status && inst != INVALID_INST)
 		isp_post_frame_end(isp, inst);
 }
 
@@ -442,10 +425,12 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 	struct isp_mcm_sch sch;
 	struct isp_instance *ins;
 	struct mi_mis_group mi_mis;
-	u32 cur_mi_irq_ctx = INVALID_MCM_SCH_INST;
+	u32 cur_mi_irq_ctx = INVALID_INST;
 	struct isp_irq_ctx *ctx;
+	struct cam_list_node *node = NULL;
 	int rc;
 	u32 ris, isp_ris, value;
+	unsigned long flags;
 
 	pr_debug("+\n");
 	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
@@ -521,7 +506,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			 *  interrupt status and drop the current frame data.
 			 */
 			mi_mis.miv2_mis = 0x1800025;
-			isp->frame_done_status = (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END);
+			isp->sch.frame_status = (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END);
 			pr_info("mp bus timed-out!\n");
 		}
 
@@ -534,7 +519,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			isp_write(isp, MIV2_IMSC1, value);
 			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
 			if (rc) {
-				if (cur_mi_irq_ctx == INVALID_MCM_SCH_INST)
+				if (cur_mi_irq_ctx == INVALID_INST)
 					pr_err("fail to get currect isp instance id!\n");
 			} else {
 				pr_debug("isp:%d, mi frame done!\n", cur_mi_irq_ctx);
@@ -561,96 +546,53 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			}
 		}
 
-		if (!isp->rdma_busy) {
-			// handle mcm_wr frame end intr
-			struct cam_list_node *node = NULL;
-
-			ctx = get_next_irq_ctx(isp);
-			if (!ctx)
-				goto _post;
-
-			ins = &isp->insts[isp->next_mi_irq_ctx];
-			if (isp->mode == ISP_MCM_MODE && !ins->online_mcm) {
-				irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
-				isp_set_schedule_offline(isp, isp->next_mi_irq_ctx, true);
-				goto _exit;
-			}
-			if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
-				if (isp->mode == ISP_STRM_MODE && !ins->shd_src_node) {
-					ins->shd_src_node = ins->src_node;
-					node = ins->src_node;
-				} else {
-					node = list_first_entry_or_null(ctx->src_buf_list2,
-									struct cam_list_node, entry);
-					if (node) {
-						list_del(&node->entry);
-						list_add_tail(&node->entry, ctx->src_buf_list3);
-						pr_debug("isp list_add_tail src_buf_list3\n");
-						if (isp->mode == ISP_STRM_MODE)
+		if (isp->sch.mi_idle) {
+			if (isp->mode == ISP_STRM_MODE) {
+				ins = &isp->insts[0];
+				if (ins->state != CAM_STATE_STARTED)
+					goto _post;
+				spin_lock_irqsave(&ins->lock, flags);
+				ctx = &ins->ctx;
+				rc = new_frame(ctx);
+				spin_unlock_irqrestore(&ins->lock, flags);
+				if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
+					if (!rc)
+						ins->shd_src_node = ins->src_node;
+					// if shd_src_node failed to update (there is no more mp buffer), use
+					// src_node to update shd_src_node
+					if (!ins->shd_src_node) {
+						ins->shd_src_node = ins->src_node;
+						node = ins->src_node;
+					} else {
+						node = list_first_entry_or_null(ctx->src_buf_list2,
+										struct cam_list_node, entry);
+						if (node) {
+							list_del(&node->entry);
+							list_add_tail(&node->entry, ctx->src_buf_list3);
+							pr_debug("isp list_add_tail src_buf_list3\n");
 							ins->src_node = node;
+						}
 					}
-				}
-			}
+					if (!node) {
+						pr_debug("isp fail to get valid node!\n");
+						goto _post;
+					}
 
-			if (node) {
-				if (isp->mode != ISP_STRM_MODE) {
-					sch.id = isp->next_mi_irq_ctx;
-					sch.mp_buf.mem.addr = get_phys_addr(node->data, 0);
-					sch.mp_buf.mem.size = 0;
-					memcpy(&sch.mp_buf.fmt, &ins->fmt.ofmt, sizeof(sch.mp_buf.fmt));
-					sch.mp_buf.valid = 1;
-				} else {
 					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
 					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
-					isp_set_schedule(isp, &sch, false);
+					isp_set_schedule(isp, &sch, true);
 					goto _exit;
-				}
-			} else if (ctx->is_src_online_mode) {
-				if (isp->mode != ISP_STRM_MODE) {
-					sch.id = isp->next_mi_irq_ctx;
-					sch.mp_buf.mem.addr = 0;
-					sch.mp_buf.mem.size = 0;
-					memcpy(&sch.mp_buf.fmt, &ins->fmt.ofmt, sizeof(sch.mp_buf.fmt));
-					sch.mp_buf.valid = 1;
 				} else {
 					isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
-					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
-					isp_set_schedule(isp, &sch, false);
-					goto _exit;
-				}
-			} else {
-				pr_err("fail to configure mp buffer!\n");
-				goto _post;
-			}
-			if (isp->mode != ISP_STRM_MODE) {
-				struct ibuf *mcm_ib;
-
-				mcm_ib = list_first_entry_or_null
-						(&isp->ibm[isp->next_mi_irq_ctx].list2,
-						struct ibuf, entry);
-				if (mcm_ib) {
-					sch.rdma_buf.mem.addr = mcm_ib->buf.addr;
-					sch.rdma_buf.mem.size = mcm_ib->buf.size;
-					memcpy(&sch.rdma_buf.fmt, &ins->fmt.ifmt, sizeof(sch.rdma_buf.fmt));
-					sch.rdma_buf.valid = 1;
-					sch.hdr_en = ins->hdr_en ? 1 : 0;
-					sch.tile_en = ins->tile_en ? 1 : 0;
-					sch.online_mcm = ins->online_mcm;
-					list_del(&mcm_ib->entry);
-					list_add_tail(&mcm_ib->entry,
-							&isp->ibm[isp->next_mi_irq_ctx].list3);
 					irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
 					isp_set_schedule(isp, &sch, true);
 					goto _exit;
 				}
-			} else if (ctx->sink_buf) {
-				isp_set_rdma_buffer(isp, get_phys_addr(ctx->sink_buf, 0));
+			} else {
+				// online && offline MCM
 				irq_notify(isp, cur_mi_irq_ctx, &mi_mis);
-				isp_set_schedule(isp, &sch, false);
+				isp_set_schedule(isp, &sch, true);
 				goto _exit;
-			} else if (ctx->sink_ctx) {
-				// TODO:
-				goto _post;
 			}
 		}
 	}
@@ -682,7 +624,7 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			isp_mis &= ~BIT(6);
 		}
 		if (isp_mis & BIT(1)) {
-			isp->frame_done_status |= ISP_MIS_FRAME_END;
+			isp->sch.frame_status |= ISP_MIS_FRAME_END;
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);
 		}
 		if (isp_mis & (BIT(2) | BIT(3))) {

@@ -23,7 +23,7 @@
 #define ISP_FMT_MAX (3)
 #define ISP_RES_MAX (3)
 
-#define INVALID_MCM_SCH_INST (0xff)
+#define INVALID_INST (0xff)
 
 #define isp_write(isp, offset, value) \
 	__raw_writel(value, (isp)->base + (offset))
@@ -88,9 +88,11 @@ struct ibuf_manage {
 	struct list_head list3;
 };
 
-struct mcm_sch_node {
-	u32 inst;
-	struct list_head entry;
+struct isp_schedule {
+	spinlock_t lock; /* lock for isp schedule function */
+	u32 next_mi_inst;
+	bool mi_idle;
+	u32 frame_status;
 };
 
 struct isp_device {
@@ -102,7 +104,8 @@ struct isp_device {
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */
 	struct cam_ctrl_device *ctrl_dev;
-	struct job_queue *jq; /* offline job queue */
+	struct job_queue *jq; /* online & offline job queue */
+	struct isp_schedule sch;
 	struct isp_instance *insts;
 	struct list_head in_buf_list;
 	struct mem_buf in_bufs[ISP_SINK_ONLINE_PATH_MAX][MCM_BUF_NUM];
@@ -114,17 +117,12 @@ struct isp_device {
 	u32 cur_mi_irq_ctx, next_mi_irq_ctx;
 	refcount_t set_state_refcnt;
 	enum cam_error error;
-	bool rdma_busy;
 	bool unit_test;
 	enum isp_work_mode mode;
 	struct mutex open_lock; /* lock for open_cnt */
 	struct mutex set_input_lock; /* lock for set_input */
 	struct mutex set_state_lock; /* lock for set_state */
-	spinlock_t mcm_sch_lock; /* lock for mcm_sch */
-	struct list_head mcm_sch_idle_list, mcm_sch_busy_list;
-	struct mcm_sch_node sch_node[ISP_SINK_PATH_MAX * SRC_BUF_NUM];
 	refcount_t open_cnt;
-	int frame_done_status;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_log_file;
@@ -150,13 +148,13 @@ int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt);
 int isp_set_state(struct isp_device *isp, u32 inst, int state);
 int isp_set_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx);
-int isp_add_job(struct isp_device *isp, u32 inst, bool mcm_online);
+int isp_add_job(struct isp_device *isp, u32 inst);
+int isp_fetch_job(struct isp_device *isp, u32 *inst);
+int isp_query_job(struct isp_device *isp, u32 *inst);
 int isp_remove_job(struct isp_device *isp, u32 inst);
-int isp_set_schedule_offline(struct isp_device *isp, u32 inst, bool isp_irq_call);
-int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool mcm_online);
+int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool isp_irq_call);
 int isp_get_schedule(struct isp_device *isp, u32 *inst);
-int isp_reset_schedule(struct isp_device *isp);
-int isp_check_schedule(struct isp_device *isp, u32 *inst);
+int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset);
 int isp_open(struct isp_device *isp, u32 inst);
 int isp_close(struct isp_device *isp, u32 inst);
 int isp_probe(struct platform_device *pdev, struct isp_device *isp);
