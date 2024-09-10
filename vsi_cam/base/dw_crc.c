@@ -30,23 +30,28 @@ int dw_reset(struct dw_crc_device *dev, enum dw_mod mod)
 		return -ENODEV;
 
 	mutex_lock(&dev->lock);
-	if (mod == DW_MOD_VSE)
+	if (mod == DW_MOD_VSE) {
 		rst = dev->vse_rst;
-	else if (mod == DW_MOD_GDC)
-		rst = dev->gdc_rst;
-	else
-		rc = -EINVAL;
-
-	if (rst) {
-		if (dev->vse_state != CAM_STATE_STARTED &&
-		    dev->gdc_state != CAM_STATE_STARTED) {
+		if (dev->gdc_state != CAM_STATE_STARTED) {
 			reset_control_assert(rst);
 			udelay(2);
 			reset_control_deassert(rst);
 		} else {
 			rc = -EBUSY;
 		}
+	} else if (mod == DW_MOD_GDC) {
+		rst = dev->gdc_rst;
+		if (dev->vse_state != CAM_STATE_STARTED) {
+			reset_control_assert(rst);
+			udelay(2);
+			reset_control_deassert(rst);
+		} else {
+			rc = -EBUSY;
+		}
+	} else {
+		rc = -EINVAL;
 	}
+
 	mutex_unlock(&dev->lock);
 	return rc;
 }
