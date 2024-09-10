@@ -667,26 +667,16 @@ irqreturn_t fe_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
 	struct isp_msg msg = { .id = ISP_MSG_IRQ_MIS };
-	u32 isp_fe_mis, isp_fe_ctrl;
+	u32 isp_fe_mis;
 	u32 miv2_ctrl;
 
 	isp_fe_mis = isp_read(isp, ISP_FE_MIS);
 	pr_debug("+fe_mis:0x%x\n", isp_fe_mis);
 	if (isp_fe_mis) {
 		isp_write(isp, ISP_FE_ICR, isp_fe_mis);
-		isp_fe_ctrl = isp_read(isp, ISP_FE_CTL);
 		miv2_ctrl = isp_read(isp, MIV2_CTRL);
 		miv2_ctrl |= MIV2_CTRL_MCM_RAW_RDMA_START_MASK;
 		isp_write(isp, MIV2_CTRL, miv2_ctrl);
-		if ((isp_fe_ctrl & ISP_FE_CFG_SEL_MASK) == ISP_FE_SEL_CMDBUF) {
-			isp_fe_ctrl &=
-				~(ISP_FE_CFG_SEL_MASK | ISP_FE_AHB_WRITE_MASK);
-			isp_fe_ctrl |= (ISP_FE_SEL_AHBBUF)
-				       << ISP_FE_CFG_SEL_SHIFT;
-			isp_fe_ctrl |= (ISP_FE_AHB_WR_ENABLE)
-				       << ISP_FE_AHB_WRITE_SHIFT;
-			isp_write(isp, ISP_FE_CTL, isp_fe_ctrl);
-		}
 		msg.irq.num = FE_IRQ_MIS;
 		msg.irq.stat.fe_mis = isp_fe_mis;
 		isp_post(isp, &msg, false);
