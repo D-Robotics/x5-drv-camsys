@@ -228,12 +228,10 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL)
 			return 0;
 
-#if 0
 		if (inst->buf_ctx.pad) {
 			memset(&ctx, 0, sizeof(ctx));
 			sif_set_ctx(inst->dev, inst->id, &ctx);
 		}
-#endif
 
 		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL)
 			refcount_dec(&inst->start_refcnt);

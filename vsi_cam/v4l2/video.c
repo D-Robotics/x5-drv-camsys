@@ -883,7 +883,9 @@ int create_default_links(struct vid_device *vdev)
 		rc = create_link(vdev->v4l2_dev.dev, src, link->src_pad, sink,
 				 link->sink_pad, link->flags);
 		if (rc < 0) {
-			dev_err(vdev->v4l2_dev.dev, "failed to create link , src_pad=%d, sink_pad=%d", link->src_pad, link->sink_pad);
+			dev_err(vdev->v4l2_dev.dev,
+				"failed to create link, src_pad=%d, sink_pad=%d",
+				link->src_pad, link->sink_pad);
 			destroy_links(vdev);
 			return rc;
 		}

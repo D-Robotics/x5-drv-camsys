@@ -151,7 +151,7 @@ static void vse_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
 	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
 
-	if (ctx)
+	if (ctx && on)
 		vse_wake_up(vse->dev, vse->id);
 }
 
