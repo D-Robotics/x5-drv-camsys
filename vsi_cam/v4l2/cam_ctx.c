@@ -114,17 +114,27 @@ int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 
 void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status)
 {
+	struct cam_ctx *ctx = (struct cam_ctx *)cam_ctx;
 
+	if (ctx)
+		ctx->status = status;
 }
 
 u8 cam_get_frame_status(void *cam_ctx)
 {
+	struct cam_ctx *ctx = (struct cam_ctx *)cam_ctx;
+
+	if (ctx)
+		return ctx->status;
 	return 0;
 }
 
 void cam_dec_frame_status(void *cam_ctx)
 {
+	struct cam_ctx *ctx = (struct cam_ctx *)cam_ctx;
 
+	if (ctx && ctx->status)
+		ctx->status--;
 }
 
 void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)

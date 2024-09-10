@@ -34,6 +34,7 @@ struct cam_buf {
 
 struct cam_ctx {
 	struct media_pad *pad;
+	enum cam_frame_status status;
 	void *priv;
 };
 
