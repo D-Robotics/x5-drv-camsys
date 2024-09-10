@@ -49,6 +49,7 @@ struct v4l2_buf_ctx {
 				  struct v4l2_frmivalenum *fival);
 	void (*ready)(struct v4l2_buf_ctx *ctx, u32 pad, int on);
 	int (*qbuf)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
+	int (*drop)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
 	struct cam_buf *(*dqbuf)(struct v4l2_buf_ctx *ctx);
 	void (*trigger)(struct v4l2_buf_ctx *ctx);
 	bool (*is_completed)(struct v4l2_buf_ctx *ctx);

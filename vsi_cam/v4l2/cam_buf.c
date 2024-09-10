@@ -96,9 +96,10 @@ static struct local_buf_ctx *create_local_buf_ctx(struct device *dev,
 	ctx->queue.dev = dev;
 
 	rc = vb2_core_queue_init(&ctx->queue);
-	if (rc < 0)
+	if (rc < 0) {
+		kfree(ctx);
 		return NULL;
-
+	}
 	return ctx;
 }
 
@@ -178,7 +179,7 @@ static inline int cam_remote_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
 			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
 	}
 
-	if (!vctx)
+	if (!vctx || !vctx->qbuf)
 		return -EINVAL;
 
 	return vctx->qbuf(vctx, buf);
@@ -202,13 +203,9 @@ static inline int cam_local_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
 
 int cam_qbuf_irq(struct cam_ctx *ctx, struct cam_buf *buf, bool remote)
 {
-	int rc;
-
 	if (remote)
-		rc = cam_remote_qbuf(ctx, buf);
-	else
-		rc = cam_local_qbuf(ctx, buf);
-	return rc;
+		return cam_remote_qbuf(ctx, buf);
+	return cam_local_qbuf(ctx, buf);
 }
 
 static inline struct cam_buf *cam_remote_dqbuf(struct cam_ctx *ctx)
@@ -235,7 +232,7 @@ static inline struct cam_buf *cam_remote_dqbuf(struct cam_ctx *ctx)
 			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
 	}
 
-	if (!vctx)
+	if (!vctx || !vctx->dqbuf)
 		return NULL;
 
 	return vctx->dqbuf(vctx);
@@ -262,13 +259,9 @@ static inline struct cam_buf *cam_local_dqbuf(struct cam_ctx *ctx)
 
 struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 {
-	struct cam_buf *buf;
-
 	if (remote)
-		buf = cam_remote_dqbuf(ctx);
-	else
-		buf = cam_local_dqbuf(ctx);
-	return buf;
+		return cam_remote_dqbuf(ctx);
+	return cam_local_dqbuf(ctx);
 }
 
 struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx)
@@ -368,6 +361,53 @@ phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane)
 			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, plane);
 }
 
-void cam_drop(struct cam_ctx *ctx)
+int cam_drop_irq(struct cam_ctx *ctx, struct cam_buf *buf)
 {
+	struct video_device *vdev;
+	struct v4l2_subdev *sd;
+	struct media_pad *pad;
+	struct v4l2_buf_ctx *vctx = NULL;
+
+	if (!ctx || !ctx->pad)
+		return -EINVAL;
+
+	pad = media_pad_remote_pad_first(ctx->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	if (is_media_entity_v4l2_video_device(pad->entity)) {
+		vdev = media_entity_to_video_device(pad->entity);
+		if (vdev)
+			vctx = (struct v4l2_buf_ctx *)video_get_drvdata(vdev);
+	} else if (is_media_entity_v4l2_subdev(pad->entity)) {
+		sd = media_entity_to_v4l2_subdev(pad->entity);
+		if (sd)
+			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
+	}
+
+	if (!vctx || !vctx->drop)
+		return -EINVAL;
+
+	return vctx->drop(vctx, buf);
+}
+
+int cam_drop_irq_ext(struct cam_ctx *ctx, struct cam_buf *buf)
+{
+	return cam_drop_irq(ctx, buf);
+}
+
+int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf)
+{
+	struct local_buf_ctx *lbc;
+	unsigned long flags;
+
+	if (!ctx || !ctx->priv || !buf)
+		return -EINVAL;
+
+	lbc = ctx->priv;
+
+	spin_lock_irqsave(&lbc->buflock, flags);
+	list_add_tail(&buf->entry, &lbc->queued_list);
+	spin_unlock_irqrestore(&lbc->buflock, flags);
+	return 0;
 }

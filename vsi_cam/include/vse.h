@@ -87,6 +87,7 @@ struct vse_device {
 	struct vse_instance *insts;
 	u32 next_irq_ctx;
 	enum cam_error error;
+	spinlock_t err_lock; /* lock for error var. */
 	bool is_completed;
 	struct mutex open_lock; /* lock for open_cnt */
 	refcount_t open_cnt;
@@ -123,6 +124,7 @@ int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id);
 int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx);
 int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_add_job(struct vse_device *vse, u32 inst);
+int vse_wake_up(struct vse_device *vse, u32 inst);
 int vse_open(struct vse_device *vse, u32 inst);
 int vse_close(struct vse_device *vse, u32 inst);
 int vse_probe(struct platform_device *pdev, struct vse_device *vse);

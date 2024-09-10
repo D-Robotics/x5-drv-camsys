@@ -218,7 +218,7 @@ static inline void frame_done(struct isp_instance *inst, bool timeout)
 					struct cam_list_node, entry);
 	if (node) {
 		if (cam_get_frame_status(ctx->src_ctx) || timeout) {
-			cam_drop(ctx->src_ctx);
+			cam_drop_irq(ctx->src_ctx, node->data);
 		} else {
 			if (ctx->is_sink_online_mode)
 				sif_get_frame_des(ctx->src_ctx);

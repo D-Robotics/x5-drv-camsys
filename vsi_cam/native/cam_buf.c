@@ -98,10 +98,21 @@ phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane)
 	return (phys_addr_t)((struct vio_frame *)buf)->vbuf.iommu_paddr[0][plane];
 }
 
-void cam_drop(struct cam_ctx *ctx)
+int cam_drop_irq(struct cam_ctx *ctx, struct cam_buf *buf)
 {
 	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
 
 	if (subdev)
 		vio_frame_ndone(subdev);
+	return 0;
+}
+
+int cam_drop_irq_ext(struct cam_ctx *ctx, struct cam_buf *buf)
+{
+	return 0;
+}
+
+int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf)
+{
+	return 0;
 }

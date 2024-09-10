@@ -107,6 +107,19 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return isp_add_job(isp->dev, isp->id, false);
 }
 
+static int isp_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+{
+	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+
+	if (!ctx || !buf)
+		return -EINVAL;
+
+	if (ctx->is_sink_online_mode)
+		return -EBUSY;
+
+	return cam_drop(&isp->sink_ctx, buf);
+}
+
 static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx)
 {
 	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
@@ -659,6 +672,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->bctx.ready = isp_buf_ready;
 		n->bctx.qbuf = isp_qbuf;
 		n->bctx.dqbuf = isp_dqbuf;
+		n->bctx.drop = isp_drop;
 		n->bctx.get_format = isp_get_out_format;
 		n->bctx.set_format = isp_set_out_format;
 		n->bctx.enum_format = isp_enum_out_format;

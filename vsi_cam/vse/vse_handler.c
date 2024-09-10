@@ -105,7 +105,7 @@ static inline void frame_done(struct vse_instance *inst, bool timeout)
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
 			if (timeout) {
-				cam_drop(ctx->src_ctx[i]);
+				cam_drop_irq(ctx->src_ctx[i], ctx->src_buf[i]);
 				ctx->src_buf[i] = NULL;
 			} else if (!cam_osd_update(ctx->src_ctx[i])) {
 				cam_qbuf_irq(ctx->src_ctx[i], ctx->src_buf[i], true);

@@ -201,7 +201,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	if (ins->state == CAM_STATE_STARTED) {
 		if (ctx->buf_ctx) {
 			if (ctx->next_buf) {
-				cam_drop(ctx->buf_ctx);
+				cam_drop_irq(ctx->buf_ctx, ctx->buf);
 				ctx->buf = ctx->next_buf;
 			}
 			ctx->next_buf = cam_dqbuf_irq(ctx->buf_ctx, true);
@@ -260,14 +260,16 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 		frame_status = cam_get_frame_status(ctx->buf_ctx);
 		if (frame_status == DQ_FAIL) {
 			cam_set_frame_status(ctx->buf_ctx, NO_ERR);
+			cam_drop_irq_ext(ctx->buf_ctx, ctx->buf);
 			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail, skip peek PROCESS\n",
 				sif->id, inst, __func__);
 		} else if (ins->frame_start_cnt < 0) {
+			cam_drop_irq_ext(ctx->buf_ctx, ctx->buf);
 			dev_dbg(sif->dev, "sif(%d-%d), %s meet continue frame done skip it\n",
 				sif->id, inst, __func__);
 		} else {
 			if (frame_status) {
-				cam_drop(ctx->buf_ctx);
+				cam_drop_irq(ctx->buf_ctx, ctx->buf);
 				cam_dec_frame_status(ctx->buf_ctx);
 			} else {
 				cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);

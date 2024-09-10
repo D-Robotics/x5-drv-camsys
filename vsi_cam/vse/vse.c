@@ -103,7 +103,7 @@ int vse_set_fps_rate(struct vse_device *vse, u32 inst, u32 chnl,
 	return 0;
 }
 
-int vse_server_trigger(struct vse_device *vse, u32 inst)
+static inline int vse_server_trigger(struct vse_device *vse, u32 inst)
 {
 	struct vse_instance *ins;
 	struct vse_msg msg;
@@ -451,12 +451,10 @@ int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx)
 	return 0;
 }
 
-int vse_add_job(struct vse_device *vse, u32 inst)
+static inline int _add_job(struct vse_device *vse, u32 inst)
 {
 	struct irq_job job = { inst };
-	struct vse_irq_ctx *ctx;
 	int rc;
-	u32 id;
 
 	if (vse->mode != VSE_SCM_MODE) {
 		pr_debug("add job inst:%d\n", inst);
@@ -466,14 +464,46 @@ int vse_add_job(struct vse_device *vse, u32 inst)
 			return rc;
 		}
 	}
+	return 0;
+}
 
+int vse_add_job(struct vse_device *vse, u32 inst)
+{
+	struct vse_irq_ctx *ctx;
+	unsigned long flags;
+	int rc;
+
+	rc = _add_job(vse, inst);
+	if (rc < 0)
+		return rc;
+
+	spin_lock_irqsave(&vse->err_lock, flags);
 	if (vse->error) {
 		ctx = get_next_irq_ctx(vse);
-		if(ctx) {
-			id = vse->next_irq_ctx;
-			vse_set_cmd(vse, id);
-		}
+		if (ctx)
+			vse_set_cmd(vse, vse->next_irq_ctx);
 	}
+	spin_unlock_irqrestore(&vse->err_lock, flags);
+	return 0;
+}
+
+int vse_wake_up(struct vse_device *vse, u32 inst)
+{
+	struct vse_irq_ctx *ctx;
+	unsigned long flags;
+	int rc;
+
+	spin_lock_irqsave(&vse->err_lock, flags);
+	if (vse->error) {
+		rc = _add_job(vse, inst);
+		if (rc < 0)
+			return rc;
+
+		ctx = get_next_irq_ctx(vse);
+		if (ctx)
+			vse_set_cmd(vse, vse->next_irq_ctx);
+	}
+	spin_unlock_irqrestore(&vse->err_lock, flags);
 	return 0;
 }
 
@@ -654,6 +684,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	spin_lock_init(&vse->isc_lock);
 	mutex_init(&vse->open_lock);
 	refcount_set(&vse->open_cnt, REFCNT_INIT_VAL);
+	spin_lock_init(&vse->err_lock);
 
 	vse->error = 1;
 	vse->is_completed = true;

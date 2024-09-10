@@ -209,6 +209,10 @@ static const struct media_entity_operations vse_media_ops = {
 
 static void vse_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
+	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+
+	if (ctx)
+		vse_wake_up(vse->dev, vse->id);
 }
 
 static int vse_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
@@ -227,6 +231,19 @@ static int vse_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 		return rc;
 
 	return vse_add_job(vse->dev, vse->id);
+}
+
+static int vse_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+{
+	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+
+	if (!ctx || !buf)
+		return -EINVAL;
+
+	if (ctx->is_sink_online_mode)
+		return -EBUSY;
+
+	return cam_drop(&vse->sink_ctx, buf);
 }
 
 static struct cam_buf *vse_dqbuf(struct v4l2_buf_ctx *ctx)
@@ -796,6 +813,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 
 		n->bctx.ready = vse_buf_ready;
 		n->bctx.qbuf = vse_qbuf;
+		n->bctx.drop = vse_drop;
 		n->bctx.dqbuf = vse_dqbuf;
 		n->bctx.trigger = vse_trigger;
 		n->bctx.is_completed = vse_is_completed;
