@@ -1150,18 +1150,19 @@ int isp_open(struct isp_device *isp, u32 inst)
 	if (refcount_read(&isp->open_cnt) == REFCNT_INIT_VAL)
 		en_clk = true;
 	refcount_inc(&isp->open_cnt);
-	mutex_unlock(&isp->open_lock);
 
 	if (en_clk) {
 		pm_runtime_set_active(isp->dev);
 		rc = pm_runtime_get_sync(isp->dev);
 		if (rc < 0)
-			return rc;
+			goto _exit;
 		rc = isp_runtime_resume(isp->dev);
 		if (rc < 0)
-			return rc;
+			goto _exit;
 	}
 
+_exit:
+	mutex_unlock(&isp->open_lock);
 	dev_dbg(isp->dev, "inst %d-\n", inst);
 
 	return rc;
@@ -1217,11 +1218,10 @@ int isp_close(struct isp_device *isp, u32 inst)
 		if (refcount_read(&isp->open_cnt) == REFCNT_INIT_VAL)
 			dis_clk = true;
 	}
-	mutex_unlock(&isp->open_lock);
 
 	if (!dis_clk) {
 		dev_dbg(isp->dev, "inst %d close\n", inst);
-		return 0;
+		goto _exit;
 	}
 
 	reset_job_queue(isp->jq);
@@ -1229,15 +1229,17 @@ int isp_close(struct isp_device *isp, u32 inst)
 	isp_reset(isp);
 	rc = isp_runtime_suspend(isp->dev);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
 	rc = pm_runtime_put_sync(isp->dev);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
+_exit:
+	mutex_unlock(&isp->open_lock);
 	dev_dbg(isp->dev, "inst %d-\n", inst);
 
-	return 0;
+	return rc;
 }
 
 int isp_probe(struct platform_device *pdev, struct isp_device *isp)

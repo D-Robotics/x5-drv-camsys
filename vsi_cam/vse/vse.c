@@ -526,10 +526,11 @@ int vse_open(struct vse_device *vse, u32 inst)
 	if (refcount_read(&vse->open_cnt) == REFCNT_INIT_VAL)
 		en_clk = true;
 	refcount_inc(&vse->open_cnt);
-	mutex_unlock(&vse->open_lock);
 
 	if (en_clk)
 		rc = vse_runtime_resume(vse->dev);
+
+	mutex_unlock(&vse->open_lock);
 	return rc;
 }
 
@@ -539,7 +540,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	struct vse_msg msg;
 	bool dis_clk = false;
 	u32 value;
-	int rc;
+	int rc = 0;
 
 	if (!vse)
 		return -EINVAL;
@@ -577,7 +578,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	mutex_unlock(&vse->open_lock);
 
 	if (!dis_clk)
-		return 0;
+		goto _exit;
 
 	reset_job_queue(vse->jq);
 
@@ -591,7 +592,11 @@ int vse_close(struct vse_device *vse, u32 inst)
 		dev_warn(vse->dev, "DW module is busy now and cannot be reset!\n");
 	vse->is_completed = true;
 	vse->error = 1;
-	return vse_runtime_suspend(vse->dev);
+	rc = vse_runtime_suspend(vse->dev);
+
+_exit:
+	mutex_unlock(&vse->open_lock);
+	return rc;
 }
 
 int vse_probe(struct platform_device *pdev, struct vse_device *vse)
