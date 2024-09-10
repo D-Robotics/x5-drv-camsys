@@ -879,6 +879,17 @@ int vse_system_resume(struct device *dev)
 int vse_runtime_suspend(struct device *dev)
 {
 	struct vse_device *vse = dev_get_drvdata(dev);
+	struct vse_instance *ins;
+	int inst;
+
+	if (!vse)
+		return -EINVAL;
+
+	for (inst = 0; inst < vse->num_insts; inst++) {
+		ins = &vse->insts[inst];
+		if (ins->state == CAM_STATE_STARTED)
+			return -EBUSY;
+	}
 
 	if (vse->gdc_hclk)
 		clk_disable_unprepare(vse->gdc_hclk);

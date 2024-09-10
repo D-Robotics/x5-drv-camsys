@@ -1568,6 +1568,17 @@ int isp_system_resume(struct device *dev)
 int isp_runtime_suspend(struct device *dev)
 {
 	struct isp_device *isp = dev_get_drvdata(dev);
+	struct isp_instance *ins;
+	int inst;
+
+	if (!isp)
+		return -EINVAL;
+
+	for (inst = 0; inst < isp->num_insts; inst++) {
+		ins = &isp->insts[inst];
+		if (ins->state == CAM_STATE_STARTED)
+			return -EBUSY;
+	}
 
 	if (isp->mcm)
 		clk_disable_unprepare(isp->mcm);

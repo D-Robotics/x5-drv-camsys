@@ -336,6 +336,17 @@ int gdc_system_resume(struct device *dev)
 int gdc_runtime_suspend(struct device *dev)
 {
 	struct gdc_device *gdc = dev_get_drvdata(dev);
+	struct gdc_instance *ins;
+	int inst;
+
+	if (!gdc)
+		return -EINVAL;
+
+	for (inst = 0; inst < gdc->num_insts; inst++) {
+		ins = &gdc->insts[inst];
+		if (ins->state == CAM_STATE_STARTED)
+			return -EBUSY;
+	}
 
 	if (gdc->core)
 		clk_disable_unprepare(gdc->core);

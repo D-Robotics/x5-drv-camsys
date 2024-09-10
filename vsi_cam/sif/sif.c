@@ -758,6 +758,17 @@ int sif_system_resume(struct device *dev)
 int sif_runtime_suspend(struct device *dev)
 {
 	struct sif_device *sif = dev_get_drvdata(dev);
+	struct sif_instance *ins;
+	int inst;
+
+	if (!sif)
+		return -EINVAL;
+
+	for (inst = 0; inst < sif->num_insts; inst++) {
+		ins = &sif->insts[inst];
+		if (ins->state == CAM_STATE_STARTED)
+			return -EBUSY;
+	}
 
 	if (sif->axi)
 		clk_disable_unprepare(sif->axi);
