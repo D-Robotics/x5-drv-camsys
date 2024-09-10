@@ -11,39 +11,6 @@
 
 #include "sif.h"
 
-static s32 handle_set_fmt_cap(struct sif_device *sif, struct sif_msg *msg)
-{
-	struct sif_instance *ins;
-	struct sif_format_cap *cap, *c = NULL;
-	u32 i;
-
-	if (msg->inst >= sif->num_insts)
-		return -EINVAL;
-
-	ins = &sif->insts[msg->inst];
-
-	for (i = 0; i < ARRAY_SIZE(ins->fmt_cap); i++) {
-		cap = &ins->fmt_cap[i];
-		if (cap->format == msg->fcap.format) {
-			c = cap;
-			break;
-		} else if (cap->format == CAM_FMT_NULL) {
-			c = cap;
-			c->format = msg->fcap.format;
-			break;
-		}
-	}
-
-	if (!c)
-		return -EINVAL;
-
-	if (msg->fcap.index >= ARRAY_SIZE(c->res))
-		return -EINVAL;
-
-	c->res[msg->fcap.index] = msg->fcap.res;
-	return 0;
-}
-
 static s32 handle_set_state(struct sif_device *sif, struct sif_msg *msg)
 {
 	int rc;
@@ -74,20 +41,6 @@ static s32 handle_set_format(struct sif_device *sif, struct sif_msg *msg)
 	return 0;
 }
 
-static s32 handle_change_input(struct sif_device *sif, struct sif_msg *msg)
-{
-	struct sif_instance *ins;
-
-	if (msg->inst >= sif->num_insts)
-		return -EINVAL;
-
-	ins = &sif->insts[msg->inst];
-
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
-	ins->input_bayer_format = msg->in.sens.bayer_format;
-	return 0;
-}
-
 static s32 handle_set_cfg(struct sif_device *sif, struct sif_msg *msg)
 {
 	struct sif_instance *ins;
@@ -102,14 +55,6 @@ static s32 handle_set_cfg(struct sif_device *sif, struct sif_msg *msg)
 	return 0;
 }
 
-static s32 handle_get_fmt_cap(struct sif_device *sif, struct sif_msg *msg)
-{
-	if (msg->inst >= sif->num_insts)
-		return -EINVAL;
-
-	return sif_handle_get_fmt_cap((void *)sif, msg->inst, (void *)&msg->sen_ctrl);
-}
-
 s32 sif_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
@@ -120,12 +65,6 @@ s32 sif_msg_handler(void *msg, u32 len, void *arg)
 		return -EINVAL;
 
 	switch (m->id) {
-	case CAM_MSG_CHANGE_INPUT:
-		rc = handle_change_input(sif, m);
-		break;
-	case CAM_MSG_SET_FMT_CAP:
-		rc = handle_set_fmt_cap(sif, m);
-		break;
 	case CAM_MSG_SET_FORMAT:
 		rc = handle_set_format(sif, m);
 		break;
@@ -138,9 +77,7 @@ s32 sif_msg_handler(void *msg, u32 len, void *arg)
 	case SIF_MSG_SET_CFG:
 		rc = handle_set_cfg(sif, m);
 		break;
-	case CAM_MSG_GET_FMT_CAP:
-		rc = handle_get_fmt_cap(sif, m);
-		break;
+
 	default:
 		return -EINVAL;
 	}

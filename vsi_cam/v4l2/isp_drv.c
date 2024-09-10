@@ -207,6 +207,41 @@ static int isp_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	return -EINVAL;
 }
 
+static void isp_set_cap(struct v4l2_buf_ctx *ctx)
+{
+	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_instance *ins;
+	struct isp_format_cap *cap;
+	struct cam_res_cap *res;
+	struct v4l2_subdev *sd;
+	struct v4l2_subdev_frame_size_enum fse;
+	struct v4l2_subdev_state state;
+	uint32_t support_fmt = CAM_FMT_NV12;
+	int i, rc;
+
+	ins = &inst->dev->insts[inst->id];
+	sd = &inst->node.sd;
+	ins->input_bayer_format = BAYER_FMT_BGGR;
+
+	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+	cap = &ins->fmt_cap[0];
+	cap->format = support_fmt;
+
+	for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
+		res = &cap->res[i];
+		memset(&state, 0, sizeof(state));
+		memset(&fse, 0, sizeof(fse));
+		fse.index = i;
+		fse.code = cam_format_to_mbus_code(CAM_FMT_RAW8, ins->input_bayer_format);
+		rc = sd->ops->pad->enum_frame_size(sd, &state, &fse);
+		if (rc < 0)
+			break;
+		res->type = CAP_DC;
+		res->dc.width = fse.min_width;
+		res->dc.height = fse.min_height;
+	}
+}
+
 static void fill_irq_ctx(struct isp_v4l_instance *isp, struct isp_irq_ctx *ctx)
 {
 	memset(ctx, 0, sizeof(*ctx));
@@ -629,6 +664,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = isp_enum_out_format;
 		n->bctx.enum_framesize = isp_enum_out_framesize;
 		n->bctx.enum_frameinterval = isp_enum_out_frameinterval;
+		n->bctx.set_cap = isp_set_cap;
 
 		n->dev = dev;
 		if (i < ISP_SINK_ONLINE_PATH_MAX)

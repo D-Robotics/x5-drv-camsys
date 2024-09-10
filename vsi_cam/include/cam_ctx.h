@@ -50,8 +50,4 @@ void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data);
 
 void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data);
 
-int sif_handle_get_fmt_cap(void *sif_dev, uint32_t inst, void *data);
-
-int isp_handle_get_fmt_cap(void *isp_dev, uint32_t inst, void *data);
-
 #endif /* _CAM_COM_H_ */

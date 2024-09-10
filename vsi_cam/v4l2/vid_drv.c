@@ -120,6 +120,12 @@ static int sd_async_notifier_complete(struct v4l2_async_notifier *notifier)
 	if (rc < 0)
 		return rc;
 
+	rc = vid_subdev_set_cap(vid_dev);
+	if (rc < 0) {
+		destroy_links(vid_dev);
+		return rc;
+	}
+
 	rc = v4l2_device_register_subdev_nodes(&vid_dev->v4l2_dev);
 	if (rc < 0)
 		destroy_links(vid_dev);

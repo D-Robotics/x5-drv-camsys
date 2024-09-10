@@ -939,3 +939,23 @@ void destroy_links(struct vid_device *vdev)
 		destroy_video_device(v);
 	}
 }
+
+int vid_subdev_set_cap(struct vid_device *vdev)
+{
+	struct vid_video_device *v;
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct v4l2_buf_ctx *ctx;
+
+	list_for_each_entry(v, &vdev->video_device_list, entry) {
+		pad = media_pad_remote_pad_first(&v->pad);
+		if (!pad)
+			return -ENOLINK;
+		sd = media_entity_to_v4l2_subdev(pad->entity);
+		ctx = v4l2_get_subdevdata(sd);
+		if (ctx && ctx->set_cap)
+			ctx->set_cap(ctx);
+	}
+
+	return 0;
+}

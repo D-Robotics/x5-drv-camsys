@@ -243,6 +243,27 @@ static int gdc_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	return -EINVAL;
 }
 
+static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
+{
+	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_instance *ins;
+	struct gdc_format_cap *cap;
+	uint32_t support_fmt = CAM_FMT_NV12;
+
+	ins = &inst->dev->insts[inst->id];
+
+	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+	cap = &ins->fmt_cap[0];
+	cap->format             = support_fmt;
+	cap->res[0].type           = CAP_SW;
+	cap->res[0].sw.step_width  = 2;
+	cap->res[0].sw.step_height = 2;
+	cap->res[0].sw.min_width   = 64;
+	cap->res[0].sw.min_height  = 64;
+	cap->res[0].sw.max_width   = 8192;
+	cap->res[0].sw.max_height  = 8192;
+}
+
 static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
 {
 	memset(ctx, 0, sizeof(*ctx));
@@ -520,6 +541,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = gdc_enum_out_format;
 		n->bctx.enum_framesize = gdc_enum_out_framesize;
 		n->bctx.enum_frameinterval = gdc_enum_out_frameinterval;
+		n->bctx.set_cap = gdc_set_cap;
 
 		n->dev = dev;
 		n->num_pads = 2;

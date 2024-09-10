@@ -182,6 +182,43 @@ static int sif_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	return -EINVAL;
 }
 
+static void sif_set_cap(struct v4l2_buf_ctx *ctx)
+{
+	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_instance *ins;
+	struct sif_format_cap *cap;
+	struct cam_res_cap *res;
+	struct v4l2_subdev *sd;
+	struct v4l2_subdev_frame_size_enum fse;
+	struct v4l2_subdev_state state;
+	uint32_t support_fmt[2] = {CAM_FMT_RAW8, CAM_FMT_NV12};
+	int i, j, rc;
+
+	ins = &inst->dev->insts[inst->id];
+	sd = &inst->node.sd;
+	ins->input_bayer_format = BAYER_FMT_BGGR;
+
+	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+
+	for(j = 0; j < ARRAY_SIZE(support_fmt); j++){
+		cap = &ins->fmt_cap[j];
+		cap->format = support_fmt[j];
+		for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
+			res = &cap->res[i];
+			memset(&state, 0, sizeof(state));
+			memset(&fse, 0, sizeof(fse));
+			fse.index = i;
+			fse.code = cam_format_to_mbus_code(CAM_FMT_RAW8, ins->input_bayer_format);
+			rc = sd->ops->pad->enum_frame_size(sd, &state, &fse);
+			if (rc < 0)
+				break;
+			res->type = CAP_DC;
+			res->dc.width = fse.min_width;
+			res->dc.height = fse.min_height;
+		}
+	}
+}
+
 static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
@@ -339,7 +376,7 @@ static long sif_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	}
 
 	if (rc < 0)
-		pr_err("%s call isp ctrl failed\n", __func__);
+		pr_err("%s call sensor ctrl failed\n", __func__);
 
 	return rc;
 }
@@ -484,6 +521,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = sif_enum_out_format;
 		n->bctx.enum_framesize = sif_enum_out_framesize;
 		n->bctx.enum_frameinterval = sif_enum_out_frameinterval;
+		n->bctx.set_cap = sif_set_cap;
 
 		n->dev = dev;
 		n->num_pads = 3;

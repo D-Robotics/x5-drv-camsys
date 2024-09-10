@@ -393,6 +393,48 @@ static int vse_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	return -EINVAL;
 }
 
+static void vse_set_cap(struct v4l2_buf_ctx *ctx)
+{
+	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_instance *ins;
+	struct vse_format_cap *cap;
+	uint32_t support_fmt = CAM_FMT_NV12;
+	int i;
+
+	ins = &inst->dev->insts[inst->id];
+
+	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+	cap = &ins->fmt_cap[0];
+	cap->format = support_fmt;
+
+	for (i = 0; i < 5; i++) {
+		cap->res[i][0].type           = CAP_SW;
+		cap->res[i][0].sw.min_width   = 64;
+		cap->res[i][0].sw.min_height  = 64;
+		cap->res[i][0].sw.step_width  = 2;
+		cap->res[i][0].sw.step_height = 2;
+	}
+
+	cap->res[0][0].sw.max_width  = 4096;
+	cap->res[0][0].sw.max_height = 3076;
+	cap->res[1][0].sw.max_width  = 1920;
+	cap->res[1][0].sw.max_height = 1080;
+	cap->res[2][0].sw.max_width  = 1920;
+	cap->res[2][0].sw.max_height = 1080;
+	cap->res[3][0].sw.max_width  = 1280;
+	cap->res[3][0].sw.max_height = 720;
+	cap->res[4][0].sw.max_width  = 1280;
+	cap->res[4][0].sw.max_height = 720;
+
+	cap->res[5][0].type           = CAP_SW;
+	cap->res[5][0].sw.min_width   = 64;
+	cap->res[5][0].sw.min_height  = 64;
+	cap->res[5][0].sw.max_width   = 4096;
+	cap->res[5][0].sw.max_height  = 3076;
+	cap->res[5][0].sw.step_width  = 2;
+	cap->res[5][0].sw.step_height = 2;
+}
+
 static void fill_irq_ctx(struct vse_v4l_instance *vse, struct vse_irq_ctx *ctx)
 {
 	u32 i;
@@ -762,6 +804,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = vse_enum_out_format;
 		n->bctx.enum_framesize = vse_enum_out_framesize;
 		n->bctx.enum_frameinterval = vse_enum_out_frameinterval;
+		n->bctx.set_cap = vse_set_cap;
 
 		n->dev = dev;
 		n->num_pads = VSE_OUT_CHNL_MAX + 1;

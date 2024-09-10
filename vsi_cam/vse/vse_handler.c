@@ -12,40 +12,6 @@
 
 #include "vse.h"
 
-static s32 handle_set_fmt_cap(struct vse_device *vse, struct vse_msg *msg)
-{
-	struct vse_instance *ins;
-	struct vse_format_cap *cap, *c = NULL;
-	u32 i;
-
-	if (msg->inst >= vse->num_insts)
-		return -EINVAL;
-
-	ins = &vse->insts[msg->inst];
-
-	for (i = 0; i < ARRAY_SIZE(ins->fmt_cap); i++) {
-		cap = &ins->fmt_cap[i];
-		if (cap->format == msg->fcap.format) {
-			c = cap;
-			break;
-		} else if (cap->format == CAM_FMT_NULL) {
-			c = cap;
-			c->format = msg->fcap.format;
-			break;
-		}
-	}
-
-	if (!c)
-		return -EINVAL;
-
-	if (msg->fcap.index >= ARRAY_SIZE(c->res))
-		return -EINVAL;
-
-	for (i = 0; i < msg->fcap.res_num; i++)
-		c->res[i][msg->fcap.index] = msg->fcap.res[i];
-	return 0;
-}
-
 static s32 handle_set_state(struct vse_device *vse, struct vse_msg *msg)
 {
 	return 0;
@@ -54,19 +20,6 @@ static s32 handle_set_state(struct vse_device *vse, struct vse_msg *msg)
 static s32 handle_reset_control(struct vse_device *vse, struct vse_msg *msg)
 {
 	return dw_reset(vse->crc_dev, DW_MOD_VSE);
-}
-
-static s32 handle_change_input(struct vse_device *vse, struct vse_msg *msg)
-{
-	struct vse_instance *ins;
-
-	if (msg->inst >= vse->num_insts)
-		return -EINVAL;
-
-	ins = &vse->insts[msg->inst];
-
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
-	return 0;
 }
 
 static s32 handle_alloc_cmd_buf(struct vse_device *vse, struct vse_msg *msg)
@@ -119,12 +72,6 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case CAM_MSG_WRITE_REG:
 		vse_write(vse, m->reg.offset, m->reg.value);
-		break;
-	case CAM_MSG_CHANGE_INPUT:
-		rc = handle_change_input(vse, m);
-		break;
-	case CAM_MSG_SET_FMT_CAP:
-		rc = handle_set_fmt_cap(vse, m);
 		break;
 	case CAM_MSG_SET_STATE:
 		rc = handle_set_state(vse, m);

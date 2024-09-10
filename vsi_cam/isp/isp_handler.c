@@ -12,39 +12,6 @@
 
 #include "isp.h"
 
-static s32 handle_set_fmt_cap(struct isp_device *isp, struct isp_msg *msg)
-{
-	struct isp_instance *ins;
-	struct isp_format_cap *cap, *c = NULL;
-	u32 i;
-
-	if (msg->inst >= isp->num_insts)
-		return -EINVAL;
-
-	ins = &isp->insts[msg->inst];
-
-	for (i = 0; i < ARRAY_SIZE(ins->fmt_cap); i++) {
-		cap = &ins->fmt_cap[i];
-		if (cap->format == msg->fcap.format) {
-			c = cap;
-			break;
-		} else if (cap->format == CAM_FMT_NULL) {
-			c = cap;
-			c->format = msg->fcap.format;
-			break;
-		}
-	}
-
-	if (!c)
-		return -EINVAL;
-
-	if (msg->fcap.index >= ARRAY_SIZE(c->res))
-		return -EINVAL;
-
-	c->res[msg->fcap.index] = msg->fcap.res;
-	return 0;
-}
-
 static s32 handle_get_format(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_instance *ins;
@@ -91,21 +58,6 @@ static s32 handle_set_clock(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_reset_control(struct isp_device *isp, struct isp_msg *msg)
 {
 	isp_reset(isp);
-	return 0;
-}
-
-static s32 handle_change_input(struct isp_device *isp, struct isp_msg *msg)
-{
-	struct isp_instance *ins;
-
-	if (msg->inst >= isp->num_insts)
-		return -EINVAL;
-
-	ins = &isp->insts[msg->inst];
-
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
-
-	ins->input_bayer_format = msg->in.sens.bayer_format;
 	return 0;
 }
 
@@ -196,14 +148,6 @@ static s32 handle_get_sensor_ctrl(struct isp_device *isp, struct isp_msg *msg)
 	return 0;
 }
 
-static s32 handle_get_fmt_cap(struct isp_device *isp, struct isp_msg *msg)
-{
-	if (msg->inst >= isp->num_insts)
-		return -EINVAL;
-
-	return isp_handle_get_fmt_cap((void *)isp, msg->inst, (void *)&msg->sen_ctrl);
-}
-
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -219,12 +163,6 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case CAM_MSG_WRITE_REG:
 		isp_write(isp, m->reg.offset, m->reg.value);
-		break;
-	case CAM_MSG_CHANGE_INPUT:
-		rc = handle_change_input(isp, m);
-		break;
-	case CAM_MSG_SET_FMT_CAP:
-		rc = handle_set_fmt_cap(isp, m);
 		break;
 	case CAM_MSG_GET_FORMAT:
 		rc = handle_get_format(isp, m);
@@ -258,9 +196,6 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case CAM_MSG_GET_SEN_CTRL:
 		rc = handle_get_sensor_ctrl(isp, m);
-		break;
-	case CAM_MSG_GET_FMT_CAP:
-		rc = handle_get_fmt_cap(isp, m);
 		break;
 	default:
 		return -EINVAL;
