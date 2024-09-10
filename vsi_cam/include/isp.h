@@ -74,10 +74,12 @@ struct isp_instance {
 	ktime_t last_frame_done, frame_interval;
 	u32 frame_count;
 	u32 meta_inst;
+	void *prev;
 };
 
 struct ibuf {
 	struct mem_buf buf;
+	struct cam_frame_info info;
 	struct list_head entry;
 };
 

@@ -239,7 +239,8 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct isp_instance *inst, bool timeout)
+static inline void frame_done(struct isp_instance *inst, bool timeout, u32 mode,
+			struct cam_frame_info *info)
 {
 	struct isp_irq_ctx *ctx = &inst->ctx;
 	struct cam_list_node *node;
@@ -256,8 +257,12 @@ static inline void frame_done(struct isp_instance *inst, bool timeout)
 		if (cam_get_frame_status(ctx->src_ctx) || timeout) {
 			cam_drop_irq(ctx->src_ctx, node->data);
 		} else {
-			if (ctx->is_sink_online_mode)
-				sif_get_frame_des(ctx->src_ctx);
+			if (ctx->is_sink_online_mode) {
+				if (mode == ISP_STRM_MODE)
+					sif_get_frame_des(ctx->src_ctx);
+				else
+					cam_update_frame_info(ctx->src_ctx, info);
+			}
 			cam_qbuf_irq(ctx->src_ctx, node->data, true);
 		}
 		cam_set_frame_status(ctx->src_ctx, NO_ERR);
@@ -348,6 +353,7 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 	u32 inst = isp->stream_idx_mapping[path];
 	struct isp_instance *ins;
 	struct ibuf *ib;
+	struct cam_frame_info *info;
 
 	pr_debug("%s: path[%d], inst:%d\n", __func__, path, inst);
 	if (unlikely(inst >= isp->num_insts))
@@ -361,6 +367,8 @@ static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
 				      struct ibuf, entry);
 	if (ib) {
 		if (!error) {
+			info = &ins->mcm_ib->info;
+			cam_get_frame_info(ins->prev, info);
 			list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list2);
 		} else {
 			list_add_tail(&ins->mcm_ib->entry, &isp->ibm[inst].list1);
@@ -516,7 +524,8 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 				// handle isp frame end intr
 				ins = &isp->insts[isp->cur_mi_irq_ctx];
 				if (ins->state == CAM_STATE_STARTED) {
-					frame_done(ins, !!(mi_mis.miv2_mis1 & 0x1));
+					struct cam_frame_info *info = NULL;
+
 					if (ins->online_mcm) {
 						struct ibuf *ib;
 
@@ -524,11 +533,13 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 								(&isp->ibm[isp->cur_mi_irq_ctx].list3,
 								struct ibuf, entry);
 						if (ib) {
+							info = &ib->info;
 							list_del(&ib->entry);
 							list_add_tail(&ib->entry,
 								&isp->ibm[isp->cur_mi_irq_ctx].list1);
 						}
 					}
+					frame_done(ins, !!(mi_mis.miv2_mis1 & 0x1), isp->mode, info);
 					if (isp->mode == ISP_STRM_MODE)
 						ins->shd_src_node = NULL;
 				}

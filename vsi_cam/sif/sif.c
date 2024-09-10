@@ -457,6 +457,33 @@ int sif_set_cam_pulse_gen(struct cam_pulse_device *dev, bool enable)
 	return rc;
 }
 
+int sif_get_frame_info(struct sif_device *sif, u32 inst,
+		       struct cam_frame_info *info)
+{
+	u64 time_stamp;
+	struct sif_instance *ins = &sif->insts[inst];
+
+	if (!sif || !info || inst >= sif->num_insts)
+		return -EINVAL;
+
+	info->frame_id = sif_read(sif, SIF_IPI_FRAME_ID(inst));
+	if (ins->sif_cfg.ts_ctrl.trigger_mode & IPI_VSYNC) {
+		time_stamp = sif_read(sif, SIF_IPI_TS_VSYNC_HI(inst));
+		time_stamp = sif_read(sif, SIF_IPI_TS_VSYNC_LO(inst)) | (info->time_stamp << 32);
+		info->tv_sec = time_stamp / sif->timestamp_clk;
+		info->tv_usec = (time_stamp % sif->timestamp_clk) / (sif->timestamp_clk / 1000000u);
+	}
+
+	if (ins->sif_cfg.ts_ctrl.trigger_mode & IPI_TRIGGER) {
+		time_stamp = sif_read(sif, SIF_IPI_TS_TRIG_HI(inst));
+		time_stamp = sif_read(sif, SIF_IPI_TS_TRIG_LO(inst)) | (info->time_stamp << 32);
+		info->trig_tv_sec = time_stamp / sif->timestamp_clk;
+		info->trig_tv_usec = (time_stamp % sif->timestamp_clk) / (sif->timestamp_clk / 1000000u);
+	}
+
+	return 0;
+}
+
 static void sif_bound(struct isc_handle *isc, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;

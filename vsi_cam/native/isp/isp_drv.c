@@ -549,6 +549,7 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 	} else if (vctx->id == VNODE_ID_CAP) {
 		dev = inst->dev;
 		src_inst = &dev->src_instance[vctx->ctx_id];
+		dev->isp_dev.insts[vctx->ctx_id].prev = src_inst->prev;
 		if (src_inst->online_mode && !inst->metadata_en) {
 			get_csi_ipi_idx(src_inst->prev, &csi_idx, &ipi_idx, &ipi_num);
 			pr_info("%s stream_idx=%d,csi_idx=%d,ipi_idx=%d,ipi_num=%d\n", __func__,

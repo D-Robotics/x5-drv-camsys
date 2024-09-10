@@ -6,6 +6,7 @@
 
 struct cam_ctx;
 struct cam_buf;
+struct cam_frame_info;
 
 struct cam_buf_ops {
 	int (*queue_setup)(struct cam_ctx *ctx,

@@ -116,6 +116,15 @@ enum cam_work_mode {
 	CAM_MULTIPLEX_MODE,
 };
 
+struct cam_frame_info {
+	__u32 frame_id;
+	__u64 time_stamp;
+	__u64 tv_sec;
+	__u64 tv_usec;
+	__u64 trig_tv_sec;
+	__u64 trig_tv_usec;
+};
+
 struct cam_reg {
 	__u32 offset;
 	__u32 value;

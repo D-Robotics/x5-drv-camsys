@@ -160,6 +160,8 @@ void sif_debugfs_init(struct sif_device *sif);
 void sif_debugfs_remo(struct sif_device *sif);
 #endif
 int sif_reset_ipi(struct sif_device *sif, u32 inst);
+int sif_get_frame_info(struct sif_device *sif, u32 inst,
+		       struct cam_frame_info *info);
 
 void sif_reset(struct sif_device *sif);
 #ifdef CONFIG_PM_SLEEP

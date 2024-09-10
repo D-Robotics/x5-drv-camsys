@@ -258,3 +258,43 @@ void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
 {
 
 }
+
+int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+	struct vio_node *vnode;
+	int ret = 0;
+
+	if (unlikely(!subdev))
+		return -EINVAL;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode) {
+		vio_get_frame_id(vnode);
+		memcpy(info, &vnode->frameid, sizeof(struct cam_frame_info));
+	} else {
+		return -EINVAL;
+	}
+
+	return ret;
+}
+
+int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+	struct vio_node *vnode;
+	int ret = 0;
+
+	if (unlikely(!subdev))
+		return -EINVAL;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode && info)
+		memcpy(&vnode->frameid, info, sizeof(struct cam_frame_info));
+	else
+		return -EINVAL;
+
+	return ret;
+}

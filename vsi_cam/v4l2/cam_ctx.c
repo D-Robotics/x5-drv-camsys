@@ -154,3 +154,13 @@ void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
 	uint32_t cmd = CAM_GET_SENSOR_CTRL;
 	v4l2_subdev_call(sd, core, command, cmd, (void *)ctrl);
 }
+
+int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	return 0;
+}
+
+int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	return 0;
+}
