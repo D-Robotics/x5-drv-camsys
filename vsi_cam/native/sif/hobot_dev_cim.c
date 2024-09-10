@@ -886,11 +886,6 @@ static s32 cim_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-#ifdef CIM_DEBUG
-	cim->base_reg = devm_kzalloc(&pdev->dev, 0x20000, GFP_KERNEL);
-	dev_err(dev, "fake reg addr %p\n", cim->base_reg);
-#endif
-
 #ifdef CONFIG_OF
 	dnode = dev->of_node;
 	ret = of_property_read_u32(dnode, "id", &cim->hw_id);
@@ -907,7 +902,6 @@ static s32 cim_probe(struct platform_device *pdev)
 	}
 
 	ret = vin_node_device_node_init(cim->hw_id);
-	// ret = vin_node_device_node_init(cim->hw_id);
 	if (ret < 0) {
 		vio_err("vin_node_device_node_init fail\n");
 		return ret;
@@ -1013,17 +1007,20 @@ static s32 cim_remove(struct platform_device *pdev)
 	}
 
 	device_remove_file(dev, &dev_attr_regdump);
+#ifdef CIM_DEBUG
+	device_remove_file(dev, &dev_attr_simu_irq);
+#endif
 	device_remove_file(dev, &dev_attr_cim_stat);
-	// devm_free_irq(dev, (u32)cim->irq, cim);
-	devm_kfree(dev, (void *)cim);
 	vio_unregister_callback_ops(VIN_MODULE, COPS_0);
-	vio_unregister_callback_ops(VIN_MODULE, COPS_1);
-	// vio_unregister_callback_ops(VIN_MODULE, COPS_8);
 	vio_unregister_callback_ops(VIN_MODULE, COPS_9);
 	vin_node_device_node_deinit(cim->hw_id);
+	vin_device_node_deinit(cim->hw_id);
+	mutex_destroy(&cim->mlock);
 #ifdef CONFIG_DEBUG_FS
 	sif_debugfs_remo(&cim->sif);
 #endif
+	g_cim_dev[cim->hw_id] = NULL;
+	devm_kfree(dev, (void *)cim);
 	dev_info(dev, "%s\n", __func__);
 	return ret;
 }
