@@ -634,6 +634,7 @@ static int32_t common_get_base_info(uint32_t chn, struct isi_sensor_base_info_s 
         user_para->bus_type = tuning_param[chn].bus_type;
         user_para->reg_width = tuning_param[chn].reg_width;
         user_para->mode = tuning_param[chn].mode;
+        user_para->af_mode = tuning_param[chn].af_mode;
 
         return 0;
 }

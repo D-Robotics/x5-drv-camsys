@@ -16,6 +16,8 @@
 #define ISP_MSG_GET_FUNC       (0x2 << 0)
 #define ISP_MSG_GET_VI_INFO    (0x3 << 0)
 #define ISP_MSG_GET_FRAME_INFO (0x4 << 0)
+#define ISP_MSG_GET_METADATA   (0x5 << 0)
+#define ISP_MSG_QRY_METADATA   (0x6 << 0)
 
 #define ISP_MSG_IRQ_MIS    (0x1 << 8)
 #define ISP_MSG_MCM_SCH    (0x2 << 8)
@@ -106,6 +108,11 @@ struct isp_frame_info {
 	__u64 time_stamp;
 };
 
+struct isp_metadata {
+	struct mem_buf buf;
+	__u8 last;
+};
+
 struct isp_msg {
 	__u32 id;
 	__u32 inst;
@@ -128,6 +135,8 @@ struct isp_msg {
 		struct cam_log log;
 		struct isp_vi_info vinfo;
 		struct isp_frame_info frame_info;
+		struct isp_metadata meta;
+		__u32 meta_enabled;
 		__u32 tune_enabled;
 		struct sen_ctrl sen_ctrl;
 	};

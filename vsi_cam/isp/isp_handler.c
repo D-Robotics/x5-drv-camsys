@@ -148,6 +148,46 @@ static s32 handle_get_sensor_ctrl(struct isp_device *isp, struct isp_msg *msg)
 	return 0;
 }
 
+static s32 handle_get_metadata(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_instance *ins, *ins_meta;
+	struct cam_buf *buf;
+	struct isp_irq_ctx *ctx;
+
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	ins_meta = &isp->insts[ins->meta_inst];
+	ctx = &ins_meta->ctx;
+
+	if (ctx->sink_buf) {
+		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
+		ctx->sink_buf = NULL;
+	}
+	buf = cam_dqbuf_irq(ctx->sink_ctx, true);
+	if (!buf)
+		return -ENOMEM;
+	ctx->sink_buf = buf;
+	msg->meta.buf.addr = get_phys_addr(buf, 0);
+	msg->meta.buf.size = get_buf_size(buf, 0);
+	pr_debug("%s buf_addr: 0x%x, buff_size:%d\n", __func__, (u32)msg->meta.buf.addr, (u32)msg->meta.buf.size);
+	return 0;
+}
+
+static s32 handle_query_metadata(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_instance *ins;
+
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	msg->meta_enabled = ins->meta_inst < isp->num_insts ? 1 : 0;
+	pr_info("%s meta_enabled: %d\n", __func__, msg->meta_enabled);
+	return 0;
+}
+
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -196,6 +236,12 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case CAM_MSG_GET_SEN_CTRL:
 		rc = handle_get_sensor_ctrl(isp, m);
+		break;
+	case ISP_MSG_GET_METADATA:
+		rc = handle_get_metadata(isp, m);
+		break;
+	case ISP_MSG_QRY_METADATA:
+		rc = handle_query_metadata(isp, m);
 		break;
 	default:
 		return -EINVAL;

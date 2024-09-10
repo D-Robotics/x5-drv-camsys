@@ -74,6 +74,7 @@ struct isp_instance {
 	u32 online_mcm;
 	ktime_t last_frame_done, frame_interval;
 	u32 frame_count;
+	u32 meta_inst;
 };
 
 struct ibuf {

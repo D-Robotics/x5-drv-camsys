@@ -361,6 +361,11 @@ phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane)
 			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, plane);
 }
 
+unsigned long get_buf_size(struct cam_buf *buf, unsigned int plane)
+{
+	return 0;
+}
+
 int cam_drop_irq(struct cam_ctx *ctx, struct cam_buf *buf)
 {
 	struct video_device *vdev;

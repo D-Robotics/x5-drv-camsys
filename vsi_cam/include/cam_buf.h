@@ -33,6 +33,8 @@ void cam_buf_ctx_release(struct cam_ctx *ctx);
 
 phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane);
 
+unsigned long get_buf_size(struct cam_buf *buf, unsigned int plane);
+
 int cam_drop_irq(struct cam_ctx *ctx, struct cam_buf *buf);
 
 int cam_drop_irq_ext(struct cam_ctx *ctx, struct cam_buf *buf);

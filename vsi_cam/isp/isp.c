@@ -1138,6 +1138,7 @@ static struct isc_notifier_ops isp_notifier_ops = {
 
 int isp_open(struct isp_device *isp, u32 inst)
 {
+	struct isp_instance *ins;
 	bool en_clk = false;
 	int rc = 0;
 
@@ -1145,6 +1146,12 @@ int isp_open(struct isp_device *isp, u32 inst)
 
 	if (!isp)
 		return -EINVAL;
+
+	if (inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[inst];
+	ins->meta_inst = isp->num_insts;
 
 	mutex_lock(&isp->open_lock);
 	if (refcount_read(&isp->open_cnt) == REFCNT_INIT_VAL)
@@ -1208,6 +1215,7 @@ int isp_close(struct isp_device *isp, u32 inst)
 		isp->hdr_bufs[inst].size = 0;
 	}
 
+	ins->meta_inst = isp->num_insts;
 	rc = isp_set_state(isp, inst, CAM_STATE_CLOSED);
 	if (rc < 0)
 		dev_err(isp->dev, "failed to call isp_set_state (err=%d)\n", rc);
