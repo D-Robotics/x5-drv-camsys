@@ -350,7 +350,7 @@ static s32 vse_video_streamon(struct vio_video_ctx *vctx)
 			return rc;
 		}
 
-		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 1, 1, 1);
+		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 1);
 	}
 	return 0;
 }
@@ -371,7 +371,7 @@ static s32 vse_video_streamoff(struct vio_video_ctx *vctx)
 			return rc;
 		}
 
-		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 0, 1, 1);
+		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 0);
 	}
 	return 0;
 }

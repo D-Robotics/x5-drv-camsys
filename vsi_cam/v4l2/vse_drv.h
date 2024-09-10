@@ -2,6 +2,8 @@
 #ifndef _VSE_DRV_H_
 #define _VSE_DRV_H_
 
+#include <linux/refcount.h>
+
 #include "utils.h"
 #include "vse.h"
 
@@ -13,7 +15,7 @@ struct vse_v4l_instance {
 	struct media_pad *src_pads[VSE_OUT_CHNL_MAX];
 	bool is_out_chnl_connected[VSE_OUT_CHNL_MAX];
 	struct vse_format ifmt;
-	u32 set_state_count;
+	refcount_t state_count;
 	u32 out_pixelformat;
 	u32 id;
 };

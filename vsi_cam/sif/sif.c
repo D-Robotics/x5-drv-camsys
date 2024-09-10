@@ -18,8 +18,6 @@
 
 #include "sif.h"
 
-#define REFCNT_INIT_VAL (1)
-
 void sif_post(struct sif_device *sif, void *msg, u32 len)
 {
 	struct isc_post_param param = {

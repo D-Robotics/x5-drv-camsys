@@ -114,7 +114,7 @@ int vse_set_oformat(struct vse_device *vse, u32 inst, u32 chnl, struct cam_forma
 int vse_set_format(struct vse_device *vse, u32 inst, u32 chnl,
 		   struct vse_format *fmt, struct vse_stitching *stitch);
 int vse_set_cascade(struct vse_device *vse, u32 inst, u32 cas_id, bool en_cas);
-int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32 total_cnt);
+int vse_set_state(struct vse_device *vse, u32 inst, int enable);
 int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info);
 int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf);
 int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl);

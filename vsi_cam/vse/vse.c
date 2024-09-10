@@ -285,7 +285,7 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	pr_debug("inst %d\n", inst);
 }
 
-int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32 total_cnt)
+int vse_set_state(struct vse_device *vse, u32 inst, int enable)
 {
 	struct vse_instance *ins;
 	struct vse_msg msg;
@@ -293,9 +293,6 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 
 	if (!vse || inst >= vse->num_insts)
 		return -EINVAL;
-
-	if (cur_cnt < total_cnt)
-		return 0;
 
 	ins = &vse->insts[inst];
 	msg.id = CAM_MSG_STATE_CHANGED;

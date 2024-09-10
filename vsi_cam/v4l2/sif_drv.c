@@ -5,11 +5,10 @@
 #include <linux/platform_device.h>
 #include <media/v4l2-device.h>
 
+#include "cam_dev.h"
 #include "cam_uapi.h"
 
 #include "sif_drv.h"
-
-#define REFCNT_INIT_VAL (1)
 
 #define sd_to_sif_v4l_instance(s)                                \
 	({                                                       \

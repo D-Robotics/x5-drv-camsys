@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#define pr_fmt(fmt) "[vse_drv]: %s: " fmt, __func__
+
 #include <linux/clk.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -13,7 +15,7 @@
 
 static int scene;
 module_param(scene, int, 0644);
-
+#if 0
 static struct vse_stitching stitchesx[] = {
 	{ false },
 	{ false },
@@ -23,74 +25,21 @@ static struct vse_stitching stitchesx[] = {
 	{ false },
 };
 
-static struct vse_stitching stitches9[] = {
-	{ true, 2, 2, 5, 0, 1 },
-	{ true, 2, 2, 5, 1, 0 },
-	{ true, 2, 2, 5, 1, 1 },
-	{ false },
-	{ false },
-	{ true, 2, 2, 5, 0, 0 },
-};
-
 static struct vse_stitching *stitches[] = {
 	stitchesx,
 	stitchesx,
 	stitchesx,
 	stitchesx,
 	stitchesx,
-	stitchesx,
-	stitchesx,
-	stitchesx,
-	stitchesx,
-	stitches9,
-	stitchesx,
-	stitchesx,
-	stitchesx,
-	stitchesx,
 };
+#endif
 
 static struct cam_rect cropsx[] = {
 	{}, {}, {}, {}, {}, {},
 };
 
-static struct cam_rect crops2[] = {
-	{ 0, 0, 1280, 720 },
-	{ 0, 0, 1280, 720 },
-	{ 0, 0, 1280, 720 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 1280, 720 },
-};
-
-static struct cam_rect crops6[] = {
-	{ 0, 0, 1280, 720 },
-	{ 0, 0, 1280, 720 },
-	{ 0, 0, 1280, 720 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 0, 0 },
-};
-
-static struct cam_rect crops9[] = {
-	{ 780, 420, 360, 240 },
-	{ 1238, 652, 682, 428 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 0, 0 },
-	{ 0, 0, 260, 194 },
-};
-
 static struct cam_rect *crops[] = {
 	cropsx,
-	cropsx,
-	crops2,
-	cropsx,
-	cropsx,
-	cropsx,
-	crops6,
-	cropsx,
-	cropsx,
-	crops9,
 	cropsx,
 	cropsx,
 	cropsx,
@@ -102,15 +51,6 @@ static struct ires {
 } iress[] = {
 	{ 1920, 1080 },
 	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1280,  720 },
 	{ 1920, 1080 },
 	{ 1920, 1080 },
 	{ 1920, 1080 },
@@ -463,7 +403,7 @@ static void fill_irq_ctx(struct vse_v4l_instance *vse, struct vse_irq_ctx *ctx)
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (vse->src_ctx[i].pad)
 			ctx->src_ctx[i] = &vse->src_ctx[i];
-		ctx->stitches[i] = stitches[scene][i];
+		// ctx->stitches[i] = stitches[scene][i];
 	}
 }
 
@@ -495,30 +435,20 @@ static struct cam_buf_ops vse_buf_ops = {
 	.queue_setup = vse_queue_setup,
 };
 
-static int count_channels(struct vse_v4l_instance *inst)
-{
-	int i, count = 0;
-
-	for (i = 0; i < VSE_OUT_CHNL_MAX; i++)
-		if (inst->is_out_chnl_connected[i])
-			count++;
-	return count;
-}
-
 static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
 	struct vse_irq_ctx ctx;
-	u32 set_state_count = 0, out_chnl_connected_num;
 	int rc;
 
-	if (enable)
-		set_state_count = vse->set_state_count + 1;
-	else if (vse->set_state_count > 0)
-		set_state_count = vse->set_state_count - 1;
-	out_chnl_connected_num = count_channels(vse);
-
 	if (enable) {
+		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL) {
+			refcount_inc(&vse->state_count);
+			return 0;
+		}
+
+		refcount_inc(&vse->state_count);
+
 		if (vse->id < VSE_SINK_ONLINE_PATH_MAX)
 			rc = vse_set_source(vse->dev, vse->id, VSE_SRC_STRM0);
 		else
@@ -533,31 +463,33 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 
 		fill_irq_ctx(vse, &ctx);
 		vse_set_ctx(vse->dev, vse->id, &ctx);
-	} else {
-		if (!set_state_count) {
-			rc = subdev_set_stream(sd, enable);
-			if (rc < 0)
-				return rc;
-		}
 
-		memset(&ctx, 0, sizeof(ctx));
-		vse_set_ctx(vse->dev, vse->id, &ctx);
+		rc = vse_set_state(vse->dev, vse->id, enable);
+		if (rc < 0)
+			return rc;
 
-		if (!vse->node.bctx.is_sink_online_mode)
-			cam_reqbufs(&vse->sink_ctx, 0, NULL);
-	}
-
-	rc = vse_set_state(vse->dev, vse->id, enable, set_state_count, out_chnl_connected_num);
-	if (rc < 0)
-		return rc;
-
-	if (enable && set_state_count >= out_chnl_connected_num) {
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
-	}
+	} else {
+		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL)
+			refcount_dec(&vse->state_count);
+		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL)
+			return 0;
 
-	vse->set_state_count = set_state_count;
+		rc = subdev_set_stream(sd, enable);
+		if (rc < 0)
+			return rc;
+
+		memset(&ctx, 0, sizeof(ctx));
+		vse_set_ctx(vse->dev, vse->id, &ctx);
+		if (!vse->node.bctx.is_sink_online_mode)
+			cam_reqbufs(&vse->sink_ctx, 0, NULL);
+
+		rc = vse_set_state(vse->dev, vse->id, enable);
+		if (rc < 0)
+			return rc;
+	}
 	return 0;
 }
 
@@ -579,25 +511,25 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 {
 	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
 	struct cam_format f;
-	struct vse_stitching *stitch;
+	// struct vse_stitching *stitch;
 	struct v4l2_subdev_format s_f = *fmt;
 	struct cam_rect crop;
 	int channel = -1;
 	int hfactor = 1, vfactor = 1;
-	int rc, i;
+	int rc;
 
 	if (fmt->pad < inst->node.num_pads)
 		channel = get_channel_index(inst, &inst->node.pads[fmt->pad]);
 
 	if (channel < 0)
 		return -EINVAL;
-
+#if 0
 	stitch = stitches[scene];
 	if (stitch[channel].enabled) {
 		hfactor = stitch[channel].hfactor;
 		vfactor = stitch[channel].vfactor;
 	}
-
+#endif
 	memset(&f, 0, sizeof(f));
 	f.format = CAM_FMT_NV12;
 	f.width = iress[scene].width;
@@ -624,6 +556,11 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		memcpy(&inst->ifmt, &f, sizeof(f));
 	}
 
+	if (inst->node.bctx.is_sink_online_mode)
+		vse_set_cascade(inst->dev, inst->id, inst->id, true); //FIXME
+	else
+		vse_set_cascade(inst->dev, inst->id, inst->id, false);
+
 	f.width = ALIGN_DOWN(fmt->format.width / hfactor, 16);
 	f.height = fmt->format.height / vfactor;
 	f.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
@@ -635,7 +572,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	rc = vse_set_oformat(inst->dev, inst->id, channel, &f, &crop, true);
 	if (rc < 0)
 		return rc;
-
+#if 0
 	if (!stitch[channel].enabled)
 		return 0;
 
@@ -650,6 +587,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 				return rc;
 		}
 	}
+#endif
 	return 0;
 }
 
@@ -808,6 +746,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 
 		inst->id = i;
 		inst->dev = &v4l_dev->vse_dev;
+		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
 
 		n->async_bound = vse_async_bound;
 
