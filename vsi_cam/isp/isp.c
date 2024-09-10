@@ -18,8 +18,6 @@
 #include "isp.h"
 #include "isp8000_regs.h"
 
-#define REFCNT_INIT_VAL (1)
-
 #ifdef EN_CHK_FMT
 static bool check_format(struct isp_instance *ins, struct cam_format *fmt)
 {

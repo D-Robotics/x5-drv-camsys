@@ -6,6 +6,7 @@
 #include "cam_buf.h"
 #include "cam_ctrl.h"
 #include "cam_dev.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "gdc_uapi.h"
 
@@ -226,7 +227,6 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 		{},
 	};
 	struct rst_res gdc_rsts[] = {
-		{ "rst", NULL },
 		{},
 	};
 	struct cam_dt gdc_dt = {
@@ -257,7 +257,6 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	gdc->hclk = gdc_dt.clks[2].clk;
 	gdc->vse_core = gdc_dt.clks[3].clk;
 	gdc->vse_ups = gdc_dt.clks[4].clk;
-	gdc->rst = gdc_dt.rsts[0].rst;
 	spin_lock_init(&gdc->isc_lock);
 
 	gdc->error = 1;
@@ -270,6 +269,10 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	gdc->ctrl_dev = get_cam_ctrl_device(pdev);
 	if (IS_ERR(gdc->ctrl_dev))
 		return PTR_ERR(gdc->ctrl_dev);
+
+	gdc->crc_dev = get_dw_crc_device(pdev);
+	if (IS_ERR(gdc->crc_dev))
+		return PTR_ERR(gdc->crc_dev);
 
 	gdc->jq = create_job_queue(32);
 	if (!gdc->jq) {

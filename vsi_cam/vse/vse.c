@@ -2,22 +2,19 @@
 #define pr_fmt(fmt) "[vse_drv]: %s: " fmt, __func__
 #include <linux/clk.h>
 #include <linux/debugfs.h>
-#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/reset.h>
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
 #include "cam_ctx.h"
 #include "dw230_vse_regs.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "vse_uapi.h"
 
 #include "vse.h"
-
-#define REFCNT_INIT_VAL (1)
 
 #ifdef EN_CHK_FMT
 static bool check_iformat(struct vse_instance *ins, struct cam_format *fmt)
@@ -316,6 +313,7 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 	if (rc < 0)
 		return rc;
 	ins->state = msg.state;
+	dw_set_state(vse->crc_dev, DW_MOD_VSE, msg.state);
 	return 0;
 }
 
@@ -588,7 +586,9 @@ int vse_close(struct vse_device *vse, u32 inst)
 	value = vse_read(vse, VSE_CTRL);
 	vse_write(vse, VSE_CTRL, value | BIT(15));
 
-	/* vse_reset(vse); */
+	rc = dw_reset(vse->crc_dev, DW_MOD_VSE);
+	if (rc == -EBUSY)
+		dev_warn(vse->dev, "DW module is busy now and cannot be reset!\n");
 	vse->is_completed = true;
 	vse->error = 1;
 	return vse_runtime_suspend(vse->dev);
@@ -616,7 +616,6 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		{},
 	};
 	struct rst_res vse_rsts[] = {
-		{ "rst", NULL },
 		{},
 	};
 	struct cam_dt vse_dt = {
@@ -647,7 +646,6 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->ups = vse_dt.clks[2].clk;
 	vse->gdc_core = vse_dt.clks[3].clk;
 	vse->gdc_hclk = vse_dt.clks[4].clk;
-	vse->rst = vse_dt.rsts[0].rst;
 	spin_lock_init(&vse->isc_lock);
 	mutex_init(&vse->open_lock);
 	refcount_set(&vse->open_cnt, REFCNT_INIT_VAL);
@@ -663,6 +661,10 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->ctrl_dev = get_cam_ctrl_device(pdev);
 	if (IS_ERR(vse->ctrl_dev))
 		return PTR_ERR(vse->ctrl_dev);
+
+	vse->crc_dev = get_dw_crc_device(pdev);
+	if (IS_ERR(vse->crc_dev))
+		return PTR_ERR(vse->crc_dev);
 
 	vse->jq = create_job_queue(32);
 	if (!vse->jq) {
@@ -705,15 +707,6 @@ int vse_remove(struct platform_device *pdev, struct vse_device *vse)
 	put_cam_ctrl_device(vse->ctrl_dev);
 	dev_dbg(&pdev->dev, "VS VSE driver (base) removed\n");
 	return rc;
-}
-
-void vse_reset(struct vse_device *vse)
-{
-	if (vse->rst) {
-		reset_control_assert(vse->rst);
-		udelay(2);
-		reset_control_deassert(vse->rst);
-	}
 }
 
 #ifdef CONFIG_DEBUG_FS

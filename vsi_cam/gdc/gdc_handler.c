@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
-#include <linux/reset.h>
 
 #include "cam_buf.h"
 #include "cam_ctrl.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "gdc_uapi.h"
 
@@ -51,13 +50,9 @@ static s32 handle_set_state(struct gdc_device *gdc, struct gdc_msg *msg)
 
 static s32 handle_reset_control(struct gdc_device *gdc, struct gdc_msg *msg)
 {
-	if (gdc->rst) {
-		reset_control_assert(gdc->rst);
-		udelay(2);
-		reset_control_deassert(gdc->rst);
-	}
-	return 0;
+	return dw_reset(gdc->crc_dev, DW_MOD_GDC);
 }
+
 static s32 handle_change_input(struct gdc_device *gdc, struct gdc_msg *msg)
 {
 	struct gdc_instance *ins;

@@ -4,6 +4,8 @@
 
 #include <linux/interrupt.h>
 
+#define REFCNT_INIT_VAL (1)
+
 struct cam_res_cap;
 struct cam_format;
 
@@ -42,5 +44,6 @@ bool check_framesize(struct cam_res_cap *cap, u32 size, struct cam_format *fmt);
 u32 get_framebuf_size(struct cam_format *fmt);
 struct csiw_device *get_csi_wrapper_device(struct platform_device *pdev);
 struct cam_ctrl_device *get_cam_ctrl_device(struct platform_device *pdev);
+struct dw_crc_device *get_dw_crc_device(struct platform_device *pdev);
 
 #endif /* _CAM_DEV_H_ */

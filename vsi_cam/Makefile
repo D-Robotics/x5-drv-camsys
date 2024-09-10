@@ -38,6 +38,10 @@ obj-$(CONFIG_VIDEO_VS_CAM_PULSE) += vs_cam_pulse.o
 vs_csi_wrapper-objs += csi/csi_wrapper.o
 obj-$(CONFIG_VIDEO_VS_CSI_WRAPPER) += vs_csi_wrapper.o
 
+# dw cr control
+vs_dw_crc-objs += base/dw_crc.o
+obj-$(CONFIG_VIDEO_VS_DW_CRC) += vs_dw_crc.o
+
 cam_common = base/cam_dev.o base/job_queue.o
 
 # v4l2

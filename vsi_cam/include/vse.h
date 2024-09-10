@@ -79,10 +79,10 @@ struct vse_device {
 	struct device *dev;
 	void __iomem *base;
 	struct clk *core, *axi, *ups, *gdc_core, *gdc_hclk;
-	struct reset_control *rst;
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */
 	struct cam_ctrl_device *ctrl_dev;
+	struct dw_crc_device *crc_dev;
 	struct job_queue *jq; /* offline job queue */
 	struct vse_instance *insts;
 	u32 next_irq_ctx;
@@ -128,7 +128,6 @@ int vse_close(struct vse_device *vse, u32 inst);
 int vse_probe(struct platform_device *pdev, struct vse_device *vse);
 int vse_remove(struct platform_device *pdev, struct vse_device *vse);
 
-void vse_reset(struct vse_device *vse);
 #ifdef CONFIG_DEBUG_FS
 void vse_debugfs_init(struct vse_device *vse);
 void vse_debugfs_remo(struct vse_device *vse);

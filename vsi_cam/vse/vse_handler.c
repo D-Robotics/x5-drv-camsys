@@ -6,6 +6,7 @@
 
 #include "cam_ctx.h"
 #include "dw230_vse_regs.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "vse_uapi.h"
 
@@ -52,8 +53,7 @@ static s32 handle_set_state(struct vse_device *vse, struct vse_msg *msg)
 
 static s32 handle_reset_control(struct vse_device *vse, struct vse_msg *msg)
 {
-	vse_reset(vse);
-	return 0;
+	return dw_reset(vse->crc_dev, DW_MOD_VSE);
 }
 
 static s32 handle_change_input(struct vse_device *vse, struct vse_msg *msg)

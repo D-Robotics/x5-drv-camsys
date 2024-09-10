@@ -195,3 +195,8 @@ struct csiw_device *get_csi_wrapper_device(struct platform_device *pdev)
 {
 	return of_get_phandle(pdev->dev.of_node, "csi-wrapper");
 }
+
+struct dw_crc_device *get_dw_crc_device(struct platform_device *pdev)
+{
+	return of_get_phandle(pdev->dev.of_node, "dw-crc");
+}
