@@ -222,6 +222,8 @@ struct hobot_gdc_dev {
 
 	struct gdc_wrapper *wrap;
 
+	struct dw_crc_device *dw_crc;
+
 	struct vio_hw_loading loading;
 
 	struct vio_stl stl;

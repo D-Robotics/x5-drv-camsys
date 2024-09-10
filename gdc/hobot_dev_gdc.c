@@ -23,6 +23,7 @@
 #include "gdc_hw_api.h"
 #include "hobot_gdc_ops.h"
 #include "cam_ctrl.h"
+#include "dw_crc.h"
 
 /**
  * @def MODULE_NAME
@@ -385,11 +386,15 @@ static s32 gdc_video_streamon(struct vio_video_ctx *vctx)
 	s32 ret = 0;
 	struct vio_node *vnode;
 	struct vio_subdev *vdev;
+	struct gdc_subdev *subdev;
 
 	vctx->event = 0;
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
 	vnode->leader = 1;
+	subdev = container_of(vdev, struct gdc_subdev, vdev);
+	if (vctx->id == VNODE_ID_CAP)
+		dw_set_state(subdev->gdc->dw_crc, DW_MOD_GDC, CAM_STATE_STARTED);
 	vio_info("[%s][S%d][C%d] %s leader %d\n", vctx->name, vnode->flow_id,
 		vnode->ctx_id, __func__, vdev->leader);
 
@@ -413,7 +418,14 @@ static s32 gdc_video_streamon(struct vio_video_ctx *vctx)
 */
 static s32 gdc_video_streamoff(struct vio_video_ctx *vctx)
 {
+	struct vio_subdev *vdev;
+	struct gdc_subdev *subdev;
 	s32 ret = 0;
+
+	vdev = vctx->vdev;
+	subdev = container_of(vdev, struct gdc_subdev, vdev);
+	if (vctx->id == VNODE_ID_CAP)
+		dw_set_state(subdev->gdc->dw_crc, DW_MOD_GDC, CAM_STATE_STOPPED);
 	return ret;
 }
 
@@ -573,7 +585,7 @@ static DEVICE_ATTR(regdump, 0444, gdc_reg_dump, NULL);/*PRQA S 4501,0636*/
 static int gdc_wrapper_init(struct platform_device *pdev)
 {
 	struct hobot_gdc_dev *gdc;
-	struct platform_device *cam_ctrl_pdev;
+	struct platform_device *cam_ctrl_pdev, *dw_crc_pdev;
 	struct device_node *dn;
 	void *ph;
 
@@ -599,6 +611,21 @@ static int gdc_wrapper_init(struct platform_device *pdev)
 	}
 	gdc->wrap = ph;
 
+	dn = of_parse_phandle(pdev->dev.of_node, "dw-crc", 0);
+	if (!dn)
+		return -1;
+
+	dw_crc_pdev = of_find_device_by_node(dn);
+	of_node_put(dn);
+	if (!dw_crc_pdev)
+		return -1;
+
+	ph = platform_get_drvdata(dw_crc_pdev);
+	if (!ph) {
+		platform_device_put(dw_crc_pdev);
+		return -1;
+	}
+	gdc->dw_crc = ph;
 	return 0;
 }
 
