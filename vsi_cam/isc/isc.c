@@ -51,9 +51,13 @@ struct isc_cus {
 	struct list_head *rp, *wp;
 };
 
+struct isc_wait {
+	wait_queue_head_t wq;
+	bool cond, stat;
+};
+
 struct isc_sync {
-	wait_queue_head_t *waitq;
-	bool *condq;
+	struct isc_wait *waitq;
 	u16 *stat;
 	u16 waitq_sz, stat_sz;
 	struct mutex lock; /* lock for updating wait queue stat */
@@ -154,6 +158,8 @@ static int isc_destroy_msg_queue(struct list_head *h)
 		m = container_of(i, struct isc_imsg, entry);
 		kfree(m);
 	}
+	m = container_of(h, struct isc_imsg, entry);
+	kfree(m);
 	return 0;
 }
 
@@ -161,13 +167,18 @@ static void isc_free_sync(struct isc_sync *sync)
 {
 	int i;
 
+	if (!sync->waitq_sz)
+		return;
+
 	for (i = 0; i < sync->waitq_sz; i++) {
-		sync->condq[i] = true;
-		wake_up_interruptible(&sync->waitq[i]);
+		sync->waitq[i].cond = true;
+		if (sync->waitq[i].stat && wq_has_sleeper(&sync->waitq[i].wq)) {
+			sync->waitq[i].stat = false;
+			wake_up_interruptible(&sync->waitq[i].wq);
+		}
 	}
 	mutex_destroy(&sync->lock);
 	kfree(sync->waitq);
-	kfree(sync->condq);
 	kfree(sync->stat);
 }
 
@@ -175,6 +186,7 @@ static void isc_free(struct kref *ref)
 {
 	struct isc_handle *isc = container_of(ref, struct isc_handle, ref);
 
+	isc_free_sync(&isc->sync);
 	isc_destroy_msg_queue(isc->k2u_cus.wp);
 	isc_mem_free(isc, &isc->k2u_mem);
 	isc_mem_free(isc, &isc->k2u_mem_ex);
@@ -183,7 +195,6 @@ static void isc_free(struct kref *ref)
 	isc_mem_free(isc, &isc->u2k_mem_ex);
 	mem_free_all(isc->dev, &isc->buf_list);
 	mutex_destroy(&isc->lock);
-	isc_free_sync(&isc->sync);
 	kfree(isc);
 }
 
@@ -413,12 +424,25 @@ void isc_free_extra_buf(struct isc_handle *isc, struct mem_buf *buf)
 }
 EXPORT_SYMBOL(isc_free_extra_buf);
 
+static inline int isc_wait(struct isc_wait *w)
+{
+#define ISC_SYNC_WAIT_TIMEOUT_MS (5000)
+	w->stat = true;
+	wait_event_timeout(w->wq, w->cond,
+			   msecs_to_jiffies(ISC_SYNC_WAIT_TIMEOUT_MS));
+	w->cond = false;
+	if (!w->stat)
+		return -EFAULT;
+	w->stat = false;
+	return 0;
+}
+
 int isc_post(struct isc_handle *isc, struct isc_post_param *param)
 {
 	struct list_head *wp;
 	struct isc_imsg *m;
 	unsigned long flags;
-	int i, index = -1;
+	int i, index = -1, rc;
 	u32 msg_flags = 0;
 
 	if (!isc || !param)
@@ -454,10 +478,9 @@ int isc_post(struct isc_handle *isc, struct isc_post_param *param)
 	if (param->sync) {
 		if (!IS_ERR(wp)) {
 			if (index >= 0) {
-				wait_event_timeout(isc->sync.waitq[index],
-						   isc->sync.condq[index],
-						   msecs_to_jiffies(5000));
-				isc->sync.condq[index] = false;
+				rc = isc_wait(&isc->sync.waitq[index]);
+				if (rc < 0)
+					return rc;
 			}
 			if (param->msg && param->msg_len) {
 				spin_lock_irqsave(param->lock, flags);
@@ -542,6 +565,31 @@ static int isc_extra_mem_alloc(struct isc_handle *isc, struct isc_bind *bind)
 		isc->u2k_ex_mem_msz = bind->msz_ex;
 	}
 	return rc;
+}
+
+static int isc_init_sync(struct isc_sync *sync)
+{
+	u16 i, sz;
+
+	sync->waitq = kcalloc(ISC_SYNC_WAIT_Q_SZ, sizeof(*sync->waitq), GFP_KERNEL);
+	if (!sync->waitq)
+		return -ENOMEM;
+
+	sz = sizeof(*sync->stat) * 8;
+	sz = (ISC_SYNC_WAIT_Q_SZ + sz - 1) / sz;
+	sync->stat = kcalloc(sz, sizeof(*sync->stat), GFP_KERNEL);
+	if (!sync->stat) {
+		kfree(sync->waitq);
+		return -ENOMEM;
+	}
+
+	sync->stat_sz = sz;
+	sync->waitq_sz = ISC_SYNC_WAIT_Q_SZ;
+
+	mutex_init(&sync->lock);
+	for (i = 0; i < ISC_SYNC_WAIT_Q_SZ; i++)
+		init_waitqueue_head(&sync->waitq[i].wq);
+	return 0;
 }
 
 static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
@@ -648,9 +696,20 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 		return rc;
 	}
 
+	if (is_k2u(bind.dir) && bind.msz > 0) {
+		rc = isc_init_sync(&isc->sync);
+		if (rc < 0) {
+			isc_destroy_msg_queue(cus->wp);
+			isc_mem_free(isc, mem);
+			kfree(isc->ib);
+			return rc;
+		}
+	}
+
 	if (bind.msz_ex && bind.num_ex) {
 		rc = isc_extra_mem_alloc(isc, &bind);
 		if (rc < 0) {
+			isc_free_sync(&isc->sync);
 			isc_destroy_msg_queue(cus->wp);
 			isc_mem_free(isc, mem);
 			kfree(isc->ib);
@@ -736,8 +795,8 @@ static int isc_ioctl_recv(struct isc_handle *isc, void *arg)
 	for (i = 0; i < recv.num; i++) {
 		refcount_dec(&isc->noack);
 		if (m->msg->flags & ISC_MSG_FLAG_SYNC) {
-			isc->sync.condq[m->msg->wait] = true;
-			wake_up(&isc->sync.waitq[m->msg->wait]);
+			isc->sync.waitq[m->msg->wait].cond = true;
+			wake_up(&isc->sync.waitq[m->msg->wait].wq);
 		} else if (m->msg->flags & ISC_MSG_FLAG_LONG) {
 			/* Nothing needs to do done currently */
 		}
@@ -904,54 +963,15 @@ static __poll_t isc_poll(struct file *file, struct poll_table_struct *wait)
 	return POLLIN | POLLRDNORM;
 }
 
-static int isc_init_sync(struct isc_sync *sync)
-{
-	u16 i, sz;
-
-	sync->waitq = kcalloc(ISC_SYNC_WAIT_Q_SZ, sizeof(*sync->waitq), GFP_KERNEL);
-	if (!sync->waitq)
-		return -ENOMEM;
-
-	sync->condq = kcalloc(ISC_SYNC_WAIT_Q_SZ, sizeof(*sync->condq), GFP_KERNEL);
-	if (!sync->condq) {
-		kfree(sync->waitq);
-		return -ENOMEM;
-	}
-
-	sz = sizeof(*sync->stat) * 8;
-	sz = (ISC_SYNC_WAIT_Q_SZ + sz - 1) / sz;
-	sync->stat = kcalloc(sz, sizeof(*sync->stat), GFP_KERNEL);
-	if (!sync->stat) {
-		kfree(sync->waitq);
-		kfree(sync->condq);
-		return -ENOMEM;
-	}
-
-	sync->stat_sz = sz;
-	sync->waitq_sz = ISC_SYNC_WAIT_Q_SZ;
-
-	mutex_init(&sync->lock);
-	for (i = 0; i < ISC_SYNC_WAIT_Q_SZ; i++)
-		init_waitqueue_head(&sync->waitq[i]);
-	return 0;
-}
-
 static int isc_open(struct inode *inode, struct file *file)
 {
 	struct isc_device *dev;
 	struct isc_handle *isc;
-	int rc;
 
 	dev = container_of(inode->i_cdev, struct isc_device, cdev);
 	isc = kzalloc(sizeof(*isc), GFP_KERNEL);
 	if (!isc)
 		return -ENOMEM;
-
-	rc = isc_init_sync(&isc->sync);
-	if (rc < 0) {
-		kfree(isc);
-		return rc;
-	}
 
 	kref_init(&isc->ref);
 	refcount_set(&isc->nowait, ISC_REFCNT_INIT_VAL);
