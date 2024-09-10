@@ -249,10 +249,16 @@ static int sif_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 		       struct v4l2_subdev_format *fmt)
 {
 	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_instance *sif;
 	struct cam_format f;
+	struct v4l2_subdev_format senfmt;
 	int rc;
 
-	rc = subdev_set_fmt(sd, state, fmt);
+	memcpy(&senfmt, fmt, sizeof(senfmt));
+	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1_5X8)
+		senfmt.format.code = MEDIA_BUS_FMT_YUYV8_1X16;
+
+	rc = subdev_set_fmt(sd, state, &senfmt);
 	if (rc < 0)
 		return rc;
 
@@ -262,13 +268,20 @@ static int sif_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	f.width = fmt->format.width;
 	f.height = fmt->format.height;
 	f.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
-	if (inst->out_pixelformat)
+	if (senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
+		f.format = pixelformat_to_cam_format(V4L2_PIX_FMT_NV16);
+	else if (inst->out_pixelformat)
 		f.format = pixelformat_to_cam_format(inst->out_pixelformat);
 	else
 		f.format = mbus_code_to_cam_format(fmt->format.code);
 
 	inst->dev->ipi_base = inst->id;
 	inst->dev->ipi_channel_num = 1;
+
+	sif = &inst->dev->insts[inst->id];
+	memset(&sif->sif_cfg, 0, sizeof(sif->sif_cfg));
+	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
+		sif->sif_cfg.yuv_conv = 1;
 
 	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post,
 			    BOTH_CHANNEL);
@@ -299,6 +312,10 @@ static int sif_enum_frame_size(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
+	int rc;
+	rc = subdev_enum_frame_size(sd, state, fse);
+	if (rc < 0)
+		return rc;
 	return 0;
 }
 
@@ -308,6 +325,29 @@ static int sif_enum_frame_interval(struct v4l2_subdev *sd,
 {
 	return 0;
 }
+
+static long sif_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+    int rc = 0;
+
+	switch(cmd) {
+		case CAM_SET_SENSOR_CTRL:
+		case CAM_GET_SENSOR_CTRL:
+			rc = subdev_call_command(sd, cmd, arg);
+			break;
+		default:
+			break;
+	}
+
+	if (rc < 0)
+		pr_err("%s call isp ctrl failed\n", __func__);
+
+	return rc;
+}
+
+static const struct v4l2_subdev_core_ops sif_core_ops = {
+	.command = sif_command,
+};
 
 static const struct v4l2_subdev_video_ops sif_video_ops = {
 	.s_stream = sif_s_stream,
@@ -324,6 +364,7 @@ static const struct v4l2_subdev_pad_ops sif_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops sif_subdev_ops = {
+	.core = &sif_core_ops,
 	.video = &sif_video_ops,
 	.pad = &sif_pad_ops,
 };

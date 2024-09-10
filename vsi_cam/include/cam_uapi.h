@@ -144,9 +144,18 @@ struct cam_clk {
 #define CAM_LOG_DEBUG      (1 << 3)
 #define CAM_LOG_VERBOSE    (1 << 4)
 
+#define SEN_CTRL_DATA_LENGTH (128)
+
 struct cam_log {
 	__u16 id;    /* log system id */
 	__u16 level; /* log priority */
+};
+
+struct sen_ctrl {
+	__u32 ctrl_id;
+	__u8 ctrl_data[SEN_CTRL_DATA_LENGTH];
+	__u32 size; // must no more than ISP_CTRL_DATA_LENGTH!
+	__u8 dir;
 };
 
 /* send */
@@ -161,6 +170,9 @@ struct cam_log {
 #define CAM_MSG_GET_CLOCK       (0x9 << 16)
 #define CAM_MSG_SET_CLOCK       (0xa << 16)
 #define CAM_MSG_RESET_CONTROL   (0xb << 16)
+#define CAM_MSG_SET_SEN_CTRL    (0xc << 16)
+#define CAM_MSG_GET_SEN_CTRL    (0xd << 16)
+#define CAM_MSG_GET_FMT_CAP     (0xe << 16)
 /* recv */
 #define CAM_MSG_FORMAT_CHANGED      (0x1 << 24)
 #define CAM_MSG_STATE_CHANGED       (0x2 << 24)

@@ -13,7 +13,7 @@
 #include "sif_uapi.h"
 
 #define SIF_FMT_MAX (4)
-#define SIF_RES_MAX (3)
+#define SIF_RES_MAX (10)
 
 #define SIF_EBD_HSIZE_ALIGN (16)
 

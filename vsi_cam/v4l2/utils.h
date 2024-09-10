@@ -62,6 +62,13 @@ struct subdev_node {
 	int (*async_bound)(struct subdev_node *sn);
 };
 
+enum v4l_core_ctrl_cmd {
+	CAM_SET_SENSOR_CTRL = 0,
+	CAM_GET_SENSOR_CTRL,
+	CAM_SET_ISP_CTRL,
+	CAM_GET_ISP_CTRL,
+};
+
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 		const struct v4l2_subdev_ops *ops,
 		const struct media_entity_operations *mops);
@@ -74,4 +81,8 @@ u32 pixelformat_to_cam_format(u32 format);
 u32 cam_format_to_pixelformat(u32 format, u32 bayer_format);
 u32 mbus_code_to_cam_format(u32 format);
 u32 cam_format_to_mbus_code(u32 format, u32 bayer_format);
+int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg);
+int subdev_enum_frame_size(struct v4l2_subdev *sd,
+				struct v4l2_subdev_state *sd_state,
+				struct v4l2_subdev_frame_size_enum *fse);
 #endif /* _UTILS_H_ */

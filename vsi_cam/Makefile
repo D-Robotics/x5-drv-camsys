@@ -45,7 +45,7 @@ obj-$(CONFIG_VIDEO_VS_DW_CRC) += vs_dw_crc.o
 cam_common = base/cam_dev.o base/job_queue.o
 
 # v4l2
-vs_vid_v4l-objs += v4l2/vid_drv.o v4l2/video.o v4l2/cam_ctx.o v4l2/cam_buf.o
+vs_vid_v4l-objs += v4l2/vid_drv.o v4l2/video.o v4l2/cam_ctx.o v4l2/cam_buf.o v4l2/utils.o
 obj-$(CONFIG_VIDEO_VS_VID_V4L) += vs_vid_v4l.o
 
 vs_isp_v4l-objs += $(cam_common)

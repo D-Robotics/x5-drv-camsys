@@ -301,12 +301,23 @@ static int isp_g_ctrl(struct isp_v4l_instance *isp, void *arg)
 static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
-        int rc = 0;
+	int rc = 0;
 
-	if (cmd)
-		rc = isp_s_ctrl(isp, arg);
-	else
-		rc = isp_g_ctrl(isp, arg);
+	switch(cmd) {
+		case CAM_SET_SENSOR_CTRL:
+		case CAM_GET_SENSOR_CTRL:
+			rc = subdev_call_command(sd, cmd, arg);
+			break;
+		case CAM_SET_ISP_CTRL:
+			rc = isp_s_ctrl(isp, arg);
+			break;
+		case CAM_GET_ISP_CTRL:
+			rc = isp_g_ctrl(isp, arg);
+			break;
+		default:
+			break;
+	}
+
 	if (rc < 0)
 		pr_err("%s call isp ctrl failed\n", __func__);
 
@@ -436,15 +447,17 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	rc = isp_set_format(inst->dev, inst->id, &f);
 	if (rc < 0)
 		return rc;
-	{
-		// FIXME
-		struct cam_input in;
 
-		in.index = inst->id;
-		in.type = CAM_INPUT_SENSOR;
-		snprintf(in.sens.name, sizeof(in.sens.name), "ov5640");
-		return isp_set_input(inst->dev, inst->id, &in);
-	}
+	struct isp_ctrl sen_ctrl = {0};
+	sen_ctrl.ctrl_id = V4L2_CID_SENSOR_NAME;
+	v4l2_subdev_call(sd, core, command, CAM_GET_SENSOR_CTRL, &sen_ctrl);
+
+	struct cam_input in;
+	memset(&in, 0, sizeof(in));
+	in.index = inst->id;
+	in.type = CAM_INPUT_SENSOR;
+	snprintf(in.sens.name, sizeof(in.sens.name), "%s_%dx%d_tuning.json", sen_ctrl.ctrl_data, f.ifmt.width, f.ifmt.height);
+	return isp_set_input(inst->dev, inst->id, &in);
 }
 
 static int isp_get_fmt(struct v4l2_subdev *sd,
@@ -465,6 +478,10 @@ static int isp_enum_frame_size(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
+	int rc;
+	rc = subdev_enum_frame_size(sd, state, fse);
+	if (rc < 0)
+		return rc;
 	return 0;
 }
 

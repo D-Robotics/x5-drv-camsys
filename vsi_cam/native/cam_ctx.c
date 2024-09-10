@@ -248,3 +248,23 @@ void cam_dec_frame_status(void *cam_ctx)
 		spin_unlock_irqrestore(&vdev->slock, flag);
 	}
 }
+
+void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
+{
+
+}
+
+void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
+{
+
+}
+
+int sif_handle_get_fmt_cap(void *sif_dev, uint32_t inst, void *data)
+{
+	return 0;
+}
+
+int isp_handle_get_fmt_cap(void *isp_dev, uint32_t inst, void *data)
+{
+	return 0;
+}

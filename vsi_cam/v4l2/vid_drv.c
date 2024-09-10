@@ -9,22 +9,58 @@
 #include "vid_drv.h"
 
 #define VID_MDEV_NAME       "vs-media"
+#define SD_NUM (10)
+#define SD_NAME_LENGTH (20)
+
+static char *sensor_list = "ovti,ov5640";
+module_param(sensor_list, charp, 0644);
+MODULE_PARM_DESC(sensor_list, "List of sensor names (e.g., 'ovti,ov5640&ovti,ov5645')");
 
 static int init_subdev_list(struct device *dev,
 			    struct v4l2_async_notifier *notifier)
 {
 	struct device_node *node = NULL;
 	struct v4l2_async_subdev *asd;
-	char * const sd_names[] = {
+	struct i2c_client *i2c_dev;
+	int sd_nums = 5;
+	char sd_names[SD_NUM][SD_NAME_LENGTH] = {
 		ISP_DT_NAME,
 		VSE_DT_NAME,
 		SIF_DT_NAME,
 		CSI_DT_NAME,
 		GDC_DT_NAME,
 	};
-	int i = 0;
 
-	while (i < ARRAY_SIZE(sd_names)) {
+	char *sensor_name, *temp_list;
+	temp_list = kstrdup(sensor_list, GFP_KERNEL);
+	if (!temp_list)
+		return -ENOMEM;
+
+	if (!strchr(temp_list, '&')) {
+		if (sd_nums < SD_NUM) {
+			strncpy(sd_names[sd_nums], temp_list, SD_NAME_LENGTH - 1);
+			sd_names[sd_nums][SD_NAME_LENGTH - 1] = '\0';
+			sd_nums++;
+		}
+	} else {
+		while ((sensor_name = strsep(&temp_list, "&")) != NULL) {
+			if (*sensor_name) {
+				if (sd_nums < SD_NUM) {
+					strncpy(sd_names[sd_nums], sensor_name, SD_NAME_LENGTH - 1);
+					sd_names[sd_nums][SD_NAME_LENGTH - 1] = '\0';
+					sd_nums++;
+				} else {
+					pr_err("%s, Too many sensors\n", __func__);
+					return -EINVAL;
+				}
+			}
+		}
+	}
+
+	kfree(temp_list);
+
+	int i = 0;
+	while (i < sd_nums) {
 		while (true) {
 			node = of_find_compatible_node(node, NULL, sd_names[i]);
 			if (!node)
@@ -32,6 +68,14 @@ static int init_subdev_list(struct device *dev,
 
 			if (!of_device_is_available(node))
 				return -1;
+
+			const char *node_name = of_node_full_name(node);
+			if (strncmp(node_name, "camera@", 7) == 0) {
+				i2c_dev = of_find_i2c_device_by_node(node);
+				if (!(i2c_dev && i2c_dev->dev.driver)){
+					continue;
+				}
+			}
 
 			asd = v4l2_async_nf_add_fwnode(notifier,
 						       of_fwnode_handle(node),
@@ -57,6 +101,9 @@ static const struct media_device_ops vid_mdev_ops = {
 static int sd_async_notifier_bound(struct v4l2_async_notifier *notifier,
 				   struct v4l2_subdev *sd, struct v4l2_async_subdev *asd)
 {
+	if(sd->entity.function == MEDIA_ENT_F_CAM_SENSOR)
+		return 0;
+
 	struct subdev_node *sn = container_of(sd, struct subdev_node, sd);
 
 	if (sn->async_bound)

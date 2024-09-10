@@ -102,6 +102,14 @@ static s32 handle_set_cfg(struct sif_device *sif, struct sif_msg *msg)
 	return 0;
 }
 
+static s32 handle_get_fmt_cap(struct sif_device *sif, struct sif_msg *msg)
+{
+	if (msg->inst >= sif->num_insts)
+		return -EINVAL;
+
+	return sif_handle_get_fmt_cap((void *)sif, msg->inst, (void *)&msg->sen_ctrl);
+}
+
 s32 sif_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
@@ -129,6 +137,9 @@ s32 sif_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case SIF_MSG_SET_CFG:
 		rc = handle_set_cfg(sif, m);
+		break;
+	case CAM_MSG_GET_FMT_CAP:
+		rc = handle_get_fmt_cap(sif, m);
 		break;
 	default:
 		return -EINVAL;

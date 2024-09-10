@@ -56,6 +56,7 @@ struct sif_msg {
 		struct sif_cfg cfg;
 		__u32 state; /* enum cam_state */
 		struct cam_clk clk;
+		struct sen_ctrl sen_ctrl;
 	};
 };
 

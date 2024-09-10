@@ -129,6 +129,7 @@ struct isp_msg {
 		struct isp_vi_info vinfo;
 		struct isp_frame_info frame_info;
 		__u32 tune_enabled;
+		struct sen_ctrl sen_ctrl;
 	};
 };
 

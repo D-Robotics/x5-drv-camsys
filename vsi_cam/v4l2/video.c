@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/i2c.h>
 
 #include "cam_buf.h"
 #include "cam_uapi.h"
@@ -507,7 +508,7 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
-	rc = v4l2_subdev_call(sd, core, command, true, a->controls);
+	rc = v4l2_subdev_call(sd, core, command, CAM_SET_ISP_CTRL, a->controls);
 
 	return rc;
 }
@@ -525,7 +526,7 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
-	rc = v4l2_subdev_call(sd, core, command, false, a->controls);
+	rc = v4l2_subdev_call(sd, core, command, CAM_GET_ISP_CTRL, a->controls);
 
 	return rc;
 }
@@ -689,6 +690,36 @@ static struct media_entity *find_entity_by_name(struct v4l2_device *dev,
 	return NULL;
 }
 
+static struct media_entity *find_sensor_entity_by_csi_id(struct v4l2_device *dev,
+						int csi_id)
+{
+	struct v4l2_subdev *sd;
+	struct i2c_client *client;
+	int i2c_id;
+
+	switch (csi_id) {
+		case 0:
+		case 1:
+		case 3:
+			i2c_id = csi_id;
+			break;
+		case 2:
+			i2c_id = 7;
+			break;
+		default:
+			pr_err("%s, csi_id error\n", __func__);
+			return NULL;
+	}
+
+	list_for_each_entry(sd, &dev->subdevs, list)
+		if (sd->entity.function == MEDIA_ENT_F_CAM_SENSOR) {
+			client = (struct i2c_client *)sd->dev_priv;
+			if (client->adapter->nr == i2c_id)
+				return &sd->entity;
+		}
+	return NULL;
+}
+
 static struct media_pad *get_pad(struct media_entity *ent, u16 pad,
 				 bool is_sink)
 {
@@ -768,7 +799,7 @@ static int create_link(struct device *dev, struct media_entity *src,
 int create_default_links(struct vid_device *vdev)
 {
 	struct vid_video_device *v = NULL;
-	struct media_entity *src, *sink;
+	struct media_entity *src, *sink, *sensor_src;
 	char name[64];
 	u32 i = 0, j = 0;
 	int rc = 0;
@@ -791,6 +822,14 @@ int create_default_links(struct vid_device *vdev)
 				 MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
 		if (rc < 0)
 			return rc;
+
+		sensor_src = find_sensor_entity_by_csi_id(&vdev->v4l2_dev, i);
+		if (sensor_src && j == 0) {
+			rc = create_link(vdev->v4l2_dev.dev, sensor_src, 0, src, 0,
+				 MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
+			if (rc < 0)
+				return rc;
+		}
 
 		j++;
 	}

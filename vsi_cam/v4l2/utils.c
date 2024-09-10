@@ -4,6 +4,10 @@
 #include "cam_uapi.h"
 
 #include "utils.h"
+#include "isp.h"
+#include "isp_drv.h"
+#include "sif.h"
+#include "sif_drv.h"
 
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 		const struct v4l2_subdev_ops *ops,
@@ -47,6 +51,7 @@ int subdev_set_fmt(struct v4l2_subdev *sd,
 {
 	struct media_entity *ent;
 	struct media_pad *pad;
+	struct v4l2_subdev *rsd;
 	u16 i = 0;
 	int rc;
 
@@ -62,9 +67,9 @@ int subdev_set_fmt(struct v4l2_subdev *sd,
 				i++;
 				continue;
 			}
-			sd = media_entity_to_v4l2_subdev(pad->entity);
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			fmt->pad = pad->index;
-			rc = v4l2_subdev_call(sd, pad, set_fmt, state, fmt);
+			rc = v4l2_subdev_call(rsd, pad, set_fmt, state, fmt);
 			if (rc < 0)
 				return rc;
 		}
@@ -76,6 +81,37 @@ int subdev_set_fmt(struct v4l2_subdev *sd,
 int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct media_entity *ent;
+	struct media_pad *pad;
+	struct v4l2_subdev *rsd;
+	u16 i = 0;
+	int rc;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			rc = v4l2_subdev_call(rsd, video, s_stream, enable);
+			if (rc < 0)
+				return rc;
+		}
+		i++;
+	}
+	return 0;
+}
+
+int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
+{
+	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
 	struct media_pad *pad;
 	u16 i = 0;
 	int rc;
@@ -92,13 +128,51 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 				i++;
 				continue;
 			}
-			sd = media_entity_to_v4l2_subdev(pad->entity);
-			rc = v4l2_subdev_call(sd, video, s_stream, enable);
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			rc = v4l2_subdev_call(rsd, core, command, cmd, arg);
 			if (rc < 0)
 				return rc;
 		}
 		i++;
 	}
+	return 0;
+}
+
+int subdev_enum_frame_size(struct v4l2_subdev *sd,
+				struct v4l2_subdev_state *sd_state,
+				struct v4l2_subdev_frame_size_enum *fse)
+{
+	struct media_entity *ent;
+	struct media_pad *pad;
+	struct v4l2_subdev *rsd;
+	uint32_t count[2] = {0};
+	u16 i = 0;
+	int rc;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			count[0] ++;
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				count[1] ++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			fse->pad = pad->index;
+			rc = rsd->ops->pad->enum_frame_size(rsd, sd_state, fse);
+			if (rc < 0)
+				return rc;
+		}
+		i++;
+	}
+	if(count[0] == count[1])
+		return -1;
 	return 0;
 }
 
@@ -254,4 +328,24 @@ u32 cam_format_to_mbus_code(u32 format, u32 bayer_format)
 			return MEDIA_BUS_FMT_SRGGB12_1X12;
 		}
 	}
+}
+
+struct v4l2_subdev *isp_device_to_v4l2_subdev(void *data, uint32_t inst)
+{
+    struct isp_device *isp_dev = (struct isp_device *)data;
+    struct v4l2_subdev *sd;
+    struct isp_v4l_device *isp_v4l_dev = container_of(isp_dev, struct isp_v4l_device, isp_dev);
+    struct isp_v4l_instance *ins = &isp_v4l_dev->insts[inst];
+    sd = &ins->node.sd;
+    return sd;
+}
+
+struct v4l2_subdev *sif_device_to_v4l2_subdev(void *data, uint32_t inst)
+{
+    struct sif_device *sif_dev = (struct sif_device *)data;
+    struct v4l2_subdev *sd;
+    struct sif_v4l_device *sif_v4l_dev = container_of(sif_dev, struct sif_v4l_device, sif_dev);
+    struct sif_v4l_instance *ins = &sif_v4l_dev->insts[inst];
+    sd = &ins->node.sd;
+    return sd;
 }

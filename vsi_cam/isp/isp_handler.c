@@ -178,6 +178,32 @@ static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 	return 0;
 }
 
+static s32 handle_set_sensor_ctrl(struct isp_device *isp, struct isp_msg *msg)
+{
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	isp_handle_set_sensor_ctrl((void *)isp, msg->inst, (void *)&msg->sen_ctrl);
+	return 0;
+}
+
+static s32 handle_get_sensor_ctrl(struct isp_device *isp, struct isp_msg *msg)
+{
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	isp_handle_get_sensor_ctrl((void *)isp, msg->inst, (void *)&msg->sen_ctrl);
+	return 0;
+}
+
+static s32 handle_get_fmt_cap(struct isp_device *isp, struct isp_msg *msg)
+{
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	return isp_handle_get_fmt_cap((void *)isp, msg->inst, (void *)&msg->sen_ctrl);
+}
+
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -226,6 +252,15 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case ISP_MSG_GET_FRAME_INFO:
 		rc = handle_get_frame_info(isp, m);
+		break;
+	case CAM_MSG_SET_SEN_CTRL:
+		rc = handle_set_sensor_ctrl(isp, m);
+		break;
+	case CAM_MSG_GET_SEN_CTRL:
+		rc = handle_get_sensor_ctrl(isp, m);
+		break;
+	case CAM_MSG_GET_FMT_CAP:
+		rc = handle_get_fmt_cap(isp, m);
 		break;
 	default:
 		return -EINVAL;
