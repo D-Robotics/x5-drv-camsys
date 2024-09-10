@@ -489,6 +489,7 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = vse_set_state(vse->dev, vse->id, enable);
 		if (rc < 0)
 			return rc;
+		vse->fmt_changed = false;
 	}
 	return 0;
 }
@@ -535,7 +536,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	f.width = iress[scene].width;
 	f.height = iress[scene].height;
 	f.stride = ALIGN(f.width, STRIDE_ALIGN);
-	if (memcmp(&f, &inst->ifmt, sizeof(f))) {
+	if (!inst->fmt_changed || memcmp(&f, &inst->ifmt, sizeof(f))) {
 		struct vse_msg msg;
 
 		s_f.format.width = f.width;
@@ -554,6 +555,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		if (rc < 0)
 			return rc;
 		memcpy(&inst->ifmt, &f, sizeof(f));
+		inst->fmt_changed = true;
 	}
 
 	if (inst->node.bctx.is_sink_online_mode)
@@ -656,10 +658,20 @@ static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	int rc;
 
 	rc = subdev_close(sd);
-	if (rc < 0)
+	if (rc < 0) {
+		pr_err("%s failed to call subdev_close (err=%d)\n", __func__, rc);
 		return rc;
+	}
 
-	return vse_close(inst->dev, inst->id);
+	rc = vse_close(inst->dev, inst->id);
+	if (rc < 0) {
+		pr_err("%s failed to call vse_close (err=%d)\n", __func__, rc);
+		return rc;
+	}
+
+	memset(&inst->ifmt, 0, sizeof(inst->ifmt));
+	inst->out_pixelformat = 0;
+	return 0;
 }
 
 static const struct v4l2_subdev_internal_ops vse_internal_ops = {

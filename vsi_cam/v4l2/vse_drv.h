@@ -14,7 +14,8 @@ struct vse_v4l_instance {
 	struct cam_ctx src_ctx[VSE_OUT_CHNL_MAX];
 	struct media_pad *src_pads[VSE_OUT_CHNL_MAX];
 	bool is_out_chnl_connected[VSE_OUT_CHNL_MAX];
-	struct vse_format ifmt;
+	struct cam_format ifmt;
+	bool fmt_changed;
 	refcount_t state_count;
 	u32 out_pixelformat;
 	u32 id;
