@@ -78,6 +78,8 @@ static struct entity_link links11[] = {
 	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 static struct entity_link links12[] = {

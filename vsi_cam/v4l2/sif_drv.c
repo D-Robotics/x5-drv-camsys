@@ -10,6 +10,8 @@
 
 #include "sif_drv.h"
 
+#define REFCNT_INIT_VAL (1)
+
 #define sd_to_sif_v4l_instance(s)                                \
 	({                                                       \
 		struct subdev_node *sn =                         \
@@ -188,24 +190,45 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 	int rc;
 
 	if (!enable) {
-		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
-	} else if (inst->buf_ctx.pad) {
-		memset(&ctx, 0, sizeof(ctx));
-		ctx.buf_ctx = &inst->buf_ctx;
-		ctx.buf = NULL;
-		sif_set_ctx(inst->dev, inst->id, &ctx);
-	}
+		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL)
+			return 0;
 
-	rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
-	if (rc < 0)
-		return rc;
+#if 0
+		if (inst->buf_ctx.pad) {
+			memset(&ctx, 0, sizeof(ctx));
+			sif_set_ctx(inst->dev, inst->id, &ctx);
+		}
+#endif
 
-	if (enable) {
-		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
+		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL)
+			refcount_dec(&inst->start_refcnt);
+
+		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
+			rc = subdev_set_stream(sd, enable);
+			if (rc < 0)
+				return rc;
+
+			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
+			if (rc < 0)
+				return rc;
+		}
+	} else {
+		if (inst->buf_ctx.pad) {
+			memset(&ctx, 0, sizeof(ctx));
+			ctx.buf_ctx = &inst->buf_ctx;
+			sif_set_ctx(inst->dev, inst->id, &ctx);
+		}
+
+		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
+			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
+			if (rc < 0)
+				return rc;
+
+			rc = subdev_set_stream(sd, enable);
+			if (rc < 0)
+				return rc;
+		}
+		refcount_inc(&inst->start_refcnt);
 	}
 	return 0;
 }
@@ -382,6 +405,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		inst->id = i;
 		inst->dev = &v4l_dev->sif_dev;
 		inst->en_post = true;
+		refcount_set(&inst->start_refcnt, REFCNT_INIT_VAL);
 
 		n->async_bound = sif_async_bound;
 

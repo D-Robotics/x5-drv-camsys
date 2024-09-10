@@ -2,6 +2,8 @@
 #ifndef _SIF_DRV_H_
 #define _SIF_DRV_H_
 
+#include <linux/refcount.h>
+
 #include "sif.h"
 #include "utils.h"
 
@@ -14,6 +16,7 @@ struct sif_v4l_instance {
 	u32 id;
 	int enabled;
 	bool en_post;
+	refcount_t start_refcnt;
 };
 
 struct sif_v4l_device {
