@@ -88,20 +88,28 @@ static inline bool isc_test(refcount_t *r)
 	return refcount_read(r) == ISC_REFCNT_INIT_VAL;
 }
 
-static int isc_mem_alloc(struct device *dev, u32 sz, struct isc_mem *mem)
+static int isc_mem_alloc(struct isc_handle *isc, u32 sz, struct isc_mem *mem)
 {
-	mem->va = dma_alloc_coherent(dev, sz, &mem->pa, GFP_KERNEL);
-	if (!mem->va)
-		return -ENOMEM;
+	struct mem_buf buf;
+	int rc;
+
+	buf.size = sz;
+	rc = mem_alloc(isc->dev, &isc->buf_list, &buf);
+	if (rc < 0)
+		return rc;
+	mem->pa = buf.addr;
+	mem->va = get_virt_addr(isc->dev, &isc->buf_list, &buf);
 	mem->sz = sz;
 	return 0;
 }
 
-static int isc_mem_free(struct device *dev, struct isc_mem *mem)
+static int isc_mem_free(struct isc_handle *isc, struct isc_mem *mem)
 {
-	if (mem->va)
-		dma_free_coherent(dev, mem->sz, mem->va, mem->pa);
-	return 0;
+	struct mem_buf buf;
+
+	buf.addr = mem->pa;
+	buf.size = mem->sz;
+	return mem_free(isc->dev, &isc->buf_list, &buf);
 }
 
 static int isc_create_msg_queue(u8 *mem, u16 msz, u16 num, struct list_head **h)
@@ -168,11 +176,11 @@ static void isc_free(struct kref *ref)
 	struct isc_handle *isc = container_of(ref, struct isc_handle, ref);
 
 	isc_destroy_msg_queue(isc->k2u_cus.wp);
-	isc_mem_free(isc->dev, &isc->k2u_mem);
-	isc_mem_free(isc->dev, &isc->k2u_mem_ex);
+	isc_mem_free(isc, &isc->k2u_mem);
+	isc_mem_free(isc, &isc->k2u_mem_ex);
 	isc_destroy_msg_queue(isc->u2k_cus.rp);
-	isc_mem_free(isc->dev, &isc->u2k_mem);
-	isc_mem_free(isc->dev, &isc->u2k_mem_ex);
+	isc_mem_free(isc, &isc->u2k_mem);
+	isc_mem_free(isc, &isc->u2k_mem_ex);
 	mem_free_all(isc->dev, &isc->buf_list);
 	mutex_destroy(&isc->lock);
 	isc_free_sync(&isc->sync);
@@ -518,7 +526,7 @@ static int isc_extra_mem_alloc(struct isc_handle *isc, struct isc_bind *bind)
 			return -EINVAL;
 	}
 
-	rc = isc_mem_alloc(isc->dev, bind->msz_ex * bind->num_ex, &mem);
+	rc = isc_mem_alloc(isc, bind->msz_ex * bind->num_ex, &mem);
 	if (rc < 0)
 		return rc;
 	bind->mem_ex = mem.pa;
@@ -627,7 +635,7 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 		return -EINVAL;
 	}
 
-	rc = isc_mem_alloc(isc->dev, size, mem);
+	rc = isc_mem_alloc(isc, size, mem);
 	if (rc < 0) {
 		kfree(isc->ib);
 		return rc;
@@ -635,7 +643,7 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 
 	rc = isc_create_msg_queue(mem->va, bind.msz, bind.num, &cus->wp);
 	if (rc < 0) {
-		isc_mem_free(isc->dev, mem);
+		isc_mem_free(isc, mem);
 		kfree(isc->ib);
 		return rc;
 	}
@@ -644,7 +652,7 @@ static int isc_ioctl_bind(struct isc_handle *isc, void *arg)
 		rc = isc_extra_mem_alloc(isc, &bind);
 		if (rc < 0) {
 			isc_destroy_msg_queue(cus->wp);
-			isc_mem_free(isc->dev, mem);
+			isc_mem_free(isc, mem);
 			kfree(isc->ib);
 			return rc;
 		}
