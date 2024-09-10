@@ -30,11 +30,10 @@
 
 #define isp_read(isp, offset) __raw_readl((isp)->base + (offset))
 
-enum isp_frame_done_type {
-	ISP_MP_FRAME_END  = 0x1 << 0,
-	ISP_RDMA_END      = 0x1 << 1,
-	ISP_MIS_FRAME_END = 0x1 << 2,
-};
+#define ISP_MP_FRAME_END  (0x1 << 0)
+#define ISP_RDMA_END      (0x1 << 1)
+#define ISP_MIS_FRAME_END (0x1 << 2)
+#define ISP_SW_FRAME_DONE (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END)
 
 struct isp_irq_ctx {
 	bool is_sink_online_mode, is_src_online_mode, ddr_en;
@@ -92,7 +91,7 @@ struct isp_schedule {
 	spinlock_t lock; /* lock for isp schedule function */
 	u32 next_mi_inst;
 	bool mi_idle;
-	u32 frame_status;
+	u32 frame_done_mask;
 };
 
 struct isp_device {
@@ -152,7 +151,8 @@ int isp_add_job(struct isp_device *isp, u32 inst);
 int isp_fetch_job(struct isp_device *isp, u32 *inst);
 int isp_query_job(struct isp_device *isp, u32 *inst);
 int isp_remove_job(struct isp_device *isp, u32 inst);
-int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool isp_irq_call);
+int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_mis,
+		     u32 isp_mis, bool isp_irq_call);
 int isp_get_schedule(struct isp_device *isp, u32 *inst);
 int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset);
 int isp_open(struct isp_device *isp, u32 inst);

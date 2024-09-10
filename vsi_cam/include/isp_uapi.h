@@ -18,6 +18,7 @@
 #define ISP_MSG_GET_FRAME_INFO (0x4 << 0)
 #define ISP_MSG_GET_METADATA   (0x5 << 0)
 #define ISP_MSG_QRY_METADATA   (0x6 << 0)
+#define ISP_MSG_RESET_SCH      (0x7 << 0)
 
 #define ISP_MSG_IRQ_MIS    (0x1 << 8)
 #define ISP_MSG_MCM_SCH    (0x2 << 8)

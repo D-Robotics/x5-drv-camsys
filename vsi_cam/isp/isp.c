@@ -486,7 +486,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	int rc, i;
 	u32 value;
 	bool state_check = false;
-	int cur_state;
 	struct ibuf *ib = NULL;
 	struct isp_irq_ctx *ctx;
 	unsigned long flags, flags2;
@@ -497,7 +496,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 
 	ins = &isp->insts[inst];
 	mutex_lock(&isp->set_state_lock);
-	cur_state = ins->state;
 	spin_lock_irqsave(&isp->sch.lock, flags);
 	if (state != CAM_STATE_STARTED)
 		ins->state = state;
@@ -544,7 +542,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 					value = isp_read(isp, MI_MP_CTRL);
 					value |= 0x38;
 					isp_write(isp, MI_MP_CTRL, value);
-					isp_set_schedule(isp, &sch, false);
+					isp_set_schedule(isp, &sch, 0, 0, false);
 					list_del(&node->entry);
 					list_add_tail(&node->entry, ctx->src_buf_list3);
 					ins->shd_src_node = node;
@@ -554,7 +552,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 					value = isp_read(isp, MI_MP_CTRL);
 					value |= 0x38;
 					isp_write(isp, MI_MP_CTRL, value);
-					isp_set_schedule(isp, &sch, false);
+					isp_set_schedule(isp, &sch, 0, 0, false);
 				}
 			}
 
@@ -654,10 +652,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 			}
 			if (!state_check)
 				isp_reset_schedule(isp, INVALID_INST, false);
-
-			// clean remaining job if this instance state changes from STOPPED to STARTED!
-			if (cur_state == CAM_STATE_STOPPED)
-				isp_remove_job(isp, inst);
 		}
 
 		refcount_inc(&isp->set_state_refcnt);
@@ -673,10 +667,11 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 
 		list_splice_tail_init(&ins->src_buf_list2, &ins->src_buf_list1);
 		list_splice_tail_init(&ins->src_buf_list3, &ins->src_buf_list1);
-		// for stream mode, disable all buffer operation in mi irq handler
+		// for stream mode, disable all buffer operation directly
 		if (isp->mode == ISP_STRM_MODE) {
-			isp_set_schedule(isp, &sch, false);
+			isp_set_schedule(isp, &sch, 0, 0, false);
 		} else {
+			isp_remove_job(isp, inst);
 			if (ins->online_mcm) {
 				list_splice_tail_init(&isp->ibm[inst].list2, &isp->ibm[inst].list1);
 				list_splice_tail_init(&isp->ibm[inst].list3, &isp->ibm[inst].list1);
@@ -708,6 +703,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 				ins->mcm_ib1 = ib;
 				list_del(&ib->entry);
 			}
+			ins->tile_count = 0;
 		} else {
 			if (!ctx->is_src_online_mode || ctx->ddr_en) {
 				if (ins->src_node)
@@ -794,7 +790,7 @@ int isp_add_job(struct isp_device *isp, u32 inst)
 
 	if (!ins->online_mcm) {
 		sch.id = inst;
-		isp_set_schedule(isp, &sch, false);
+		isp_set_schedule(isp, &sch, 0, 0, false);
 	}
 
 	return 0;
@@ -877,7 +873,66 @@ int isp_query_job(struct isp_device *isp, u32 *inst)
 	return 0;
 }
 
-static int isp_set_schedule_online(struct isp_device *isp, struct isp_mcm_sch *sch)
+static int isp_set_schedule_online_stream(struct isp_device *isp, bool isp_irq_call)
+{
+	struct isp_instance *ins;
+	struct isp_irq_ctx *ctx;
+	struct cam_list_node *node = NULL;
+	int rc;
+	unsigned long flags;
+
+	if (!isp)
+		return -EINVAL;
+
+	if (!isp_irq_call) {
+		isp->error = 0;
+		isp->sch.mi_idle = false;
+		return 0;
+	}
+
+	if (!isp->sch.mi_idle)
+		return 0;
+
+	ins = &isp->insts[0];
+	if (ins->state != CAM_STATE_STARTED)
+		return 0;
+	spin_lock_irqsave(&ins->lock, flags);
+	ctx = &ins->ctx;
+	rc = new_frame(ctx);
+	spin_unlock_irqrestore(&ins->lock, flags);
+	if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
+		if (!rc)
+			ins->shd_src_node = ins->src_node;
+		// if shd_src_node failed to update (there is no more mp buffer), use
+		// src_node to update shd_src_node
+		if (!ins->shd_src_node) {
+			ins->shd_src_node = ins->src_node;
+			node = ins->src_node;
+		} else {
+			node = list_first_entry_or_null(ctx->src_buf_list2,
+							struct cam_list_node, entry);
+			if (node) {
+				list_del(&node->entry);
+				list_add_tail(&node->entry, ctx->src_buf_list3);
+				pr_debug("isp list_add_tail src_buf_list3\n");
+				ins->src_node = node;
+			}
+		}
+		if (!node) {
+			pr_debug("isp fail to get valid node!\n");
+			return 0;
+		}
+		isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+	} else {
+		isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
+	}
+
+	isp->error = 0;
+	isp->sch.mi_idle = false;
+	return 0;
+}
+
+static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sch *sch)
 {
 	struct isp_msg msg;
 	struct isp_irq_ctx *ctx;
@@ -936,6 +991,8 @@ static int isp_set_schedule_online(struct isp_device *isp, struct isp_mcm_sch *s
 	isp->error = 0;
 	isp->sch.next_mi_inst = inst;
 	isp->sch.mi_idle = false;
+	isp->sch.frame_done_mask = ISP_SW_FRAME_DONE;
+	pr_debug("isp online mcm_sch inst: %d\n", sch->id);
 	memset(&msg, 0, sizeof(msg));
 	msg.id = ISP_MSG_MCM_SCH;
 	msg.inst = sch->id;
@@ -944,8 +1001,8 @@ static int isp_set_schedule_online(struct isp_device *isp, struct isp_mcm_sch *s
 	return rc;
 }
 
-static int isp_set_schedule_offline(struct isp_device *isp, struct isp_mcm_sch *sch,
-				    bool isp_irq_call)
+static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_sch *sch,
+					bool isp_irq_call)
 {
 	struct isp_instance *ins;
 	struct isp_irq_ctx *ctx;
@@ -1001,6 +1058,8 @@ static int isp_set_schedule_offline(struct isp_device *isp, struct isp_mcm_sch *
 		isp->error = 0;
 		isp->sch.next_mi_inst = sch->id;
 		isp->sch.mi_idle = false;
+		isp->sch.frame_done_mask = ISP_SW_FRAME_DONE;
+		pr_debug("isp offline mcm_sch inst: %d\n", sch->id);
 		memset(&msg, 0, sizeof(msg));
 		msg.id = ISP_MSG_MCM_SCH;
 		msg.inst = sch->id;
@@ -1011,7 +1070,8 @@ static int isp_set_schedule_offline(struct isp_device *isp, struct isp_mcm_sch *
 	return rc;
 }
 
-int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool isp_irq_call)
+int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_mis,
+		     u32 isp_mis, bool isp_irq_call)
 {
 	struct isp_instance *ins;
 	struct isp_irq_ctx *ctx;
@@ -1022,19 +1082,61 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool isp_i
 	if (!isp || !sch)
 		return -EINVAL;
 
-	if (isp->mode == ISP_STRM_MODE) {
-		isp->error = 0;
-		isp->sch.mi_idle = false;
-		return 0;
-	}
+	if (isp->mode == ISP_STRM_MODE)
+		return isp_set_schedule_online_stream(isp, isp_irq_call);
 
 	spin_lock_irqsave(&isp->sch.lock, flags);
-	// there is conflict between online/offline job and 1 job that has been scheduled
-	if (!isp->sch.mi_idle || isp->sch.next_mi_inst != INVALID_INST) {
+	// judge frame end for MCM job (online/offline)
+	if ((miv2_mis & BIT(0) || miv2_mis & BIT(24) || isp_mis & BIT(1)) &&
+		isp->sch.frame_done_mask) {
+		pr_debug("miv2_mis: 0x%x, isp_mis: 0x%x, frame_done_mask: 0x%x\n", miv2_mis,
+			 isp_mis, isp->sch.frame_done_mask);
+		if (miv2_mis & BIT(0))
+			isp->sch.frame_done_mask &= ~ISP_MP_FRAME_END;
+		if (miv2_mis & BIT(24))
+			isp->sch.frame_done_mask &= ~ISP_RDMA_END;
+		if (isp_mis & BIT(1))
+			isp->sch.frame_done_mask &= ~ISP_MIS_FRAME_END;
+		if (!isp->sch.frame_done_mask) {
+			id = isp->sch.next_mi_inst;
+			ins = &isp->insts[id];
+			/**
+			 * For tile mode, if tile count is not equal to target tile count, update
+			 * frame done mask and just return. We can consider 1 tile frame is really
+			 * done IF AND ONLY IF the number of times frame_done_mask completely being
+			 * reset is equal to target tile count!
+			 **/
+			if (ins->tile_en) {
+				if (ins->tile_count == TILE_COUNT) {
+					ins->tile_count = 0;
+					pr_debug("tile mode frame done!\n");
+				} else {
+					isp->sch.frame_done_mask = ISP_SW_FRAME_DONE;
+					goto _exit;
+				}
+			}
+
+			// frame done
+			pr_debug("mcm_sch inst: %d, frame done!\n", isp->cur_mi_irq_ctx);
+			{
+				struct isp_msg msg;
+
+				memset(&msg, 0, sizeof(msg));
+				msg.id = ISP_MSG_FRAME_DONE;
+				msg.inst = isp->cur_mi_irq_ctx;
+				isp_post(isp, &msg, false);
+				pr_debug("post frame end inst:%d", inst);
+			}
+			isp->sch.mi_idle = true;
+			isp->sch.next_mi_inst = INVALID_INST;
+		}
+	}
+	// if MI is busy or frame done mask has not been totally reset, just skip schedule
+	if (!isp->sch.mi_idle) {
 		rc = -1;
 		goto _exit;
 	}
-
+	// start next isp schedule
 	if (isp_irq_call) {
 		ctx = get_next_irq_ctx(isp);
 		if (!ctx) {
@@ -1044,6 +1146,11 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool isp_i
 		inst = isp->next_mi_irq_ctx;
 		sch->id = inst;
 	} else {
+		/**
+		 * for offline MCM job called by isp_add_job(), if MI is idle AND the first job in
+		 * job queue is equal to input offline MCM job id, try to manually trigger isp
+		 * schedule!
+		 **/
 		inst = sch->id;
 		rc = isp_query_job(isp, &id);
 		if (id != inst) {
@@ -1061,9 +1168,9 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, bool isp_i
 
 	ins = &isp->insts[inst];
 	if (ins->online_mcm)
-		isp_set_schedule_online(isp, sch);
+		isp_set_schedule_online_mcm(isp, sch);
 	else
-		isp_set_schedule_offline(isp, sch, isp_irq_call);
+		isp_set_schedule_offline_mcm(isp, sch, isp_irq_call);
 
 _exit:
 	spin_unlock_irqrestore(&isp->sch.lock, flags);
@@ -1072,8 +1179,8 @@ _exit:
 
 int isp_get_schedule(struct isp_device *isp, u32 *inst)
 {
-	struct isp_instance *ins;
 	unsigned long flags;
+	struct isp_instance *ins;
 	int rc = 0, id;
 
 	if (!isp || !inst)
@@ -1095,19 +1202,17 @@ int isp_get_schedule(struct isp_device *isp, u32 *inst)
 
 	ins = &isp->insts[id];
 	if (ins->tile_en) {
-		ins->tile_count++;
-		if (ins->tile_count < TILE_COUNT) {
-			*inst = id;
+		if (ins->tile_count == TILE_COUNT) {
+			*inst = INVALID_INST;
 			rc = -1;
 			goto _exit;
-		} else {
-			ins->tile_count = 0;
 		}
+		ins->tile_count++;
+		if (ins->tile_count < TILE_COUNT)
+			rc = -1;
 	}
 
 	*inst = id;
-	isp->sch.next_mi_inst = INVALID_INST;
-	isp->sch.mi_idle = true;
 
 _exit:
 	spin_unlock_irqrestore(&isp->sch.lock, flags);
@@ -1126,7 +1231,7 @@ int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset)
 		isp->error = 1;
 		isp->sch.next_mi_inst = INVALID_INST;
 		isp->sch.mi_idle = true;
-		isp->sch.frame_status = 0;
+		isp->sch.frame_done_mask = 0;
 	}
 	spin_unlock_irqrestore(&isp->sch.lock, flags);
 
@@ -1389,7 +1494,7 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 	spin_lock_init(&isp->sch.lock);
 	isp->sch.next_mi_inst = INVALID_INST;
 	isp->sch.mi_idle = true;
-	isp->sch.frame_status = 0;
+	isp->sch.frame_done_mask = 0;
 	isp->error = 1;
 
 	pm_runtime_enable(isp->dev);
