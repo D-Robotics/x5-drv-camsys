@@ -118,15 +118,23 @@ int32_t camera_i2c_open(struct sensor_device_s *sen, uint32_t bus_num, char *sen
 		ret = -ENODEV;
 		goto i2c_open_err_unlock;
 	}
-	client = i2c_new_client_device(adap, &dev->board_info);
+
+	/* In order to be compatible with dts v4l2 sensor node,
+	 * we need to first find out whether there is an existing
+	 * i2c client, and then determine whether to create a new
+	 * i2c client.*/
+	client = find_i2c_client_by_addr(adap, sensor_addr);
 	if (IS_ERR_OR_NULL(client)) {
-		client = find_i2c_client_by_addr(adap, sensor_addr);
+		sen_debug(dev, "%s find i2c%d@0x%02x client error, maybe new client, creat it.\n",
+			sensor_name, bus, sensor_addr);
+
+		client = i2c_new_client_device(adap, &dev->board_info);
 		if (IS_ERR_OR_NULL(client)) {
-			sen_err(dev, "%s open i2c%d@0x%02x new client error\n",
-				sensor_name, bus, sensor_addr);
 			ret = -ENOMEM;
 			goto i2c_open_err_put;
 		}
+		dev->no_new_client = 0;
+	} else {
 		dev->no_new_client = 1;
 	}
 
