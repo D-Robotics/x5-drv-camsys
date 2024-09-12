@@ -50,7 +50,7 @@ static const char* vps_stat_name[] = {
  * @callergraph
  * @design
  */
-static ssize_t vio_print_delay_log(s32 flow_id, char *buf, size_t size)/*PRQA S 2775*/
+ssize_t vio_print_delay_log(s32 flow_id, char *buf, size_t size)/*PRQA S 2775*/
 {
 	u32 i, j;
 	ssize_t offset = 0;
@@ -63,10 +63,10 @@ static ssize_t vio_print_delay_log(s32 flow_id, char *buf, size_t size)/*PRQA S 
 	vpf_dev = vpf_get_drvdata();
 	vchain = &vpf_dev->iscore.vchain[flow_id];
 	len = snprintf(&buf[offset], size - (size_t)offset,
-		"------------------------------- pipe %d vio info -------------------------------\n", flow_id);
+		"pipe %d vio delay info :\n", flow_id);
 	offset = offset + len;
 	len = snprintf(&buf[offset], size - (size_t)offset,
-		"frameid  module FS              FE              QB              DQ\n");
+		"frameid mod   FS         FE         QB         DQ\n");
 	offset = offset + len;
 	for (i = 0; i <= N2D_MODULE; i++) {
 		for (j = 0; j < MAX_DELAY_FRAMES; j++) {
@@ -74,17 +74,17 @@ static ssize_t vio_print_delay_log(s32 flow_id, char *buf, size_t size)/*PRQA S 
 			sprintf(module_name, "%s", "      ");
 			(void)memcpy(module_name, vps_stat_name[i], strlen(vps_stat_name[i]));
 			len = snprintf(&buf[offset], size - (size_t)offset,
-				"%08d %s %08llu.%06llu %08llu.%06llu %08llu.%06llu %08llu.%06llu\n",
+				"%06d  %s%06llu.%03llu %06llu.%03llu %06llu.%03llu %06llu.%03llu\n",
 				mstat->sinfo[STAT_FS].frameid,
 				module_name,
 				mstat->sinfo[STAT_FS].tv_sec % 100000000,
-				mstat->sinfo[STAT_FS].tv_usec,
+				mstat->sinfo[STAT_FS].tv_usec / 1000,
 				mstat->sinfo[STAT_FE].tv_sec % 100000000,
-				mstat->sinfo[STAT_FE].tv_usec,
+				mstat->sinfo[STAT_FE].tv_usec / 1000,
 				mstat->sinfo[STAT_QB].tv_sec % 100000000,
-				mstat->sinfo[STAT_QB].tv_usec,
+				mstat->sinfo[STAT_QB].tv_usec / 1000,
 				mstat->sinfo[STAT_DQ].tv_sec % 100000000,
-				mstat->sinfo[STAT_DQ].tv_usec);
+				mstat->sinfo[STAT_DQ].tv_usec / 1000);
 			offset += len;
 		}
 		len = snprintf(&buf[offset], size - (size_t)offset, "\n");
@@ -172,7 +172,7 @@ static DEVICE_ATTR(fps, 0660, vpf_fps_show, vpf_fps_store);/*PRQA S 4501,0636*/
  * @callergraph
  * @design
  */
-static ssize_t vpf_fps_stats_show(struct device *dev, struct device_attribute *attr, char* buf)
+ssize_t vpf_fps_stats_show(struct device *dev, struct device_attribute *attr, char* buf)
 {
 	ssize_t offset = 0;
 	struct vpf_device *vpf_device;

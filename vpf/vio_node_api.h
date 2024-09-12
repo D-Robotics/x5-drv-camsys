@@ -53,7 +53,7 @@
 
 #define AUTO_CTX_ID -1
 
-#define MAX_DELAY_FRAMES 5u
+#define MAX_DELAY_FRAMES 3u
 
 #define SHOT_TIMEOUT 100
 
