@@ -715,34 +715,89 @@ static struct media_entity *find_entity_by_name(struct v4l2_device *dev,
 	return NULL;
 }
 
-static struct media_entity *find_sensor_entity_by_csi_id(struct v4l2_device *dev,
-						int csi_id)
+struct media_entity *get_sensor_media_entity(struct media_entity *csi_entity)
 {
-	struct v4l2_subdev *sd;
-	struct i2c_client *client;
-	int i2c_id;
+    struct v4l2_subdev *csi_subdev, *sensor_subdev;
+    struct device *dev;
+    struct fwnode_handle *csi_fwnode, *endpoint = NULL, *remote_endpoint = NULL;
+    struct fwnode_handle *remote_port = NULL, *remote_node = NULL;
+    struct media_entity *sensor_entity = NULL;
+    struct i2c_client *i2c_dev;
+    struct device_node *node;
 
-	switch (csi_id) {
-		case 0:
-		case 1:
-		case 3:
-			i2c_id = csi_id;
-			break;
-		case 2:
-			i2c_id = 7;
-			break;
-		default:
-			pr_err("%s, csi_id error\n", __func__);
-			return NULL;
-	}
+    csi_subdev = media_entity_to_v4l2_subdev(csi_entity);
+    if (!csi_subdev) {
+        pr_err("Failed to get CSI subdev\n");
+        return NULL;
+    }
 
-	list_for_each_entry(sd, &dev->subdevs, list)
-		if (sd->entity.function == MEDIA_ENT_F_CAM_SENSOR) {
-			client = (struct i2c_client *)sd->dev_priv;
-			if (client->adapter->nr == i2c_id)
-				return &sd->entity;
-		}
-	return NULL;
+    dev = csi_subdev->dev;
+    if (!dev) {
+        pr_err("No device found for CSI subdev\n");
+        return NULL;
+    }
+
+    csi_fwnode = dev_fwnode(dev);
+    if (!csi_fwnode) {
+        dev_err(dev, "No fwnode found for CSI device\n");
+        return NULL;
+    }
+
+    endpoint = fwnode_graph_get_next_endpoint(csi_fwnode, NULL);
+    if (!endpoint) {
+        dev_err(dev, "No endpoint found for CSI\n");
+        return NULL;
+    }
+
+    remote_endpoint = fwnode_graph_get_remote_endpoint(endpoint);
+    if (!remote_endpoint) {
+        dev_err(dev, "No remote endpoint found\n");
+        goto out_put_endpoint;
+    }
+
+    remote_port = fwnode_get_parent(remote_endpoint);
+    if (!remote_port) {
+        dev_err(dev, "No remote port found\n");
+        goto out_put_remote_endpoint;
+    }
+
+    remote_node = fwnode_get_parent(remote_port);
+    if (!remote_node) {
+        dev_err(dev, "No remote node found\n");
+        goto out_put_remote_port;
+    }
+
+    node = to_of_node(remote_node);
+    if (!node) {
+        dev_err(dev, "Failed to convert remote node to device node\n");
+        goto out_put_remote_node;
+    }
+
+    i2c_dev = of_find_i2c_device_by_node(node);
+    if (!i2c_dev) {
+        dev_err(dev, "No I2C device found for sensor\n");
+        goto out_put_remote_node;
+    }
+
+    sensor_subdev = i2c_get_clientdata(i2c_dev);
+    if (!sensor_subdev) {
+        dev_err(dev, "No sensor subdev found\n");
+        goto out_put_remote_node;
+    }
+
+    sensor_entity = &sensor_subdev->entity;
+    dev_info(dev, "Successfully found sensor entity\n");
+
+out_put_remote_node:
+    fwnode_handle_put(remote_node);
+out_put_remote_port:
+    fwnode_handle_put(remote_port);
+out_put_remote_endpoint:
+    fwnode_handle_put(remote_endpoint);
+out_put_endpoint:
+    fwnode_handle_put(endpoint);
+
+    return sensor_entity;
 }
 
 static struct media_pad *get_pad(struct media_entity *ent, u16 pad,
@@ -848,12 +903,14 @@ int create_default_links(struct vid_device *vdev)
 		if (rc < 0)
 			return rc;
 
-		sensor_src = find_sensor_entity_by_csi_id(&vdev->v4l2_dev, i);
-		if (sensor_src && j == 0) {
-			rc = create_link(vdev->v4l2_dev.dev, sensor_src, 0, src, 0,
-				 MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
-			if (rc < 0)
-				return rc;
+		if (j == 0) {
+			sensor_src = get_sensor_media_entity(src);
+			if (sensor_src) {
+				rc = create_link(vdev->v4l2_dev.dev, sensor_src, 0, src, 0,
+					MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
+				if (rc < 0)
+					return rc;
+			}
 		}
 
 		j++;
