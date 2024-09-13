@@ -1276,7 +1276,6 @@ static struct isc_notifier_ops isp_notifier_ops = {
 
 int isp_open(struct isp_device *isp, u32 inst)
 {
-	struct isp_instance *ins;
 	bool en_clk = false;
 	int rc = 0;
 
@@ -1284,12 +1283,6 @@ int isp_open(struct isp_device *isp, u32 inst)
 
 	if (!isp)
 		return -EINVAL;
-
-	if (inst >= isp->num_insts)
-		return -EINVAL;
-
-	ins = &isp->insts[inst];
-	ins->meta_inst = isp->num_insts;
 
 	mutex_lock(&isp->open_lock);
 	if (refcount_read(&isp->open_cnt) == REFCNT_INIT_VAL)
@@ -1479,6 +1472,7 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 		for (j = 0; j < ARRAY_SIZE(isp->insts[i].src_bufs); j++)
 			list_add_tail(&isp->insts[i].src_bufs[j].entry,
 				      &isp->insts[i].src_buf_list1);
+		isp->insts[i].meta_inst = isp->num_insts;
 	}
 
 	for (i = 0; i < ISP_SINK_ONLINE_PATH_MAX; i++) {
