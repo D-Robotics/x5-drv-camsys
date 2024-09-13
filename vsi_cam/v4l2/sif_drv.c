@@ -361,21 +361,7 @@ static int sif_enum_frame_interval(struct v4l2_subdev *sd,
 
 static long sif_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-    int rc = 0;
-
-	switch(cmd) {
-		case CAM_SET_SENSOR_CTRL:
-		case CAM_GET_SENSOR_CTRL:
-			rc = subdev_call_command(sd, cmd, arg);
-			break;
-		default:
-			break;
-	}
-
-	if (rc < 0)
-		pr_err("%s call sensor ctrl failed\n", __func__);
-
-	return rc;
+	return subdev_call_command(sd, cmd, arg);
 }
 
 static const struct v4l2_subdev_core_ops sif_core_ops = {

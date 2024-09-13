@@ -621,6 +621,15 @@ static int vse_enum_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+	return subdev_call_command(sd, cmd, arg);
+}
+
+static const struct v4l2_subdev_core_ops vse_core_ops = {
+	.command = vse_command,
+};
+
 static const struct v4l2_subdev_video_ops vse_video_ops = {
 	.s_stream = vse_s_stream,
 	.g_frame_interval = vse_g_frame_interval,
@@ -636,6 +645,7 @@ static const struct v4l2_subdev_pad_ops vse_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops vse_subdev_ops = {
+	.core = &vse_core_ops,
 	.video = &vse_video_ops,
 	.pad = &vse_pad_ops,
 };

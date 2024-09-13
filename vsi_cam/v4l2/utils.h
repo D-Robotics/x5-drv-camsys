@@ -66,10 +66,12 @@ struct subdev_node {
 };
 
 enum v4l_core_ctrl_cmd {
-	CAM_SET_SENSOR_CTRL = 0,
-	CAM_GET_SENSOR_CTRL,
-	CAM_SET_ISP_CTRL,
-	CAM_GET_ISP_CTRL,
+	CAM_SET_CTRL = 0,
+	CAM_GET_CTRL,
+	CAM_SET_EXT_CTRL,
+	CAM_GET_EXT_CTRL,
+	CAM_QUERY_CTRL,
+	CAM_QUERY_EXT_CTRL,
 };
 
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,

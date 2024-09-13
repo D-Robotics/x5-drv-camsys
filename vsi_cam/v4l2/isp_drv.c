@@ -297,16 +297,12 @@ static struct cam_buf_ops isp_buf_ops = {
 
 static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
 {
-	struct v4l2_ext_control ext_ctrl;
-	int ret;
+	struct v4l2_ext_control *ext_ctrl;
 
-	ret = copy_from_user(&ext_ctrl, arg, sizeof(struct v4l2_ext_control));
-	if (ret) {
-		pr_err("%s: ctrl_data copy_from_user failed!\n", __func__);
-		return ret;
-	}
+	ext_ctrl = (struct v4l2_ext_control *)arg;
+
 	u32 size = 0;
-	switch (ext_ctrl.id) {
+	switch (ext_ctrl->id) {
 		case V4L2_CID_DR_EXPOSURE:
 			size = sizeof(hbn_isp_exposure_attr_t);
 			break;
@@ -316,23 +312,18 @@ static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
 		default:
 			return -1;
 	}
-	return isp_set_subctrl(isp->dev, isp->id, ext_ctrl.id,
-				       (void *)ext_ctrl.ptr, size);
+	return isp_set_subctrl(isp->dev, isp->id, ext_ctrl->id,
+				       (void *)ext_ctrl->ptr, size);
 }
 
 static int isp_g_ctrl(struct isp_v4l_instance *isp, void *arg)
 {
-	struct v4l2_ext_control ext_ctrl;
-	int ret;
+	struct v4l2_ext_control *ext_ctrl;
 
-	ret = copy_from_user(&ext_ctrl, arg, sizeof(struct v4l2_ext_control));
-	if (ret) {
-		pr_err("%s: ctrl_data copy_from_user failed!\n", __func__);
-		return ret;
-	}
+	ext_ctrl = (struct v4l2_ext_control *)arg;
 
 	u32 size = 0;
-	switch (ext_ctrl.id) {
+	switch (ext_ctrl->id) {
 		case V4L2_CID_DR_EXPOSURE:
 			size = sizeof(hbn_isp_exposure_attr_t);
 			break;
@@ -342,32 +333,79 @@ static int isp_g_ctrl(struct isp_v4l_instance *isp, void *arg)
 		default:
 			return -1;
 	}
-	return isp_get_subctrl(isp->dev, isp->id, ext_ctrl.id,
-				       (void *)ext_ctrl.ptr, size);
+	return isp_get_subctrl(isp->dev, isp->id, ext_ctrl->id,
+				       (void *)ext_ctrl->ptr, size);
+}
+
+static int get_name_for_ext_ctrl(uint32_t id, char *name)
+{
+	const char *source;
+
+	switch (id) {
+		case V4L2_CID_DR_EXPOSURE:
+			source = "hbn_isp_exposure_attr_t";
+			break;
+		case V4L2_CID_DR_AWB:
+			source = "hbn_isp_awb_attr_t";
+			break;
+		default:
+			return -1;
+	}
+	memcpy(name, source, strlen(source)+1);
+	return 0;
 }
 
 static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+	struct v4l2_query_ext_ctrl *qectrl;
+	struct v4l2_ext_control *vectl;
 	int rc = 0;
 
 	switch(cmd) {
-		case CAM_SET_SENSOR_CTRL:
-		case CAM_GET_SENSOR_CTRL:
+		case CAM_SET_CTRL:
+		case CAM_GET_CTRL:
+		case CAM_QUERY_CTRL:
 			rc = subdev_call_command(sd, cmd, arg);
 			break;
-		case CAM_SET_ISP_CTRL:
-			rc = isp_s_ctrl(isp, arg);
+		case CAM_SET_EXT_CTRL:
+			vectl = (struct v4l2_ext_control *)arg;
+			switch (vectl->id) {
+				case V4L2_CID_DR_EXPOSURE:
+				case V4L2_CID_DR_AWB:
+					rc = isp_s_ctrl(isp, arg);
+					break;
+				default:
+					rc = subdev_call_command(sd, cmd, arg);
+					break;
+			}
 			break;
-		case CAM_GET_ISP_CTRL:
-			rc = isp_g_ctrl(isp, arg);
+		case CAM_GET_EXT_CTRL:
+			vectl = (struct v4l2_ext_control *)arg;
+			switch (vectl->id) {
+				case V4L2_CID_DR_EXPOSURE:
+				case V4L2_CID_DR_AWB:
+					rc = isp_g_ctrl(isp, arg);
+					break;
+				default:
+					rc = subdev_call_command(sd, cmd, arg);
+					break;
+			}
+			break;
+		case CAM_QUERY_EXT_CTRL:
+			qectrl = (struct v4l2_query_ext_ctrl *)arg;
+			switch (qectrl->id) {
+				case V4L2_CID_DR_EXPOSURE:
+				case V4L2_CID_DR_AWB:
+					rc = get_name_for_ext_ctrl(qectrl->id, qectrl->name);
+					break;
+				default:
+					return -EINVAL;
+			}
 			break;
 		default:
 			break;
 	}
-
-	if (rc < 0)
-		pr_err("%s call isp ctrl failed\n", __func__);
 
 	return rc;
 }
@@ -495,7 +533,7 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 
 	struct isp_ctrl sen_ctrl = {0};
 	sen_ctrl.ctrl_id = V4L2_CID_SENSOR_NAME;
-	v4l2_subdev_call(sd, core, command, CAM_GET_SENSOR_CTRL, &sen_ctrl);
+	v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &sen_ctrl);
 
 	struct cam_input in;
 	memset(&in, 0, sizeof(in));

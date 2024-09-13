@@ -455,12 +455,43 @@ static long vid_ioctl(struct file *file, void *fh, bool valid_prio, unsigned int
 
 static int vid_s_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 {
-	return 0;
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct sen_ctrl ctrl = {0};
+
+	ctrl.ctrl_id = a->id;
+	memcpy(&ctrl.ctrl_data, &a->value, sizeof(a->value));
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	return v4l2_subdev_call(sd, core, command, CAM_SET_CTRL, &ctrl);
 }
 
 static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 {
-	return 0;
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct sen_ctrl ctrl = {0};
+	int rc = 0;
+
+	ctrl.ctrl_id = a->id;
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &ctrl);
+	if (rc < 0)
+		return -EINVAL;
+
+	memcpy(&a->value, &ctrl.ctrl_data, sizeof(a->value));
+	return rc;
 }
 
 static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls *a)
@@ -476,7 +507,11 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
-	rc = v4l2_subdev_call(sd, core, command, CAM_SET_ISP_CTRL, a->controls);
+	for (int i = 0; i < a->count; i++) {
+		rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &a->controls[i]);
+		if(rc < 0)
+			return rc;
+	}
 
 	return rc;
 }
@@ -494,7 +529,47 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
-	rc = v4l2_subdev_call(sd, core, command, CAM_GET_ISP_CTRL, a->controls);
+	for (int i = 0; i < a->count; i++) {
+		rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &a->controls[i]);
+		if(rc < 0)
+			return rc;
+	}
+
+	return rc;
+}
+
+static int vid_queryctrl(struct file *file, void *fh, struct v4l2_queryctrl *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	int rc = 0;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = v4l2_subdev_call(sd, core, command, CAM_QUERY_CTRL, a);
+
+	return rc;
+}
+
+static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext_ctrl *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	int rc = 0;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
 
 	return rc;
 }
@@ -519,6 +594,8 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_g_ctrl = vid_g_ctrl,
 	.vidioc_s_ext_ctrls = vid_s_ext_ctrls,
 	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
+	.vidioc_queryctrl = vid_queryctrl,
+	.vidioc_query_ext_ctrl = vid_query_ext_ctrl,
 };
 
 static int vid_open(struct file *file)

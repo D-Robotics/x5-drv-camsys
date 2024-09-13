@@ -142,7 +142,7 @@ void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
 	struct sen_ctrl *ctrl = (struct sen_ctrl *)data;
 	struct v4l2_subdev *sd = isp_device_to_v4l2_subdev(isp_dev, inst);
 
-	uint32_t cmd = CAM_SET_SENSOR_CTRL;
+	uint32_t cmd = CAM_SET_CTRL;
 	v4l2_subdev_call(sd, core, command, cmd, (void *)ctrl);
 }
 
@@ -151,7 +151,7 @@ void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
 	struct sen_ctrl *ctrl = (struct sen_ctrl *)data;
 	struct v4l2_subdev *sd = isp_device_to_v4l2_subdev(isp_dev, inst);
 
-	uint32_t cmd = CAM_GET_SENSOR_CTRL;
+	uint32_t cmd = CAM_GET_CTRL;
 	v4l2_subdev_call(sd, core, command, cmd, (void *)ctrl);
 }
 
