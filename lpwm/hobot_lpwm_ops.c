@@ -36,7 +36,6 @@ static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_i
 	osal_mutex_lock(&lpwm->con_lock);
 	trmode = lpwm->lpwm_attr[0].trigger_mode;
 	trsource = lpwm->lpwm_attr[0].trigger_source;
-	osal_mutex_unlock(&lpwm->con_lock);
 
 	if (enable) {
 		if (osal_atomic_read(&lpwm->enable_sif_pps_cnt) == 0) {
@@ -46,6 +45,7 @@ static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_i
 						(lpwm->cim_cops->cops))->set_cam_pulse_gen(1);
 					if (ret < 0) {
 						lpwm_err(lpwm, "Enable sif pps failed\n");
+						osal_mutex_unlock(&lpwm->con_lock);
 						return ;
 					}
 				}
@@ -66,6 +66,7 @@ static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_i
 	} else {
 		if (osal_atomic_read(&lpwm->enable_cnt[c_id]) < 1) {
 			lpwm_err(lpwm, "Channel-%d has not been enable\n", c_id);
+			osal_mutex_unlock(&lpwm->con_lock);
 			return ;
 		}
 		if (osal_atomic_dec_return(&lpwm->enable_cnt[c_id]) == 0) {
@@ -79,6 +80,7 @@ static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_i
 						(lpwm->cim_cops->cops))->set_cam_pulse_gen(0);
 					if (ret < 0) {
 						lpwm_err(lpwm, "Disable sif pps failed\n");
+						osal_mutex_unlock(&lpwm->con_lock);
 						return ;
 					}
 				}
@@ -88,7 +90,7 @@ static void lpwm_single_channel_stream(struct hobot_lpwm_ins *lpwm, uint32_t c_i
 		lpwm_debug(lpwm, "Channel-%d disable, remaining count %d\n",
 			   c_id, osal_atomic_read(&lpwm->enable_cnt[c_id]));
 	}
-
+	osal_mutex_unlock(&lpwm->con_lock);
 	return ;
 }
 
@@ -342,6 +344,7 @@ static int32_t lpwm_single_channel_config(struct hobot_lpwm_ins *lpwm, uint32_t 
 	 * 1. Cfg static ctrl regs
 	 * 2. Cfg dynamic ctrl regs
 	 */
+	osal_mutex_lock(&lpwm->con_lock);
 	lpwm_cfg2_config_single(lpwm->base, c_id, config->threshold, config->adjust_step);
 	lpwm_trigger_mode_config(lpwm->base, config->trigger_mode);
 	lpwm_trigger_source_config(lpwm->base, config->trigger_source);
@@ -349,7 +352,6 @@ static int32_t lpwm_single_channel_config(struct hobot_lpwm_ins *lpwm, uint32_t 
 	lpwm_offset_config_single(lpwm->base, c_id, config->offset);
 	lpwm_cfg1_config_single(lpwm->base, c_id, config->period, config->duty_time);
 
-	osal_mutex_lock(&lpwm->con_lock);
 	for (i = 0; i < LPWM_CNUM; i++) {
 		lpwm->lpwm_attr[i].trigger_mode = config->trigger_mode > 0 ? 1 : 0;
 		lpwm->lpwm_attr[i].trigger_source = config->trigger_source;
