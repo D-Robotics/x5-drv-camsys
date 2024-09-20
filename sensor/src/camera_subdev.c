@@ -790,8 +790,9 @@ static void sensor_frame_event_2a(int32_t flow_id, enum _sensor_frame_event_e ev
 		return;
 	sensor_frame_event_record(sen, event);
 
-	if (event == sen->param.ae_event_flag)
-		wake_up_ae_update(flow_id);
+	// FIXME
+	//if (event == sen->param.ae_event_flag)
+	//	wake_up_ae_update(flow_id);
 }
 
 static int32_t sensor_get_ts_compensate(int32_t flow_id)

@@ -740,6 +740,53 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 	return ret;
 }
 
+/**
+ * @NO{S10E04C01}
+ * @ASIL{B}
+ * @brief: prepare to stop cim from working
+ * @retval 0: success
+ * @retval <0: fail
+ * @param[in] *vctx: vio_video_ctx
+ * @param[out] None
+ * @data_read None
+ * @data_updated None
+ * @compatibility None
+ * @callgraph
+ * @callergraph
+ * @design
+ */
+s32 cim_subdev_pre_stop(struct vio_video_ctx *vctx)
+{
+	struct j6_cim_dev *cim;
+	struct vio_node *vnode;
+	struct vio_subdev *vdev;
+	struct vin_node_subdev *subdev;
+	struct j6_vin_node_dev *vin_node_dev;
+	u8 ipi_index;
+	struct vin_cim_private_s *cim_priv_attr;
+	struct cim_attr cim_attr;
+
+	vdev = vctx->vdev;
+	vnode = vdev->vnode;
+	vin_node_dev = (struct j6_vin_node_dev *)vctx->device;
+	cim = cim_get_dev(vin_node_dev->hw_id);
+	subdev = container_of(vdev, struct vin_node_subdev,
+			      vdev);
+	cim_attr = subdev->vin_attr.vin_node_attr.cim_attr;
+	cim_priv_attr = cim_get_priv_by_subdev(subdev);
+	cim_priv_attr->start_flag = 0;
+	ipi_index = cim_priv_attr->ipi_index;
+	osal_mutex_lock(&cim->mlock);
+
+	sif_pre_stop_ipi(&cim->sif, ipi_index);
+
+	osal_mutex_unlock(&cim->mlock);
+	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
+
+	return 0;
+}
+
+
 void cim_config_next_frame_addr(struct vio_node *vnode, u8 chn)
 {
 	struct j6_cim_dev *cim;

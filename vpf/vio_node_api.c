@@ -382,6 +382,21 @@ void vio_get_frame_id(struct vio_node *vnode)
 }
 EXPORT_SYMBOL(vio_get_frame_id);/*PRQA S 0605,0307*/
 
+void vio_set_sensor_event(struct vio_node *vnode, uint32_t event_type)
+{
+	struct vio_node *vin_vnode;
+	struct cim_interface_ops *cim_cops;
+	struct hobot_vpf_dev *vpf_dev;
+
+	if (vnode != NULL) {
+		vpf_dev = vpf_get_drvdata();
+		cim_cops = vpf_dev->vio_cops[VIN_MODULE][COPS_0].cops;
+		vin_vnode = vio_get_vnode(vnode->flow_id, VIN_MODULE);
+		cim_cops->set_cam_sensor_event(vin_vnode, event_type);
+	}
+}
+EXPORT_SYMBOL(vio_set_sensor_event);
+
 void vio_get_frame_id_by_flowid(u32 flow_id, struct frame_id_desc *frameid)
 {
 	struct vio_node *vnode;

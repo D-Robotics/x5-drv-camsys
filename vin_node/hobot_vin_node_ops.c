@@ -1178,6 +1178,13 @@ s32 vin_node_stop(struct vio_video_ctx *vctx)
 	vdev = vctx->vdev;
 	subdev = container_of(vdev, struct vin_node_subdev, vdev);
 
+	vin_ops = vin_node_dev->vin_ops[VIN_CIM];
+	if (vin_ops && vin_ops->video_pre_stop && osal_test_bit(CIM_START, &subdev->state)) {
+		ret = vin_ops->video_pre_stop(vctx);
+		if (ret < 0)
+			vio_err("%s cim pre stop fail\n", __func__);
+	}
+
 	vin_ops = vin_node_dev->vin_ops[VIN_VCON];
 	if (vin_ops && vin_ops->video_stop && osal_test_bit(VCON_START, &subdev->state)) {
 		ret = vin_ops->video_stop(vctx);

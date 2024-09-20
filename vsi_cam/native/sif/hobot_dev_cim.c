@@ -143,6 +143,32 @@ s32 cim_video_streamoff(struct vio_video_ctx *vctx)
 }
 
 /**
+ * @NO{S10E04C01I}
+ * @ASIL{B}
+ * @brief: prepare to stop cim from working
+ * @retval 0: success
+ * @retval <0: fail
+ * @param[in] *vctx: vio_video_ctx
+ * @param[out] None
+ * @data_read None
+ * @data_updated None
+ * @compatibility None
+ * @callgraph
+ * @callergraph
+ * @design
+ */
+static s32 cim_video_pre_stop(struct vio_video_ctx *vctx)
+{
+        s32 ret;
+
+        ret = cim_subdev_pre_stop(vctx);
+        if (ret < 0) {
+                vio_err("[S%d][V%d]%s error\n", vctx->vdev->vnode->flow_id, vctx->ctx_id, __func__);
+        }
+        return ret;
+}
+
+/**
  * @NO{S10E04C01}
  * @ASIL{B}
  * @brief: Open the calling function of the cim device node
@@ -556,9 +582,30 @@ int32_t cim_set_cam_pulse_gen(uint32_t enable)
 	return ret;
 }
 
+static int32_t cim_set_sensor_event(struct vio_node *vnode, uint32_t event_type)
+{
+	struct j6_cim_dev *cim_dev = NULL;
+
+	if (vnode == NULL)
+		return -EFAULT;
+
+	if (event_type >= 2) {
+		vio_err("%s event_type %d value not right \n", __func__, event_type);
+		return -EFAULT;
+	}
+
+	cim_dev = cim_get_dev(vnode->hw_id);
+
+	((struct sensor_cim_ops_s *)(cim_dev->sensor_cops->cops))->\
+		sensor_frame_event(vnode->flow_id, event_type);
+
+	return 0;
+}
+
 struct cim_interface_ops cim_cops = {
 	.get_frame_id = cim_video_get_frameid,
 	.set_cam_pulse_gen = cim_set_cam_pulse_gen,
+	.set_cam_sensor_event = cim_set_sensor_event,
 	// .cim_get_lpwm_timestamps = cim_get_lpwm_timestamps,
 };
 
@@ -621,6 +668,7 @@ struct vin_common_ops cim_vops = {
 	.video_set_ochn_attr = cim_video_set_ochn_attr,
 	.video_start = cim_video_streamon,
 	.video_stop = cim_video_streamoff,
+	.video_pre_stop = cim_video_pre_stop,
 	.video_reset = cim_video_reset,
 	.video_error_callback = cim_video_error_callback,
 	// .video_s_ctrl = cim_video_set_ctrl,

@@ -145,6 +145,7 @@ s32 cim_subdev_init(struct vio_video_ctx *vctx, cim_attr_t *cim_attr);
 s32 cim_subdev_reqbufs(struct vio_subdev *vdev, u32 buffers);
 s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps);
 s32 cim_subdev_stop(struct vio_video_ctx *vctx);
+s32 cim_subdev_pre_stop(struct vio_video_ctx *vctx);
 void cim_set_drop_info(u32 rx, u32 vc_mask);
 void j6_cim_subdev_init(struct j6_cim_dev *cim);
 void cim_set_clk_enable(u32 enable);

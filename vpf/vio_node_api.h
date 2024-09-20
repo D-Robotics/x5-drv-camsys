@@ -347,6 +347,7 @@ s32 vio_group_task_stop(struct vio_group_task *group_task);
 void vio_group_start_trigger(struct vio_node *vnode, struct vio_frame *frame);
 void vio_group_cancel_work(struct vio_node *vnode, struct vio_frame *frame);
 
+void vio_set_sensor_event(struct vio_node *vnode, uint32_t event_type);
 void vio_get_frame_id(struct vio_node *vnode);
 void vio_get_frame_id_by_flowid(u32 flow_id, struct frame_id_desc *frameid);
 void vio_get_head_frame_id(struct vio_node *vnode);

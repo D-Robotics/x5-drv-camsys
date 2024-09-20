@@ -191,6 +191,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	sif_frame.fs_ts = (sif_frame.fs_ts << 32) | fs_l;
 	sif_set_frame_des(ins->ctx.sink_ctx, (void *)&sif_frame);
 	cam_set_stat_info(ins->ctx.sink_ctx, CAM_STAT_FS);
+	sif_set_frame_event(ins->ctx.sink_ctx, CAM_STAT_FS);
 
 	spin_lock_irqsave(&ins->lock, flags);
 	ins->prev_irq_stat = START_STATUS;
@@ -350,8 +351,10 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 		if ((status & SIF_IRQ_FS) && (sif->insts[i].overlap == 0))
 			sif_handle_frame_start(sif, i);
 
-		if (status & SIF_IPI_FRAME_END_EN)
+		if (status & SIF_IPI_FRAME_END_EN) {
 			cam_set_stat_info(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
+			sif_set_frame_event(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
+		}
 
 		if (status & SIF_IRQ_DONE)
 			sif_handle_frame_done(sif, i);

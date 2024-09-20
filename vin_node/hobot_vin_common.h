@@ -133,6 +133,7 @@ struct vin_common_ops {
 	s32 (*close)(struct vio_video_ctx *vctx);
 	s32 (*video_start)(struct vio_video_ctx *vctx);
 	s32 (*video_stop)(struct vio_video_ctx *vctx);
+	s32 (*video_pre_stop)(struct vio_video_ctx *vctx);
 	s32 (*video_set_attr)(struct vio_video_ctx *vctx, void *attr);
 	s32 (*video_get_attr)(struct vio_video_ctx *vctx, void *attr);
 	s32 (*video_set_attr_ex)(struct vio_video_ctx *vctx, void *attr);

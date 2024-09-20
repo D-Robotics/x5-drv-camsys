@@ -78,7 +78,7 @@
 #define CPD_OFFSET 0x2000
 
 // #define CIM_ISP_COPS
-// #define CIM_SENSOR_COPS
+#define CIM_SENSOR_COPS
 
 struct j6_cim_dev {
 	struct sif_device sif;

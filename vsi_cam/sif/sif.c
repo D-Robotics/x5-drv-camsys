@@ -280,7 +280,7 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	phys_addr_t p_uv_addr = 0;
 	unsigned long flags;
 	u32 val;
-	u32 irq_val;
+	u32 irq_val, reg_val;
 
 	dev_dbg(dev->dev,"%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
@@ -331,6 +331,10 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 
 	sif_write(dev, SIF_IPI_IRQ_CLR(inst), irq_val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
+
+	reg_val = sif_read(dev, SIF_ISP_CTRL);
+	sif_write(dev, SIF_ISP_CTRL, reg_val & (~BIT(inst)));
+
 	dev_dbg(dev->dev, "%s irq_val=0x%x\n", __func__, sif_read(dev, SIF_IPI_IRQ_EN(inst)));
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 }
@@ -340,7 +344,7 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	struct sif_instance *sif;
 	unsigned long flags;
 	u32 val;
-	u32 irq_val, reg_val;
+	u32 irq_val;
 
 	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
@@ -360,9 +364,27 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 		irq_val &= ~SIF_IRQ_EBD_DMA_DONE;
 
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
-	reg_val = sif_read(dev, SIF_ISP_CTRL);
-	reg_val &= ~BIT(inst);
-	sif_write(dev, SIF_ISP_CTRL, reg_val);
+	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+
+	dev_dbg(dev->dev, "%s-\n", __func__);
+}
+
+void sif_pre_stop_ipi(struct sif_device *dev, u32 inst)
+{
+	struct sif_instance *sif;
+	unsigned long flags;
+	u32 reg_val;
+
+	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
+
+	sif = &dev->insts[inst];
+	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
+	if (sif->ctx.buf_ctx == NULL) {	//online datapath
+		reg_val = sif_read(dev, SIF_ISP_CTRL);
+		//IPI to ISP datapath will be disabled if it is set to 1
+		reg_val |= BIT(inst);
+		sif_write(dev, SIF_ISP_CTRL, reg_val);
+	}
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 
 	dev_dbg(dev->dev, "%s-\n", __func__);

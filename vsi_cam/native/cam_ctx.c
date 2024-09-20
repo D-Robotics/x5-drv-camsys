@@ -103,6 +103,14 @@ void sif_get_frame_des(struct cam_ctx *ctx)
 		vio_get_frame_id(subdev->vnode);
 }
 
+void sif_set_frame_event(struct cam_ctx *ctx, u32 type)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+
+	if (subdev)
+		vio_set_sensor_event(subdev->vnode, type);
+}
+
 void isp_update_frame_info(void *data,struct cam_ctx *ctx)
 {
 	struct vio_subdev *subdev         = (struct vio_subdev *)ctx;
@@ -131,6 +139,7 @@ void cam_set_stat_info(struct cam_ctx *ctx, u32 type)
 	else if (type == CAM_STAT_FE)
 		vio_set_stat_info(vnode->flow_id, vnode->id, STAT_FE,
 				  vnode->frameid.frame_id);
+
 }
 
 bool cam_osd_update(struct cam_ctx *ctx)
