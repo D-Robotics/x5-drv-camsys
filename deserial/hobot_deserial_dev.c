@@ -437,6 +437,7 @@ static int32_t deserial_miscdev_init(struct deserial_device_s *des)
 	dev->miscdev.minor = MISC_DYNAMIC_MINOR;
 	dev->miscdev.fops = &deserial_fops;
 	dev->miscdev.groups = attr_groups;
+	dev->miscdev.mode = 0666;
 
 	ret = misc_register(&dev->miscdev);
 	if (ret < 0) {

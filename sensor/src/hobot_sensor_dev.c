@@ -563,6 +563,7 @@ static int32_t sensor_miscdev_init(struct sensor_device_s *sen)
 	dev->miscdev.minor = MISC_DYNAMIC_MINOR;
 	dev->miscdev.fops = &sensor_fops;
 	dev->miscdev.groups = attr_groups;
+	dev->miscdev.mode = 0666;
 
 	ret = misc_register(&dev->miscdev);
 	if (ret < 0) {

@@ -820,6 +820,7 @@ static int32_t __init isi_sensor_init(void)
         isi->isi_sensor_miscdev.miscdev.minor = MISC_DYNAMIC_MINOR;
         isi->isi_sensor_miscdev.miscdev.fops = &isi_sensor_fops;
         isi->isi_sensor_miscdev.miscdev.groups = attr_groups;
+        isi->isi_sensor_miscdev.miscdev.mode = 0666;
 
         ret = misc_register(&isi->isi_sensor_miscdev.miscdev);
         if (ret < 0) {
