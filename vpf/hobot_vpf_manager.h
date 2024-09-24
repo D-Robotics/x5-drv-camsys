@@ -68,6 +68,8 @@ struct hobot_vpf_dev {
 	struct dentry *debug_file_fmgr_stats;
 };
 
+extern int vio_threshold_time;
+
 void vpf_set_drvdata(struct hobot_vpf_dev *vpf_dev);
 struct hobot_vpf_dev *vpf_get_drvdata(void);
 

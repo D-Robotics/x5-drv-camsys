@@ -37,6 +37,9 @@
 int vio_mp_en = 0;
 module_param(vio_mp_en, int, 0644);/*PRQA S 0605,0636,4501*/
 
+int vio_threshold_time = 0;
+module_param(vio_threshold_time, int, 0644);
+
 /**
  * Purpose: point to hobot_vpf_dev struct, for extern interface
  * Range: hobot_vpf_manager.c
