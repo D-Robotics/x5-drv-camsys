@@ -83,6 +83,7 @@ void sif_set_frame_des(struct cam_ctx *ctx, void *data)
 	frameid.frame_id = des->frame_id;
 	/* todo: timestamp temp use kernel api */
 	frameid.timestamps = des->timestamps;
+	frameid.sys_timestamps = des->sys_timestamps;
 	frameid.tv_sec = des->fs_ts / des->trigger_freq;
 	frameid.tv_usec = (des->fs_ts % des->trigger_freq) / (des->trigger_freq / 1000000u);
 	frameid.trig_tv_sec = des->trigger_ts / des->trigger_freq;

@@ -184,6 +184,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	}
 	sif_frame.trigger_freq = sif->timestamp_clk;
 	sif_frame.timestamps = ktime_get_raw_ns();
+	sif_frame.sys_timestamps = ktime_get_real_ns();
 	sif_frame.trigger_ts = trigger_h;
 	sif_frame.trigger_ts = (sif_frame.trigger_ts << 32) | trigger_l;
 	sif_frame.fs_ts = fs_h;

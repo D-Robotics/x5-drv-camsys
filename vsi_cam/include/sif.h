@@ -144,6 +144,7 @@ struct sif_frame_des {
 	u64 pps1_ts; // pps1 timestamp read from sif register.
 	u64 pps2_ts; // pps2 timestamp read from sif register.
 	u64 timestamps; // kernel time read from kernel api.
+	u64 sys_timestamps; //system time read from kernel api.
 };
 
 void sif_post(struct sif_device *sif, void *msg, u32 len);
