@@ -409,6 +409,7 @@ static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (rc < 0)
 		return rc;
 
+	inst->out_pixelformat = 0;
 	return sif_close(inst->dev, inst->id);
 }
 
