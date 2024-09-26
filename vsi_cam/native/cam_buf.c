@@ -56,7 +56,7 @@ struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 	return (struct cam_buf *)frame;
 }
 
-struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx)
+struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx, bool remote)
 {
 	struct vio_framemgr *framemgr;
 	struct vio_frame *frame = NULL;

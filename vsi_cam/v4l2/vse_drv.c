@@ -134,12 +134,8 @@ static int vse_link_setup(struct media_entity *entity,
 				      has_internal_buf);
 		if (rc < 0)
 			return rc;
-		if (index >= 0)
-			vse->is_out_chnl_connected[index] = true;
 	} else {
 		cam_ctx_release(buf_ctx);
-		if (index >= 0)
-			vse->is_out_chnl_connected[index] = false;
 	}
 	return rc;
 }
@@ -151,9 +147,17 @@ static const struct media_entity_operations vse_media_ops = {
 static void vse_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
 	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	int rc;
 
-	if (ctx && on)
-		vse_wake_up(vse->dev, vse->id);
+	if (!ctx || !on)
+		return;
+
+	if (vse->node.bctx.is_sink_online_mode)
+		rc = cam_ready(&vse->sink_ctx, on);
+	else
+		rc = vse_wake_up(vse->dev, vse->id);
+	if (rc < 0)
+		pr_err("%s failed to handle buf ready (err=%d)\n", __func__ , rc);
 }
 
 static int vse_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)

@@ -51,6 +51,7 @@ struct v4l2_buf_ctx {
 	int (*qbuf)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
 	int (*drop)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
 	struct cam_buf *(*dqbuf)(struct v4l2_buf_ctx *ctx);
+	struct cam_buf *(*acqbuf)(struct v4l2_buf_ctx *ctx);
 	void (*trigger)(struct v4l2_buf_ctx *ctx);
 	bool (*is_completed)(struct v4l2_buf_ctx *ctx);
 	void (*set_cap)(struct v4l2_buf_ctx *ctx);

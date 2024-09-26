@@ -13,7 +13,6 @@ struct vse_v4l_instance {
 	struct cam_ctx sink_ctx;
 	struct cam_ctx src_ctx[VSE_OUT_CHNL_MAX];
 	struct media_pad *src_pads[VSE_OUT_CHNL_MAX];
-	bool is_out_chnl_connected[VSE_OUT_CHNL_MAX];
 	struct cam_format ifmt;
 	struct v4l2_fract out_fps[VSE_OUT_CHNL_MAX];
 	bool fmt_changed;

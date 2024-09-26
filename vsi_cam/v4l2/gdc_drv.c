@@ -121,6 +121,19 @@ static struct cam_buf *gdc_dqbuf(struct v4l2_buf_ctx *ctx)
 	return cam_dqbuf(&gdc->sink_ctx);
 }
 
+static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx)
+{
+	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+
+	if (!ctx)
+		return NULL;
+
+	if (ctx->is_sink_online_mode)
+		return NULL;
+
+	return cam_acqbuf(&gdc->sink_ctx);
+}
+
 static u32 gdc_get_out_format(struct v4l2_buf_ctx *ctx)
 {
 	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
@@ -536,6 +549,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		n->bctx.ready = gdc_buf_ready;
 		n->bctx.qbuf = gdc_qbuf;
 		n->bctx.dqbuf = gdc_dqbuf;
+		n->bctx.acqbuf = gdc_acqbuf;
 		n->bctx.get_format = gdc_get_out_format;
 		n->bctx.set_format = gdc_set_out_format;
 		n->bctx.enum_format = gdc_enum_out_format;

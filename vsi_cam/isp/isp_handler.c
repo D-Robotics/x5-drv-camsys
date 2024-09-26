@@ -320,7 +320,7 @@ int new_frame(struct isp_irq_ctx *ctx)
 	struct cam_buf *buf;
 
 	if (ctx->sink_ctx) {
-		buf = cam_acqbuf_irq(ctx->sink_ctx);
+		buf = cam_acqbuf_irq(ctx->sink_ctx, false);
 		if (!buf) {
 			ctx->sink_buf = NULL;
 			return -ENOMEM;

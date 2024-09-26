@@ -153,6 +153,20 @@ static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
 	return buf;
 }
 
+static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx)
+{
+	struct vid_video_device *vdev =
+		container_of(ctx, struct vid_video_device, bctx);
+	unsigned long flags;
+	struct cam_buf *buf;
+
+	spin_lock_irqsave(&vdev->irqlock, flags);
+	buf = list_first_entry_or_null(&vdev->queued_list, struct cam_buf,
+				       entry);
+	spin_unlock_irqrestore(&vdev->irqlock, flags);
+	return buf;
+}
+
 static void init_fmt(struct v4l2_format *f, struct video_fmt *v_f)
 {
 	u32 bytesperline, sizeimage;
@@ -877,6 +891,7 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 	INIT_LIST_HEAD(&v->queued_list);
 	v->bctx.qbuf = vid_qbuf;
 	v->bctx.dqbuf = vid_dqbuf;
+	v->bctx.acqbuf = vid_acqbuf;
 	v->bctx.drop = vid_drop;
 
 	video_set_drvdata(&v->video, &v->bctx);

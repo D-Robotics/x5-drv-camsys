@@ -91,7 +91,7 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct vse_instance *inst, bool timeout)
+static inline void frame_done(struct vse_instance *inst, bool drop)
 {
 	struct vse_irq_ctx *ctx = &inst->ctx;
 	ktime_t now_time = ktime_get_boottime();
@@ -104,7 +104,7 @@ static inline void frame_done(struct vse_instance *inst, bool timeout)
 
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
-			if (timeout) {
+			if (drop || vse_get_drop_status(ctx->src_ctx[i])) {
 				cam_drop_irq(ctx->src_ctx[i], ctx->src_buf[i]);
 				ctx->src_buf[i] = NULL;
 			} else if (!cam_osd_update(ctx->src_ctx[i])) {
@@ -134,7 +134,7 @@ int new_frame(struct vse_irq_ctx *ctx)
 	}
 
 	if (!ctx->is_sink_online_mode && ctx->sink_ctx) {
-		buf = cam_acqbuf_irq(ctx->sink_ctx);
+		buf = cam_acqbuf_irq(ctx->sink_ctx, false);
 		if (!buf)
 			return -ENOMEM;
 	}

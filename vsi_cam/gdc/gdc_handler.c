@@ -82,7 +82,7 @@ int new_frame(struct gdc_irq_ctx *ctx)
 	struct cam_buf *buf;
 
 	if (ctx->sink_ctx) {
-		buf = cam_acqbuf_irq(ctx->sink_ctx);
+		buf = cam_acqbuf_irq(ctx->sink_ctx, false);
 		if (!buf)
 			return -ENOMEM;
 	}

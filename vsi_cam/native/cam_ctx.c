@@ -299,3 +299,8 @@ int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
 
 	return ret;
 }
+
+bool vse_get_drop_status(struct cam_ctx *ctx)
+{
+	return false;
+}

@@ -21,11 +21,13 @@ int cam_qbuf_irq(struct cam_ctx *ctx, struct cam_buf *buf, bool remote);
 
 struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote);
 
-struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx);
+struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx, bool remote);
 
 int cam_qbuf(struct cam_ctx *ctx, struct cam_buf *buf);
 
 struct cam_buf *cam_dqbuf(struct cam_ctx *ctx);
+
+__weak struct cam_buf *cam_acqbuf(struct cam_ctx *ctx);
 
 int cam_buf_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
 		     bool has_internal_buf);
@@ -41,5 +43,7 @@ int cam_drop_irq(struct cam_ctx *ctx, struct cam_buf *buf);
 int cam_drop_irq_ext(struct cam_ctx *ctx, struct cam_buf *buf);
 
 int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf);
+
+__weak int cam_ready(struct cam_ctx *ctx, int on);
 
 #endif /* _CAM_BUF_H_ */

@@ -54,4 +54,6 @@ int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info);
 
 int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info);
 
+bool vse_get_drop_status(struct cam_ctx *ctx);
+
 #endif /* _CAM_COM_H_ */
