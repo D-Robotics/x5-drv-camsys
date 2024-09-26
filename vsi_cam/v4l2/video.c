@@ -499,6 +499,8 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	struct cam_v4l2_ext_control cam_ext_ctrl;
+	bool sd_is_vse = false;
 	int rc = 0;
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
@@ -506,9 +508,14 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 		return -ENOLINK;
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
-
+	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
 	for (int i = 0; i < a->count; i++) {
-		rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &a->controls[i]);
+		if (sd_is_vse) {
+			cam_ext_ctrl.pad = pad->index;
+			cam_ext_ctrl.controls = &a->controls[i];
+			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &cam_ext_ctrl);
+		} else
+			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &a->controls[i]);
 		if(rc < 0)
 			return rc;
 	}
@@ -521,6 +528,8 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	struct cam_v4l2_ext_control cam_ext_ctrl;
+	bool sd_is_vse = false;
 	int rc = 0;
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
@@ -528,9 +537,16 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 		return -ENOLINK;
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
-
+	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
 	for (int i = 0; i < a->count; i++) {
-		rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &a->controls[i]);
+		if (sd_is_vse) {
+			cam_ext_ctrl.pad = pad->index;
+			cam_ext_ctrl.controls = &a->controls[i];
+			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &cam_ext_ctrl);
+		} else {
+			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &a->controls[i]);
+		}
+
 		if(rc < 0)
 			return rc;
 	}

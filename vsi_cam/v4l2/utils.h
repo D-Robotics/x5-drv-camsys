@@ -74,6 +74,11 @@ enum v4l_core_ctrl_cmd {
 	CAM_QUERY_EXT_CTRL,
 };
 
+struct cam_v4l2_ext_control {
+	__u32 pad;
+	struct v4l2_ext_control *controls;
+};
+
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 		const struct v4l2_subdev_ops *ops,
 		const struct media_entity_operations *mops);

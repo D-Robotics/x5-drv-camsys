@@ -10,6 +10,7 @@
 #include "cam_dev.h"
 
 #include "vse_drv.h"
+#include "v4l2_usr_api.h"
 
 #define VSE_SINK_ONLINE_PATH_MAX (4)
 
@@ -506,6 +507,16 @@ static int vse_s_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static uint32_t vse_get_sensor_fps(struct v4l2_subdev *sd)
+{
+	struct sen_ctrl sctrl = {0};
+	uint32_t fps;
+	sctrl.ctrl_id = V4L2_CID_FPS;
+	subdev_call_command(sd, CAM_GET_CTRL, &sctrl);
+	memcpy(&fps, &sctrl.ctrl_data, sizeof(fps));
+	return fps;
+}
+
 static int vse_set_fmt(struct v4l2_subdev *sd,
 		       struct v4l2_subdev_state *state,
 		       struct v4l2_subdev_format *fmt)
@@ -515,6 +526,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	// struct vse_stitching *stitch;
 	struct v4l2_subdev_format s_f = *fmt;
 	struct cam_rect crop;
+	struct vse_fps_rate fps;
 	int channel = -1;
 	int hfactor = 1, vfactor = 1;
 	int rc;
@@ -574,6 +586,14 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	rc = vse_set_oformat(inst->dev, inst->id, channel, &f, &crop, true);
 	if (rc < 0)
 		return rc;
+
+	fps.src = vse_get_sensor_fps(sd);
+	fps.dst = fps.src;
+	rc = vse_set_fps_rate(inst->dev, inst->id, channel, &fps);
+	if (rc < 0) {
+		pr_err("vse_set_fps_dst_rate failed");
+		return rc;
+	}
 #if 0
 	if (!stitch[channel].enabled)
 		return 0;
@@ -621,9 +641,161 @@ static int vse_enum_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static void vse_get_cur_attr(struct vse_instance *ins, int chnl, vse_ochn_attr_ex_t *vse_attr)
+{
+	vse_attr->src_fps = ins->fps[chnl].src;
+	vse_attr->dst_fps = ins->fps[chnl].dst;
+	if(ins->fps[chnl].dst == 0)
+		vse_attr->chn_en = 0;
+	else
+		vse_attr->chn_en = 1;
+	vse_attr->roi.x = ins->crop[chnl].x;
+	vse_attr->roi.y = ins->crop[chnl].y;
+	vse_attr->roi.w = ins->crop[chnl].w;
+	vse_attr->roi.h = ins->crop[chnl].h;
+	vse_attr->target_w = ins->ofmt[chnl].width;
+	vse_attr->target_h = ins->ofmt[chnl].height;
+}
+
+
+static int vse_s_attr(struct vse_v4l_instance *inst, void *arg)
+{
+	struct vse_instance *ins;
+	vse_ochn_attr_ex_t vse_attr;
+	struct cam_v4l2_ext_control *cam_ext_ctrl;
+	struct cam_format f;
+	struct cam_rect crop;
+	struct vse_fps_rate fps;
+	int hfactor = 1, vfactor = 1;
+	int chnl, rc;
+
+	ins = &inst->dev->insts[inst->id];
+	cam_ext_ctrl = (struct cam_v4l2_ext_control *)arg;
+
+	if (cam_ext_ctrl->pad < inst->node.num_pads)
+		chnl = get_channel_index(inst, &inst->node.pads[cam_ext_ctrl->pad]);
+
+	rc = copy_from_user(&vse_attr, cam_ext_ctrl->controls->ptr, sizeof(vse_attr));
+	if (rc < 0)
+		return rc;
+
+	f.format = ins->ofmt[chnl].format;
+	f.width = ALIGN_DOWN(vse_attr.target_w / hfactor, 16);
+	f.height = vse_attr.target_h / vfactor;
+	f.stride = ALIGN(vse_attr.target_w, STRIDE_ALIGN);
+	crop.x = vse_attr.roi.x;
+	crop.y = vse_attr.roi.y;
+	crop.w = vse_attr.roi.w;
+	crop.h = vse_attr.roi.h;
+
+	rc = vse_set_oformat(inst->dev, inst->id, chnl, &f, &crop, vse_attr.chn_en);
+	if (rc < 0) {
+		pr_err("%s vse set oformat fail\n", __func__);
+		return rc;
+	}
+
+	fps.src = vse_attr.src_fps;
+	fps.dst = vse_attr.dst_fps;
+	rc = vse_set_fps_rate(inst->dev, inst->id, chnl, &fps);
+	if (rc < 0) {
+		pr_err("%s vse set fps rate fail\n", __func__);
+		return rc;
+	}
+	return 0;
+}
+
+static int vse_g_attr(struct vse_v4l_instance *inst, void *arg)
+{
+	struct vse_instance *ins;
+	struct cam_v4l2_ext_control *cam_ext_ctrl;
+	vse_ochn_attr_ex_t vse_attr = {0};
+	int chnl, rc;
+
+	ins = &inst->dev->insts[inst->id];
+	cam_ext_ctrl = (struct cam_v4l2_ext_control *)arg;
+
+	if (cam_ext_ctrl->pad < inst->node.num_pads)
+		chnl = get_channel_index(inst, &inst->node.pads[cam_ext_ctrl->pad]);
+
+	if (chnl < 0)
+		return -EINVAL;
+
+	vse_get_cur_attr(ins, chnl, &vse_attr);
+
+	rc = copy_to_user(cam_ext_ctrl->controls->ptr,  &vse_attr, sizeof(vse_ochn_attr_ex_t));
+	if (rc) {
+		pr_err("%s: ctrl_data copy_to_user failed!\n", __func__);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int get_name_for_ext_ctrl(uint32_t id, char *name)
+{
+	const char *source;
+
+	switch (id) {
+		case V4L2_CID_DR_VSE_ATTR:
+			source = "vse_ochn_attr_ex_t";
+			break;
+		default:
+			return -1;
+	}
+	memcpy(name, source, strlen(source)+1);
+	return 0;
+}
+
 static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-	return subdev_call_command(sd, cmd, arg);
+	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
+	struct v4l2_query_ext_ctrl *qectrl;
+	struct cam_v4l2_ext_control *cam_ext_ctrl;
+	int rc = 0;
+
+	switch(cmd) {
+		case CAM_SET_CTRL:
+		case CAM_GET_CTRL:
+		case CAM_QUERY_CTRL:
+			rc = subdev_call_command(sd, cmd, arg);
+			break;
+		case CAM_SET_EXT_CTRL:
+			cam_ext_ctrl = (struct cam_v4l2_ext_control*)arg;
+			switch (cam_ext_ctrl->controls->id) {
+				case V4L2_CID_DR_VSE_ATTR:
+					rc = vse_s_attr(vse, arg);
+					break;
+				default:
+					rc = subdev_call_command(sd, cmd, (void *)cam_ext_ctrl->controls);
+					break;
+			}
+			break;
+		case CAM_GET_EXT_CTRL:
+			cam_ext_ctrl = (struct cam_v4l2_ext_control *)arg;
+			switch (cam_ext_ctrl->controls->id) {
+				case V4L2_CID_DR_VSE_ATTR:
+					rc = vse_g_attr(vse, arg);
+					break;
+				default:
+					rc = subdev_call_command(sd, cmd, (void *)cam_ext_ctrl->controls);
+					break;
+			}
+			break;
+		case CAM_QUERY_EXT_CTRL:
+			qectrl = (struct v4l2_query_ext_ctrl *)arg;
+			switch (qectrl->id) {
+				case V4L2_CID_DR_VSE_ATTR:
+					rc = get_name_for_ext_ctrl(qectrl->id, qectrl->name);
+					break;
+				default:
+					return -EINVAL;
+			}
+			break;
+		default:
+			break;
+	}
+
+	return rc;
 }
 
 static const struct v4l2_subdev_core_ops vse_core_ops = {
