@@ -110,6 +110,22 @@ static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 	return 0;
 }
 
+static s32 handle_set_gamma_febe(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_instance *ins;
+
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->febe_ctrl.flag) {
+		memcpy(&ins->febe_ctrl, &msg->febe_ctrl, sizeof(msg->febe_ctrl));
+		ins->febe_ctrl.flag = true;
+	}
+
+	return 0;
+}
+
 static s32 handle_set_sensor_ctrl(struct isp_device *isp, struct isp_msg *msg)
 {
 	if (msg->inst >= isp->num_insts)
@@ -217,6 +233,9 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case ISP_MSG_GET_FRAME_INFO:
 		rc = handle_get_frame_info(isp, m);
+		break;
+	case ISP_MSG_SET_GAMMA_FE_BE:
+		rc = handle_set_gamma_febe(isp, m);
 		break;
 	case CAM_MSG_SET_SEN_CTRL:
 		rc = handle_set_sensor_ctrl(isp, m);
@@ -576,7 +595,7 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 	struct isp_msg msg = { .id = ISP_MSG_IRQ_MIS };
 	struct isp_instance *ins;
 	struct isp_mcm_sch sch;
-	u32 isp_mis = 0;
+	u32 isp_mis = 0, i;
 
 	pr_debug("+\n");
 	isp_mis = isp_read(isp, ISP_MIS);
@@ -599,8 +618,26 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			msg.irq.num = ISP_IRQ_MIS;
 			msg.irq.stat.isp_mis = isp_mis;
 			isp_post(isp, &msg, false);
-			if ((isp_mis & BIT(1)) && isp->mode != ISP_STRM_MODE)
-				isp_set_schedule(isp, &sch, 0, isp_mis, true);
+			if (isp_mis & BIT(1)) {
+				if (isp->mode != ISP_STRM_MODE) {
+					isp_set_schedule(isp, &sch, 0, isp_mis, true);
+				} else if (ins->febe_ctrl.flag) {
+					pr_debug("config febe\n");
+					isp_write(isp, ISP_GAMMA_FE_Y_ADDR, 0);
+					isp_write(isp, ISP_GAMMA_BE_Y_ADDR, 0);
+					for (i = 0; i < ISP_CTRL_FEBE_NUM; i++) {
+						if (i % 20 == 0)
+							pr_debug("%s i %d  %d %d\n", __func__, i,
+								 ins->febe_ctrl.compress[i],
+								 ins->febe_ctrl.expand[i]);
+						isp_write(isp, ISP_GAMMA_FE_Y_WRITE_DATA,
+							  ins->febe_ctrl.compress[i]);
+						isp_write(isp, ISP_GAMMA_BE_Y_WRITE_DATA,
+							  ins->febe_ctrl.expand[i]);
+					}
+					ins->febe_ctrl.flag = false;
+				}
+			}
 		}
 	} else {
 		return IRQ_NONE;
