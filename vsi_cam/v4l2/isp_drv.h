@@ -9,6 +9,7 @@ struct isp_v4l_instance {
 	struct subdev_node node;
 	struct isp_device *dev;
 	struct cam_ctx sink_ctx, src_ctx;
+	struct v4l2_fract out_fps;
 	u32 out_pixelformat;
 	u32 id;
 	int enabled;

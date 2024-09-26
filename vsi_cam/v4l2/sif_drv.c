@@ -125,9 +125,7 @@ static int sif_enum_out_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 
 	*format = cam_format_to_pixelformat(sif->fmt_cap[index].format,
 					    sif->input_bayer_format);
-	if (!*format)
-		return -EINVAL;
-	return 0;
+	return *format ? 0 : -EINVAL;
 }
 
 static int sif_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -178,7 +176,48 @@ static int sif_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int sif_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	return -EINVAL;
+	struct sif_v4l_instance *ins = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_instance *sif;
+	struct sif_format_cap *cap = NULL;
+	struct cam_res_cap *res;
+	bool found = false;
+	u32 i, format;
+
+	if (fival->index > 0)
+		return -EINVAL;
+
+	sif = &ins->dev->insts[ins->id];
+
+	for (i = 0; i < ARRAY_SIZE(sif->fmt_cap); i++) {
+		format = cam_format_to_pixelformat
+				(sif->fmt_cap[i].format, sif->input_bayer_format);
+		if (format == fival->pixel_format) {
+			cap = &sif->fmt_cap[i];
+			break;
+		}
+	}
+
+	if (!cap)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
+		res = &cap->res[i];
+		if (res->type == CAP_DC) {
+			if (res->dc.width == fival->width &&
+			    res->dc.height == fival->height) {
+				found = true;
+				break;
+			}
+		}
+	}
+
+	if (!found)
+		return -EINVAL;
+
+	fival->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fival->discrete.numerator = ins->out_fps.numerator;
+	fival->discrete.denominator = ins->out_fps.denominator;
+	return 0;
 }
 
 static void sif_set_cap(struct v4l2_buf_ctx *ctx)
@@ -269,12 +308,18 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 static int sif_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct sif_v4l_instance *ins = sd_to_sif_v4l_instance(sd);
+
+	fiv->interval = ins->out_fps;
 	return 0;
 }
 
 static int sif_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct sif_v4l_instance *ins = sd_to_sif_v4l_instance(sd);
+
+	fiv->interval = ins->out_fps;
 	return 0;
 }
 
@@ -496,6 +541,8 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		inst->dev = &v4l_dev->sif_dev;
 		inst->en_post = true;
 		refcount_set(&inst->start_refcnt, REFCNT_INIT_VAL);
+		inst->out_fps.numerator = 30;
+		inst->out_fps.denominator = 1;
 
 		n->async_bound = sif_async_bound;
 

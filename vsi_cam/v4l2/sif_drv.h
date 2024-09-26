@@ -12,6 +12,7 @@ struct sif_v4l_instance {
 	struct sif_device *dev;
 	struct cam_ctx buf_ctx;
 	struct v4l2_subdev_format out_fmt;
+	struct v4l2_fract out_fps;
 	u32 out_pixelformat;
 	u32 id;
 	int enabled;

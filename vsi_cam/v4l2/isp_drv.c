@@ -24,6 +24,9 @@
 	container_of(sn, struct isp_v4l_instance, node); \
 })
 
+static char input_fmt_str[16];
+module_param_string(input_fmt, input_fmt_str, 16, 0644);
+
 static int isp_link_setup(struct media_entity *entity,
 			  const struct media_pad *local,
 			  const struct media_pad *remote, u32 flags)
@@ -165,9 +168,7 @@ static int isp_enum_out_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 
 	*format = cam_format_to_pixelformat
 			(isp->fmt_cap[index].format, isp->input_bayer_format);
-	if (!*format)
-		return -EINVAL;
-	return 0;
+	return *format ? 0 : -EINVAL;
 }
 
 static int isp_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -218,7 +219,48 @@ static int isp_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int isp_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	return -EINVAL;
+	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_instance *isp;
+	struct isp_format_cap *cap = NULL;
+	struct cam_res_cap *res;
+	bool found = false;
+	u32 i, format;
+
+	if (fival->index > 0)
+		return -EINVAL;
+
+	isp = &inst->dev->insts[inst->id];
+
+	for (i = 0; i < ARRAY_SIZE(isp->fmt_cap); i++) {
+		format = cam_format_to_pixelformat
+				(isp->fmt_cap[i].format, isp->input_bayer_format);
+		if (format == fival->pixel_format) {
+			cap = &isp->fmt_cap[i];
+			break;
+		}
+	}
+
+	if (!cap)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
+		res = &cap->res[i];
+		if (res->type == CAP_DC) {
+			if (res->dc.width == fival->width &&
+			    res->dc.height == fival->height) {
+				found = true;
+				break;
+			}
+		}
+	}
+
+	if (!found)
+		return -EINVAL;
+
+	fival->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fival->discrete.numerator = inst->out_fps.numerator;
+	fival->discrete.denominator = inst->out_fps.denominator;
+	return 0;
 }
 
 static void isp_set_cap(struct v4l2_buf_ctx *ctx)
@@ -297,11 +339,9 @@ static struct cam_buf_ops isp_buf_ops = {
 
 static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
 {
-	struct v4l2_ext_control *ext_ctrl;
-
-	ext_ctrl = (struct v4l2_ext_control *)arg;
-
+	struct v4l2_ext_control *ext_ctrl = (struct v4l2_ext_control *)arg;
 	u32 size = 0;
+
 	switch (ext_ctrl->id) {
 		case V4L2_CID_DR_EXPOSURE:
 			size = sizeof(hbn_isp_exposure_attr_t);
@@ -310,7 +350,7 @@ static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
 			size = sizeof(hbn_isp_awb_attr_t);
 			break;
 		default:
-			return -1;
+			return -EINVAL;
 	}
 	return isp_set_subctrl(isp->dev, isp->id, ext_ctrl->id,
 				       (void *)ext_ctrl->ptr, size);
@@ -318,11 +358,9 @@ static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
 
 static int isp_g_ctrl(struct isp_v4l_instance *isp, void *arg)
 {
-	struct v4l2_ext_control *ext_ctrl;
-
-	ext_ctrl = (struct v4l2_ext_control *)arg;
-
+	struct v4l2_ext_control *ext_ctrl = (struct v4l2_ext_control *)arg;
 	u32 size = 0;
+
 	switch (ext_ctrl->id) {
 		case V4L2_CID_DR_EXPOSURE:
 			size = sizeof(hbn_isp_exposure_attr_t);
@@ -331,7 +369,7 @@ static int isp_g_ctrl(struct isp_v4l_instance *isp, void *arg)
 			size = sizeof(hbn_isp_awb_attr_t);
 			break;
 		default:
-			return -1;
+			return -EINVAL;
 	}
 	return isp_get_subctrl(isp->dev, isp->id, ext_ctrl->id,
 				       (void *)ext_ctrl->ptr, size);
@@ -404,9 +442,9 @@ static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			}
 			break;
 		default:
+			rc = -EINVAL;
 			break;
 	}
-
 	return rc;
 }
 
@@ -452,13 +490,43 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 static int isp_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct isp_v4l_instance *ins = sd_to_isp_v4l_instance(sd);
+
+	fiv->interval = ins->out_fps;
 	return 0;
 }
 
 static int isp_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct isp_v4l_instance *ins = sd_to_isp_v4l_instance(sd);
+
+	fiv->interval = ins->out_fps;
 	return 0;
+}
+
+static int check_input_fmt_param(enum cam_format_type *fmt)
+{
+	size_t len = strlen(input_fmt_str);
+	int rc = 0;
+
+	if (!len)
+		return -EINVAL;
+
+	if (input_fmt_str[len - 1] == '\n')
+		input_fmt_str[len - 1] = 0;
+	if (!strcmp(input_fmt_str, "raw8"))
+		*fmt = CAM_FMT_RAW8;
+	else if (!strcmp(input_fmt_str, "raw10"))
+		*fmt = CAM_FMT_RAW10;
+	else if (!strcmp(input_fmt_str, "raw12"))
+		*fmt = CAM_FMT_RAW12;
+	else if (!strcmp(input_fmt_str, "raw16"))
+		*fmt = CAM_FMT_RAW16;
+	else
+		rc = -EINVAL;
+	pr_info("got input format from param: %s\n", input_fmt_str);
+	return rc;
 }
 
 static int isp_set_fmt(struct v4l2_subdev *sd,
@@ -485,15 +553,24 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	isp = &inst->dev->insts[inst->id];
-	for (i = 0; i < ARRAY_SIZE(in_fmt_preferred_list); i++) {
-		f.ifmt.format    = in_fmt_preferred_list[i];
-		s_f.format.code = cam_format_to_mbus_code(f.ifmt.format, isp->input_bayer_format);
-
+	rc = check_input_fmt_param(&f.ifmt.format);
+	if (!rc) {
+		s_f.format.code = cam_format_to_mbus_code
+				(f.ifmt.format, isp->input_bayer_format);
 		rc = subdev_set_fmt(sd, state, &s_f);
-		if (!rc)
-			break;
-		if (rc < 0 && rc != -EINVAL)
+		if (rc < 0)
 			return rc;
+	} else {
+		for (i = 0; i < ARRAY_SIZE(in_fmt_preferred_list); i++) {
+			f.ifmt.format = in_fmt_preferred_list[i];
+			s_f.format.code = cam_format_to_mbus_code
+					(f.ifmt.format, isp->input_bayer_format);
+			rc = subdev_set_fmt(sd, state, &s_f);
+			if (!rc)
+				break;
+			if (rc < 0 && rc != -EINVAL)
+				return rc;
+		}
 	}
 
 	switch (f.ifmt.format) {
@@ -539,7 +616,8 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	memset(&in, 0, sizeof(in));
 	in.index = inst->id;
 	in.type = CAM_INPUT_SENSOR;
-	snprintf(in.sens.name, sizeof(in.sens.name), "%s_%dx%d_tuning.json", sen_ctrl.ctrl_data, f.ifmt.width, f.ifmt.height);
+	snprintf(in.sens.name, sizeof(in.sens.name), "%s_%dx%d_tuning.json",
+		 sen_ctrl.ctrl_data, f.ifmt.width, f.ifmt.height);
 	return isp_set_input(inst->dev, inst->id, &in);
 }
 
@@ -705,6 +783,8 @@ static int isp_v4l_probe(struct platform_device *pdev)
 
 		inst->id = i;
 		inst->dev = &v4l_dev->isp_dev;
+		inst->out_fps.numerator = 30;
+		inst->out_fps.denominator = 1;
 
 		n->async_bound = isp_async_bound;
 

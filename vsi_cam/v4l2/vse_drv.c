@@ -283,9 +283,7 @@ static int vse_enum_out_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 		return -EINVAL;
 
 	*format = cam_format_to_pixelformat(vse->fmt_cap[index].format, 0);
-	if (!*format)
-		return -EINVAL;
-	return 0;
+	return *format ? 0 : -EINVAL;
 }
 
 static int vse_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -348,7 +346,56 @@ static int vse_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int vse_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	return -EINVAL;
+	struct vse_v4l_instance *ins = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_instance *vse;
+	struct vse_format_cap *cap = NULL;
+	struct cam_res_cap *res;
+	bool found = false;
+	u32 i, format;
+
+	if (fival->index > 0)
+		return -EINVAL;
+
+	vse = &ins->dev->insts[ins->id];
+
+	for (i = 0; i < ARRAY_SIZE(vse->fmt_cap); i++) {
+		format = cam_format_to_pixelformat(vse->fmt_cap[i].format, 0);
+		if (format == fival->pixel_format) {
+			cap = &vse->fmt_cap[i];
+			break;
+		}
+	}
+
+	if (!cap)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(cap->res[pad]); i++) {
+		res = &cap->res[pad][i];
+		if (res->type == CAP_SW) {
+			int diff;
+
+			if (fival->width > res->sw.max_width)
+				continue;
+			if (fival->height > res->sw.max_height)
+				continue;
+			diff = fival->width - res->sw.min_width;
+			if (diff % res->sw.step_width)
+				continue;
+			diff = fival->height - res->sw.min_height;
+			if (diff % res->sw.step_height)
+				continue;
+			found = true;
+			break;
+		}
+	}
+
+	if (!found)
+		return -EINVAL;
+
+	fival->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fival->discrete.numerator = ins->out_fps[pad].numerator;
+	fival->discrete.denominator = ins->out_fps[pad].denominator;
+	return 0;
 }
 
 static void vse_set_cap(struct v4l2_buf_ctx *ctx)
@@ -365,7 +412,7 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 	cap = &ins->fmt_cap[0];
 	cap->format = support_fmt;
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		cap->res[i][0].type           = CAP_SW;
 		cap->res[i][0].sw.min_width   = 64;
 		cap->res[i][0].sw.min_height  = 64;
@@ -383,14 +430,8 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 	cap->res[3][0].sw.max_height = 720;
 	cap->res[4][0].sw.max_width  = 1280;
 	cap->res[4][0].sw.max_height = 720;
-
-	cap->res[5][0].type           = CAP_SW;
-	cap->res[5][0].sw.min_width   = 64;
-	cap->res[5][0].sw.min_height  = 64;
-	cap->res[5][0].sw.max_width   = 4096;
-	cap->res[5][0].sw.max_height  = 3076;
-	cap->res[5][0].sw.step_width  = 2;
-	cap->res[5][0].sw.step_height = 2;
+	cap->res[5][0].sw.max_width  = 4096;
+	cap->res[5][0].sw.max_height = 3076;
 }
 
 static void fill_irq_ctx(struct vse_v4l_instance *vse, struct vse_irq_ctx *ctx)
@@ -498,12 +539,22 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 static int vse_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct vse_v4l_instance *ins = sd_to_vse_v4l_instance(sd);
+
+	if (fiv->pad >= VSE_OUT_CHNL_MAX)
+		return -EINVAL;
+	fiv->interval = ins->out_fps[fiv->pad];
 	return 0;
 }
 
 static int vse_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct vse_v4l_instance *ins = sd_to_vse_v4l_instance(sd);
+
+	if (fiv->pad >= VSE_OUT_CHNL_MAX)
+		return -EINVAL;
+	fiv->interval = ins->out_fps[fiv->pad];
 	return 0;
 }
 
@@ -941,6 +992,10 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		inst->id = i;
 		inst->dev = &v4l_dev->vse_dev;
 		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
+		for (j = 0; j < VSE_OUT_CHNL_MAX; j++) {
+			inst->out_fps[j].numerator = 30;
+			inst->out_fps[j].denominator = 1;
+		}
 
 		n->async_bound = vse_async_bound;
 

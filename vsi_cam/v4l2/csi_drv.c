@@ -322,7 +322,7 @@ static int csi_s_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 		}
 		i++;
 	}
-	return -1;
+	return -EINVAL;
 }
 
 static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
@@ -471,7 +471,7 @@ static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			rc = csi_query_sensor_ctrl(rsd, arg);
 			break;
 		default:
-			rc = -1;
+			rc = -EINVAL;
 			break;
 	}
 
