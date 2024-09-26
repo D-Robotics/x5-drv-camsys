@@ -281,6 +281,12 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		frame_done(inst, !!(mis1 & 0x5));
 		spin_unlock_irqrestore(&inst->lock, flags);
 
+		msg.inst = -1;
+		msg.channel = -1;
+		msg.irq.num = VSE_MI_MIS;
+		msg.irq.stat = mis;
+		vse_post(vse, &msg, false);
+
 		ctx = get_next_irq_ctx(vse);
 		if (!ctx) {
 			vse->is_completed = true;
@@ -310,12 +316,6 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}
-
-		msg.inst = -1;
-		msg.channel = -1;
-		msg.irq.num = VSE_MI_MIS;
-		msg.irq.stat = mis;
-		vse_post(vse, &msg, false);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;
