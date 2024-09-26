@@ -488,20 +488,22 @@ int vse_wake_up(struct vse_device *vse, u32 inst)
 {
 	struct vse_irq_ctx *ctx;
 	unsigned long flags;
-	int rc;
+	int rc = 0;
 
 	spin_lock_irqsave(&vse->err_lock, flags);
 	if (vse->error) {
 		rc = _add_job(vse, inst);
 		if (rc < 0)
-			return rc;
+			goto _exit;
 
 		ctx = get_next_irq_ctx(vse);
 		if (ctx)
 			vse_set_cmd(vse, vse->next_irq_ctx);
 	}
+
+_exit:
 	spin_unlock_irqrestore(&vse->err_lock, flags);
-	return 0;
+	return rc;
 }
 
 static void vse_bound(struct isc_handle *isc, void *arg)
