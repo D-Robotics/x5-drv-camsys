@@ -456,8 +456,8 @@ int32_t camera_i2c_write(struct sensor_device_s *sen, uint32_t reg_addr, uint32_
 
 	osal_mutex_lock(&mdev->bus_mutex);
 	client = mdev->client;
-	if (client == NULL) {
-		sen_err(dev, "%s i2c%d@0x%02x W 0x%04x[%d]: 0x%02x 0x%02x%s client NULL error\n",
+	if (client == NULL || !virt_addr_valid(client->adapter)) {
+		sen_err(dev, "%s i2c%d@0x%02x W 0x%04x[%d]: 0x%02x 0x%02x%s client error\n",
 			sensor_name, bus, sensor_addr, reg_addr, count,
 			buf[0], (count > 1) ? buf[1] : 0, (count > 2) ? " ..." : "");
 		osal_mutex_unlock(&mdev->bus_mutex);
