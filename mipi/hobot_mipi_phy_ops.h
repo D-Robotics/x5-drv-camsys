@@ -292,6 +292,8 @@ static inline uint8_t TESTCODE_LSBS_BYTE(uint16_t t) {
 	return (uint8_t)((t) & TESTCODE_BYTE_MASK);
 }
 
+#define MIPI_HOST_CFGCLK_DEFAULT   (0x1C)
+
 /* run params */
 struct mipi_phy_param_s {
 	/* type must be: uint32_t */

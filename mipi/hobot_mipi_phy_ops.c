@@ -529,6 +529,11 @@ int32_t mipi_host_dphy_set_source(const void __iomem *iomem)
 {
 	struct mipi_phy_s *phy = mipi_dphy_get_phy(MIPI_DPHY_TYPE_HOST, iomem);
 	uint16_t rxclk_rxhs_feed_int_clk = 0;
+	uint16_t port = (phy != NULL) ? (phy->sub.port) : 0;
+
+	if (port == 1 || port == 3)
+		return 0;
+
 	if(phy != NULL) {
 		rxclk_rxhs_feed_int_clk = mipi_host_dphy_testdata_read(phy, iomem, REGS_RX_CLKLANE_LANE_6);
 		//rxclk_rxhs_feed_int_clk_ovr_en_rw set 1 - bit5
@@ -586,6 +591,7 @@ int32_t mipi_host_dphy_initialize(uint16_t mipiclk, uint16_t lane, uint16_t sett
 		mipi_host_dphy_testdata(phy, iomem, REGS_RX_STARTUP_OVR_4, RX_CLK_SETTLE);
 		mipi_host_dphy_testdata(phy, iomem, REGS_RX_STARTUP_OVR_17, RX_HS_SETTLE(settle));
 	}
+
 	/*Configure the D-PHY frequency range*/
 #ifdef X5_CHIP
        (void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, port,
@@ -628,6 +634,12 @@ int32_t mipi_host_dphy_initialize(uint16_t mipiclk, uint16_t lane, uint16_t sett
 			mipi_host_dphy_initialize_1p3(phy, iomem, osc_freq_low, osc_freq_high);
 		}
 	}
+
+	(void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, port,
+		MIPI_CFG_CLK_FREQRANGE, MIPI_HOST_CFGCLK_DEFAULT);
+
+	(void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, port,
+		MIPI_PHY_ENABLE_CLK, 0x1);
 
 	/* record host */
 	if (phy != NULL) {
@@ -1955,6 +1967,7 @@ static int32_t x5sys_mipi_set_cfg(int32_t type, int32_t port, int32_t region, in
 	struct mipi_dphy_s *dphy = &g_pdev->dphy;
 	void __iomem *iomem = dphy->iomem;
 	struct os_dev *dev = &g_pdev->osdev;
+	struct mipi_phy_param_s *param = &g_pdev->dphy.param;
 	mipi_flags_t flags;
 	int32_t ret = 0;
 	uint32_t reg, val = 0U;
@@ -2025,7 +2038,7 @@ static int32_t x5sys_mipi_set_cfg(int32_t type, int32_t port, int32_t region, in
 		ret = -1;
 	}
 
-	mipi_info(dev, "set mipi%s%d freq region %d range %x, reg=0x%x,val=0x%x, %d\n",
+	mipi_dbg(param, dev, "set mipi%s%d freq region %d range %x, reg=0x%x,val=0x%x, %d\n",
 			g_mp_type[type], port, region, value, reg, val, ret);
 	return ret;
 }
@@ -2081,6 +2094,7 @@ static int32_t x5sys_mipi_get_lanemode(int32_t type, int32_t port)
 	struct mipi_dphy_s *dphy = &g_pdev->dphy;
 	void __iomem *iomem = dphy->iomem;
 	struct os_dev *dev = &g_pdev->osdev;
+	struct mipi_phy_param_s *param = &g_pdev->dphy.param;
 	mipi_flags_t flags;
 	uint32_t reg, val = 0U;
 	int32_t ret;
@@ -2111,7 +2125,7 @@ static int32_t x5sys_mipi_get_lanemode(int32_t type, int32_t port)
 		ret = -1;
 	}
 
-	mipi_info(dev, "get mipi%s%d lanemode 0x%x = %d\n",
+	mipi_dbg(param, dev, "get mipi%s%d lanemode 0x%x = %d\n",
 			g_mp_type[type], port, val, ret);
 	return ret;
 }
@@ -2121,6 +2135,7 @@ static int32_t x5sys_mipi_set_lanemode(int32_t type, int32_t port, int32_t lanem
 	struct mipi_dphy_s *dphy = &g_pdev->dphy;
 	void __iomem *iomem = dphy->iomem;
 	struct os_dev *dev = &g_pdev->osdev;
+	struct mipi_phy_param_s *param = &g_pdev->dphy.param;
 	mipi_flags_t flags;
 	int32_t ret = 0;
 	uint32_t reg, val = 0U;
@@ -2152,7 +2167,7 @@ static int32_t x5sys_mipi_set_lanemode(int32_t type, int32_t port, int32_t lanem
 		ret = -1;
 	}
 
-	mipi_info(dev, "set mipi%s%d lanemode %d, regv 0x%x, %d\n",
+	mipi_dbg(param, dev, "set mipi%s%d lanemode %d, regv 0x%x, %d\n",
 			g_mp_type[type], port, lanemode, val, ret);
 	return ret;
 }

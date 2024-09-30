@@ -251,7 +251,6 @@ static inline int32_t MIPI_HOST_PORT_FOR_CIMDMA(int32_t port) {
 #define MIPI_HOST_HBPTIME_MAX	   (0xfffU)
 #define MIPI_HOST_HSATIME_MIN	   (0x01U)
 #define MIPI_HOST_HSATIME_MAX	   (0xfffU)
-#define MIPI_HOST_CFGCLK_DEFAULT   (0x1C)
 #define MIPI_HOST_IPI1_SOFTRSTN	   ((uint32_t)(0x01UL << 0))
 #define MIPI_HOST_IPI2_SOFTRSTN	   ((uint32_t)(0x01UL << 4))
 #define MIPI_HOST_IPI3_SOFTRSTN	   ((uint32_t)(0x01UL << 8))
