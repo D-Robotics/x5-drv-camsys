@@ -993,8 +993,10 @@ void cim_sw_rst(struct j6_cim_dev *cim)
  * @callergraph
  * @design
  */
-static void cim_device_close(struct j6_cim_dev *cim, u32 rst_en)
+static void cim_device_close(struct j6_cim_dev *cim, u32 rst_en, u32 ipi_channel)
 {
+	u32 i;
+
 	osal_mutex_lock(&cim->mlock);
 	if (osal_atomic_dec_return(&cim->open_cnt) == 0) {
 		osal_clear_bit((s32)CIM_OTF_INPUT, &cim->state);
@@ -1005,10 +1007,10 @@ static void cim_device_close(struct j6_cim_dev *cim, u32 rst_en)
 
 		if (rst_en == 1) {
 			cim_sw_rst(cim);
-			sif_reset(&cim->sif);
 		}
 		cim_set_clk_enable(0);
-		sif_runtime_suspend(cim->sif.dev);
+		for (i = 0; i < cim->sif.ipi_channel_num; i++)
+			sif_close(&cim->sif, ipi_channel + i);
 	}
 	osal_mutex_unlock(&cim->mlock);
 }
@@ -1034,6 +1036,7 @@ s32 cim_open(struct vio_video_ctx *vctx)
 	s32 ret = 0, i;
 	struct j6_cim_dev *cim;
 	struct j6_vin_node_dev *vin_node_dev;
+	u32 ipi_channel = 0; /*WARN: ipi_channel cannot be acquired here for open*/
 
 	vin_node_dev = (struct j6_vin_node_dev *)vctx->device;
 	cim = cim_get_dev(vin_node_dev->hw_id);
@@ -1042,11 +1045,10 @@ s32 cim_open(struct vio_video_ctx *vctx)
 	osal_mutex_lock(&cim->mlock);
 	if (osal_atomic_inc_return(&cim->open_cnt) == 1) {
 		cim_set_clk_enable(1);
-		sif_runtime_resume(cim->sif.dev);
-		if (rst_en == 1) {
+		sif_open(&cim->sif, ipi_channel);
+
+		if (rst_en == 1)
 			cim_sw_rst(cim);
-			sif_reset(&cim->sif);
-		}
 		// cim_set_ipis_enable(cim->base_reg, 0);
 
 		for (i = 0; i < CIM_IPI_MAX_NUM; i++) {
@@ -1089,15 +1091,23 @@ s32 cim_close(struct vio_video_ctx *vctx, u32 rst_en)
 {
 	struct j6_cim_dev *cim;
 	struct vio_subdev *vdev;
+	struct vin_node_subdev *subdev;
 	struct vio_node *vnode;
 	struct j6_vin_node_dev *vin_node_dev;
+	struct vin_cim_private_s *cim_priv_attr;
+	u32 ipi_channel;
 
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
 	vin_node_dev = (struct j6_vin_node_dev *)vctx->device;
 	cim = cim_get_dev(vin_node_dev->hw_id);
+	subdev = container_of(vdev, struct vin_node_subdev,
+			      vdev); /*PRQA S 2810,0497*/
+	cim_priv_attr = cim_get_priv_by_subdev(subdev);
+	ipi_channel = cim_priv_attr->ipi_index;
+
 	if (vctx->state & BIT(VIO_VIDEO_OPEN)) {
-		cim_device_close(cim, rst_en);
+		cim_device_close(cim, rst_en, ipi_channel);
 		return 0;
 	}
 
@@ -1107,7 +1117,7 @@ s32 cim_close(struct vio_video_ctx *vctx, u32 rst_en)
 		cim_subdev_stop(vctx);
 	}
 	cim_subdev_close(vdev);
-	cim_device_close(cim, rst_en);
+	cim_device_close(cim, rst_en, ipi_channel);
 
 	vctx->state = BIT(VIO_VIDEO_CLOSE);
 

@@ -18,6 +18,9 @@
 
 #include "sif.h"
 
+static refcount_t sif_pm = REFCOUNT_INIT(REFCNT_INIT_VAL);
+static DEFINE_MUTEX(sif_pm_lock);
+
 void sif_post(struct sif_device *sif, void *msg, u32 len)
 {
 	struct isc_post_param param = {
@@ -790,41 +793,57 @@ int sif_runtime_suspend(struct device *dev)
 {
 	struct sif_device *sif = dev_get_drvdata(dev);
 	struct sif_instance *ins;
-	int inst;
+	int inst, rc = 0;
 
 	if (!sif)
 		return -EINVAL;
 
-	for (inst = 0; inst < sif->num_insts; inst++) {
-		ins = &sif->insts[inst];
-		if (ins->state == CAM_STATE_STARTED)
-			return -EBUSY;
+	mutex_lock(&sif_pm_lock);
+	if (refcount_read(&sif_pm) <= REFCNT_INIT_VAL)
+		goto _exit;
+	refcount_dec(&sif_pm);
+	if (refcount_read(&sif_pm) == REFCNT_INIT_VAL) {
+		for (inst = 0; inst < sif->num_insts; inst++) {
+			ins = &sif->insts[inst];
+			if (ins->state == CAM_STATE_STARTED) {
+				rc = -EBUSY;
+				goto _exit;
+			}
+		}
+		if (sif->axi)
+			clk_disable_unprepare(sif->axi);
+		if (sif->pclk)
+			clk_disable_unprepare(sif->pclk);
 	}
-
-	if (sif->axi)
-		clk_disable_unprepare(sif->axi);
-	if (sif->pclk)
-		clk_disable_unprepare(sif->pclk);
-	return 0;
+_exit:
+	mutex_unlock(&sif_pm_lock);
+	return rc;
 }
 
 int sif_runtime_resume(struct device *dev)
 {
 	struct sif_device *sif = dev_get_drvdata(dev);
-	int rc;
+	int rc = 0;
 
-	if (sif->axi) {
-		rc = clk_prepare_enable(sif->axi);
-		if (rc)
-			return rc;
-	}
-	if (sif->pclk) {
-		rc = clk_prepare_enable(sif->pclk);
-		if (rc) {
-			clk_disable_unprepare(sif->axi);
-			return rc;
+	mutex_lock(&sif_pm_lock);
+	if (refcount_read(&sif_pm) == REFCNT_INIT_VAL) {
+		if (sif->axi) {
+			rc = clk_prepare_enable(sif->axi);
+			if (rc)
+				goto _exit;
+		}
+		if (sif->pclk) {
+			rc = clk_prepare_enable(sif->pclk);
+			if (rc) {
+				clk_disable_unprepare(sif->axi);
+				goto _exit;
+			}
 		}
 	}
-	return 0;
+	refcount_inc(&sif_pm);
+_exit:
+	mutex_unlock(&sif_pm_lock);
+
+	return rc;
 }
 #endif
