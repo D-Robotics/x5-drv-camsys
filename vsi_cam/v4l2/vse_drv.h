@@ -16,10 +16,13 @@ struct vse_v4l_instance {
 	struct cam_format ifmt;
 	struct v4l2_fract out_fps[VSE_OUT_CHNL_MAX];
 	bool fmt_changed;
-	refcount_t state_count;
 	u32 out_pixelformat;
 	unsigned long capture_queue_offset;
 	u32 id;
+	struct mutex open_lock;
+	struct mutex fmt_lock;
+	refcount_t state_count;
+	refcount_t open_count;
 };
 
 struct vse_v4l_device {

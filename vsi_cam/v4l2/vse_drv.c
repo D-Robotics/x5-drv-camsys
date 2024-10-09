@@ -657,7 +657,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	struct vse_fps_rate fps;
 	int channel = -1;
 	int hfactor = 1, vfactor = 1;
-	int rc;
+	int rc = 0;
 
 	if (fmt->pad < inst->node.num_pads)
 		channel = get_channel_index(inst, fmt->pad);
@@ -676,6 +676,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	f.width = iress[scene].width;
 	f.height = iress[scene].height;
 	f.stride = ALIGN(f.width, STRIDE_ALIGN);
+	mutex_lock(&inst->fmt_lock);
 	if (!inst->fmt_changed || memcmp(&f, &inst->ifmt, sizeof(f))) {
 		struct vse_msg msg;
 
@@ -683,7 +684,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		s_f.format.height = f.height;
 		rc = subdev_set_fmt(sd, state, &s_f);
 		if (rc < 0)
-			return rc;
+			goto _exit;
 
 		msg.id = CAM_MSG_STATE_CHANGED;
 		msg.inst = inst->id;
@@ -693,7 +694,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 
 		rc = vse_set_iformat(inst->dev, inst->id, &f);
 		if (rc < 0)
-			return rc;
+			goto _exit;
 		memcpy(&inst->ifmt, &f, sizeof(f));
 		inst->fmt_changed = true;
 	}
@@ -713,14 +714,14 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		f.format = mbus_code_to_cam_format(fmt->format.code);
 	rc = vse_set_oformat(inst->dev, inst->id, channel, &f, &crop, true);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
 	fps.src = vse_get_sensor_fps(sd);
 	fps.dst = fps.src;
 	rc = vse_set_fps_rate(inst->dev, inst->id, channel, &fps);
 	if (rc < 0) {
 		pr_err("vse_set_fps_dst_rate failed");
-		return rc;
+		goto _exit;
 	}
 #if 0
 	if (!stitch[channel].enabled)
@@ -738,7 +739,9 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		}
 	}
 #endif
-	return 0;
+_exit:
+	mutex_unlock(&inst->fmt_lock);
+	return rc;
 }
 
 static int vse_get_fmt(struct v4l2_subdev *sd,
@@ -1038,35 +1041,55 @@ static const struct v4l2_subdev_ops vse_subdev_ops = {
 static int vse_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
-	int rc;
+	int rc = 0;
+
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
+		refcount_inc(&inst->open_count);
+		goto _exit;
+	}
+	refcount_inc(&inst->open_count);
 
 	rc = subdev_open(sd);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
-	return vse_open(inst->dev, inst->id);
+	rc = vse_open(inst->dev, inst->id);
+
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
 }
 
 static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
-	int rc;
+	int rc = 0;
+
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		refcount_dec(&inst->open_count);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		goto _exit;
 
 	rc = subdev_close(sd);
 	if (rc < 0) {
 		pr_err("%s failed to call subdev_close (err=%d)\n", __func__, rc);
-		return rc;
+		goto _exit;
 	}
 
 	rc = vse_close(inst->dev, inst->id);
 	if (rc < 0) {
 		pr_err("%s failed to call vse_close (err=%d)\n", __func__, rc);
-		return rc;
+		goto _exit;
 	}
 
 	memset(&inst->ifmt, 0, sizeof(inst->ifmt));
 	inst->out_pixelformat = 0;
-	return 0;
+
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
 }
 
 static const struct v4l2_subdev_internal_ops vse_internal_ops = {
@@ -1153,7 +1176,10 @@ static int vse_v4l_probe(struct platform_device *pdev)
 
 		inst->id = i;
 		inst->dev = &v4l_dev->vse_dev;
+		mutex_init(&inst->open_lock);
+		mutex_init(&inst->fmt_lock);
 		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
+		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 		for (j = 0; j < VSE_OUT_CHNL_MAX; j++) {
 			inst->out_fps[j].numerator = 30;
 			inst->out_fps[j].denominator = 1;

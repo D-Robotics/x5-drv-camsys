@@ -496,29 +496,42 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 	int rc;
 
 	if (enable) {
+		if (refcount_read(&isp->start_count) > REFCNT_INIT_VAL) {
+			refcount_inc(&isp->start_count);
+			return 0;
+		}
+
+		refcount_inc(&isp->start_count);
+
 		if (!isp->node.bctx.is_sink_online_mode)
 			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
 		else
 			isp_set_input_select(isp->dev, isp->id, isp->id, 0);  //FIXME
-	} else {
-		rc = subdev_set_stream(sd, enable);
+		rc = isp_set_state(isp->dev, isp->id, enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED);
 		if (rc < 0)
 			return rc;
-	}
 
-	rc = isp_set_state(isp->dev, isp->id, enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED);
-	if (rc < 0)
-		return rc;
-
-	if (enable) {
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
 	} else {
+		if (refcount_read(&isp->start_count) > REFCNT_INIT_VAL)
+			refcount_dec(&isp->start_count);
+		if (refcount_read(&isp->start_count) > REFCNT_INIT_VAL)
+			return 0;
+
+		rc = subdev_set_stream(sd, enable);
+		if (rc < 0)
+			return rc;
+
+		rc = isp_set_state(isp->dev, isp->id, enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED);
+		if (rc < 0)
+			return rc;
 		if (!isp->node.bctx.is_sink_online_mode)
 			cam_reqbufs(&isp->sink_ctx, 0, NULL);
 		else
 			isp_set_stream_idx(isp->dev, isp->id, -1);
+		isp->fmt_changed = false;
 	}
 	return 0;
 }
@@ -576,7 +589,9 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	enum cam_format_type in_fmt_preferred_list[] = {
 		CAM_FMT_RAW8, CAM_FMT_RAW10, CAM_FMT_RAW12
 	};
-	int rc, i;
+	struct isp_ctrl sen_ctrl = {0};
+	struct cam_input in;
+	int i, rc = 0;
 
 	memset(&f, 0, sizeof(f));
 
@@ -585,17 +600,35 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	else
 		f.ofmt.format = mbus_code_to_cam_format(fmt->format.code);
 
-	if (f.ofmt.format != CAM_FMT_NV12)
-		return -EINVAL;
+	if (f.ofmt.format != CAM_FMT_NV12) {
+		rc = -EINVAL;
+		goto _exit;
+	}
+
+	rc = check_input_fmt_param(&f.ifmt.format);
+
+	f.ifmt.width  = fmt->format.width;
+	f.ifmt.height = fmt->format.height;
+	f.ofmt.width  = fmt->format.width;
+	f.ofmt.height = fmt->format.height;
+	f.ofmt.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
+
+	mutex_lock(&inst->fmt_lock);
+	if (rc < 0)
+		f.ifmt.format = inst->fmt.ifmt.format;
+	f.ifmt.stride = inst->fmt.ifmt.stride;
+	if (inst->fmt_changed && !memcmp(&f, &inst->fmt, sizeof(f))) {
+		rc = 0;
+		goto _exit;
+	}
 
 	isp = &inst->dev->insts[inst->id];
-	rc = check_input_fmt_param(&f.ifmt.format);
 	if (!rc) {
 		s_f.format.code = cam_format_to_mbus_code
 				(f.ifmt.format, isp->input_bayer_format);
 		rc = subdev_set_fmt(sd, state, &s_f);
 		if (rc < 0)
-			return rc;
+			goto _exit;
 	} else {
 		for (i = 0; i < ARRAY_SIZE(in_fmt_preferred_list); i++) {
 			f.ifmt.format = in_fmt_preferred_list[i];
@@ -605,7 +638,7 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 			if (!rc)
 				break;
 			if (rc < 0 && rc != -EINVAL)
-				return rc;
+				goto _exit;
 		}
 	}
 
@@ -634,27 +667,30 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	// FIXME
 	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED);
 
-	f.ifmt.width  = fmt->format.width;
-	f.ifmt.height = fmt->format.height;
-	f.ifmt.stride = ALIGN(f.ifmt.stride, STRIDE_ALIGN);
-	f.ofmt.width  = fmt->format.width;
-	f.ofmt.height = fmt->format.height;
-	f.ofmt.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
 	rc = isp_set_format(inst->dev, inst->id, &f);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
-	struct isp_ctrl sen_ctrl = {0};
 	sen_ctrl.ctrl_id = V4L2_CID_SENSOR_NAME;
-	v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &sen_ctrl);
+	rc = v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &sen_ctrl);
+	if (rc < 0)
+		goto _exit;
 
-	struct cam_input in;
 	memset(&in, 0, sizeof(in));
 	in.index = inst->id;
 	in.type = CAM_INPUT_SENSOR;
 	snprintf(in.sens.name, sizeof(in.sens.name), "%s_%dx%d_tuning.json",
 		 sen_ctrl.ctrl_data, f.ifmt.width, f.ifmt.height);
-	return isp_set_input(inst->dev, inst->id, &in);
+	rc = isp_set_input(inst->dev, inst->id, &in);
+	if (rc < 0)
+		goto _exit;
+
+	inst->fmt = f;
+	inst->fmt_changed = true;
+
+_exit:
+	mutex_unlock(&inst->fmt_lock);
+	return rc;
 }
 
 static int isp_get_fmt(struct v4l2_subdev *sd,
@@ -718,11 +754,21 @@ static int isp_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	struct isp_v4l_instance *inst = sd_to_isp_v4l_instance(sd);
 	int rc;
 
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
+		refcount_inc(&inst->open_count);
+		goto _exit;
+	}
+	refcount_inc(&inst->open_count);
+
 	rc = subdev_open(sd);
 	if (rc < 0)
-		return rc;
+		goto _exit;
+	rc = isp_open(inst->dev, inst->id);
 
-	return isp_open(inst->dev, inst->id);
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
 }
 
 static int isp_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
@@ -730,11 +776,20 @@ static int isp_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	struct isp_v4l_instance *inst = sd_to_isp_v4l_instance(sd);
 	int rc;
 
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		refcount_dec(&inst->open_count);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		goto _exit;
+
 	rc = subdev_close(sd);
 	if (rc < 0)
-		return rc;
+		goto _exit;
+	rc = isp_close(inst->dev, inst->id);
 
-	return isp_close(inst->dev, inst->id);
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
 }
 
 static const struct v4l2_subdev_internal_ops isp_internal_ops = {
@@ -823,6 +878,11 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		inst->dev = &v4l_dev->isp_dev;
 		inst->out_fps.numerator = 30;
 		inst->out_fps.denominator = 1;
+
+		mutex_init(&inst->open_lock);
+		mutex_init(&inst->fmt_lock);
+		refcount_set(&inst->start_count, REFCNT_INIT_VAL);
+		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 
 		n->async_bound = isp_async_bound;
 

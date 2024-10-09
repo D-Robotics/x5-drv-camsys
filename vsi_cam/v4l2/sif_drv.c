@@ -283,6 +283,8 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 			if (rc < 0)
 				return rc;
+
+			inst->fmt_changed = false;
 		}
 	} else {
 		if (inst->buf_ctx.pad) {
@@ -330,28 +332,34 @@ static int sif_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	struct sif_instance *sif;
 	struct cam_format f;
 	struct v4l2_subdev_format senfmt;
-	int rc;
+	int rc = 0;
 
 	memcpy(&senfmt, fmt, sizeof(senfmt));
 	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1_5X8)
 		senfmt.format.code = MEDIA_BUS_FMT_YUYV8_1X16;
 
-	rc = subdev_set_fmt(sd, state, &senfmt);
-	if (rc < 0)
-		return rc;
-
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		return 0;
-
+	memset(&f, 0, sizeof(f));
 	f.width = fmt->format.width;
 	f.height = fmt->format.height;
 	f.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
+
 	if (senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
 		f.format = pixelformat_to_cam_format(V4L2_PIX_FMT_NV16);
 	else if (inst->out_pixelformat)
 		f.format = pixelformat_to_cam_format(inst->out_pixelformat);
 	else
 		f.format = mbus_code_to_cam_format(fmt->format.code);
+
+	mutex_lock(&inst->fmt_lock);
+	if (inst->fmt_changed && !memcmp(&f, &inst->fmt, sizeof(f)))
+		goto _exit;
+
+	rc = subdev_set_fmt(sd, state, &senfmt);
+	if (rc < 0)
+		goto _exit;
+
+	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
+		goto _exit;
 
 	inst->dev->ipi_base = inst->id;
 	inst->dev->ipi_channel_num = 1;
@@ -364,18 +372,19 @@ static int sif_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post,
 			    BOTH_CHANNEL);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
-	inst->out_fmt = *fmt;
-	return 0;
+	inst->fmt = f;
+	inst->fmt_changed = true;
+
+_exit:
+	mutex_unlock(&inst->fmt_lock);
+	return rc;
 }
 
 static int sif_get_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 		       struct v4l2_subdev_format *fmt)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
-
-	*fmt = inst->out_fmt;
 	return 0;
 }
 
@@ -436,26 +445,47 @@ static const struct v4l2_subdev_ops sif_subdev_ops = {
 static int sif_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
-	int rc;
+	int rc = 0;
+
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
+		refcount_inc(&inst->open_count);
+		goto _exit;
+	}
+	refcount_inc(&inst->open_count);
 
 	rc = subdev_open(sd);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
-	return sif_open(inst->dev, inst->id);
+	rc = sif_open(inst->dev, inst->id);
+
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
 }
 
 static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
-	int rc;
+	int rc = 0;
+
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		refcount_dec(&inst->open_count);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		goto _exit;
 
 	rc = subdev_close(sd);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
 	inst->out_pixelformat = 0;
-	return sif_close(inst->dev, inst->id);
+	rc = sif_close(inst->dev, inst->id);
+
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
 }
 
 static const struct v4l2_subdev_internal_ops sif_internal_ops = {
@@ -540,9 +570,13 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		inst->id = i;
 		inst->dev = &v4l_dev->sif_dev;
 		inst->en_post = true;
-		refcount_set(&inst->start_refcnt, REFCNT_INIT_VAL);
 		inst->out_fps.numerator = 30;
 		inst->out_fps.denominator = 1;
+
+		mutex_init(&inst->open_lock);
+		mutex_init(&inst->fmt_lock);
+		refcount_set(&inst->start_refcnt, REFCNT_INIT_VAL);
+		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 
 		n->async_bound = sif_async_bound;
 
