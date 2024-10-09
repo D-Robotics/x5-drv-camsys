@@ -98,6 +98,7 @@ static s32 handle_get_vi_info(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_instance *ins;
+	u32 i;
 
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
@@ -105,8 +106,11 @@ static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 	ins = &isp->insts[msg->inst];
 
 	memset(&msg->frame_info, 0, sizeof(msg->frame_info));
-	isp_update_frame_info(&msg->frame_info, ins->ctx.src_ctx);
 
+	if (has_offline(ins->ctx.is_src_online_mode)) {
+		i = get_offline(ins->ctx.is_src_online_mode);
+		isp_update_frame_info(&msg->frame_info, ins->ctx.src_ctx[i]);
+	}
 	return 0;
 }
 
@@ -273,18 +277,26 @@ static inline void frame_done(struct isp_instance *inst, bool timeout, u32 mode,
 	node = list_first_entry_or_null(ctx->src_buf_list3,
 					struct cam_list_node, entry);
 	if (node) {
-		if (cam_get_frame_status(ctx->src_ctx) || timeout) {
-			cam_drop_irq(ctx->src_ctx, node->data);
+		u32 i;
+		struct cam_ctx *src_ctx = NULL;
+
+		if (has_offline(ctx->is_src_online_mode)) {
+			i = get_offline(ctx->is_src_online_mode);
+			src_ctx = ctx->src_ctx[i];
+		}
+
+		if (cam_get_frame_status(src_ctx) || timeout) {
+			cam_drop_irq(src_ctx, node->data);
 		} else {
 			if (ctx->is_sink_online_mode) {
 				if (mode == ISP_STRM_MODE)
-					sif_get_frame_des(ctx->src_ctx);
+					sif_get_frame_des(src_ctx);
 				else
-					cam_update_frame_info(ctx->src_ctx, info);
+					cam_update_frame_info(src_ctx, info);
 			}
-			cam_qbuf_irq(ctx->src_ctx, node->data, true);
+			cam_qbuf_irq(src_ctx, node->data, true);
 		}
-		cam_set_frame_status(ctx->src_ctx, NO_ERR);
+		cam_set_frame_status(src_ctx, NO_ERR);
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
 	}
@@ -346,10 +358,11 @@ int new_frame(struct isp_irq_ctx *ctx)
 		}
 	}
 
-	if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
+	if (has_offline(ctx->is_src_online_mode)) {
 		struct cam_list_node *node;
+		u32 i = get_offline(ctx->is_src_online_mode);
 
-		buf = cam_dqbuf_irq(ctx->src_ctx, true);
+		buf = cam_dqbuf_irq(ctx->src_ctx[i], true);
 		if (!buf)
 			return -ENOMEM;
 		node = list_first_entry_or_null(ctx->src_buf_list1,
@@ -611,8 +624,10 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 		if (isp_mis & BIT(1))
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);
 		if (isp_mis & (BIT(2) | BIT(3))) {
-			if (isp_mis & BIT(3))
-				cam_set_frame_status(ins->ctx.src_ctx, VSIZE_ERR);
+			if (isp_mis & BIT(3) && has_offline(ins->ctx.is_src_online_mode)) {
+				i = get_offline(ins->ctx.is_src_online_mode);
+				cam_set_frame_status(ins->ctx.src_ctx[i], VSIZE_ERR);
+			}
 		}
 		if (isp_mis) {
 			msg.irq.num = ISP_IRQ_MIS;

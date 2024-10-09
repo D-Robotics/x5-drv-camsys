@@ -15,6 +15,7 @@
 #define ISP_SINK_ONLINE_PATH_MAX  (4)
 #define ISP_SINK_OFFLINE_PATH_MAX (2)
 #define ISP_SINK_PATH_MAX (ISP_SINK_ONLINE_PATH_MAX + ISP_SINK_OFFLINE_PATH_MAX)
+#define ISP_OUT_CHNL_MAX (2)
 #define SRC_BUF_NUM (16)
 #define MCM_BUF_NUM (4)
 #define HDR_BUF_NUM (2)
@@ -35,10 +36,26 @@
 #define ISP_MIS_FRAME_END (0x1 << 2)
 #define ISP_SW_FRAME_DONE (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END)
 
+union u32_byte_map {
+	u32 v;
+	u8 b[4];
+};
+
+#define set_online(x, n)    (x).b[n] = 0
+#define set_offline(x, n)   (x).b[n] = 1
+#define is_online(x, n)     (!(x).b[n])
+#define is_offline(x, n)    ((x).b[n])
+#define has_offline(x)      ((x).v)
+#define get_offline(x)      (((x).v & 1) + \
+                            (((x).v >> 8) & 1) * 2 + \
+                            (((x).v >> 16) & 1) * 3 + \
+                            (((x).v >> 24) & 1) * 4 - 1)
+
 struct isp_irq_ctx {
-	bool is_sink_online_mode, is_src_online_mode, ddr_en;
+	bool is_sink_online_mode;
+	union u32_byte_map is_src_online_mode;
 	struct cam_buf *sink_buf, *src_buf;
-	struct cam_ctx *sink_ctx, *src_ctx, *stat_ctx;
+	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *stat_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
 };
 
@@ -134,7 +151,6 @@ struct isp_device {
 };
 
 void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr);
-void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr);
 void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam_format *fmt);
 int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync);
 int isp_post_ex(struct isp_device *isp, struct isp_msg *msg,
@@ -148,6 +164,7 @@ int isp_set_iformat(struct isp_device *isp, u32 inst, struct cam_format *fmt, st
 int isp_set_oformat(struct isp_device *isp, u32 inst, struct cam_format *fmt);
 int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt);
 int isp_set_state(struct isp_device *isp, u32 inst, int state);
+int isp_get_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx);
 int isp_add_job(struct isp_device *isp, u32 inst);

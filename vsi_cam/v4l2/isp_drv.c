@@ -27,6 +27,16 @@
 static char input_fmt_str[16];
 module_param_string(input_fmt, input_fmt_str, 16, 0644);
 
+static int get_src_pad_index(struct isp_v4l_instance *isp, u32 pad)
+{
+	int i;
+
+	for (i = 0; i < ISP_OUT_CHNL_MAX; i++)
+		if (isp->src_pads[i] && isp->src_pads[i]->index == pad)
+			return i;
+	return -1;
+}
+
 static int isp_link_setup(struct media_entity *entity,
 			  const struct media_pad *local,
 			  const struct media_pad *remote, u32 flags)
@@ -36,8 +46,8 @@ static int isp_link_setup(struct media_entity *entity,
 	struct media_pad *pad;
 	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
-	int rc = 0;
-	bool has_internal_buf = false;
+	int index, rc = 0;
+	bool has_internal_buf = false, online;
 
 	if (!entity)
 		return -EINVAL;
@@ -60,15 +70,23 @@ static int isp_link_setup(struct media_entity *entity,
 			if (lctx->is_sink_online_mode)
 				return 0;
 			has_internal_buf = !lctx->is_sink_online_mode;
+			online = lctx->is_sink_online_mode;
 		} else {
 			lctx->is_src_online_mode = rctx->is_sink_online_mode;
+			online = rctx->is_sink_online_mode;
 		}
+	} else {
+		online = false;
 	}
 
-	if (local->flags & MEDIA_PAD_FL_SINK)
+	if (local->flags & MEDIA_PAD_FL_SINK) {
 		buf_ctx = &isp->sink_ctx;
-	else
-		buf_ctx = &isp->src_ctx;
+	} else {
+		index = get_src_pad_index(isp, local->index);
+		if (index < 0)
+			return -EINVAL;
+		buf_ctx = &isp->src_ctx[index];
+	}
 
 	if (flags & MEDIA_LNK_FL_ENABLED) {
 		if (buf_ctx->pad)
@@ -78,6 +96,7 @@ static int isp_link_setup(struct media_entity *entity,
 				      has_internal_buf);
 		if (rc < 0)
 			return rc;
+		buf_ctx->online = online;
 	} else {
 		cam_ctx_release(buf_ctx);
 	}
@@ -298,17 +317,6 @@ static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 	}
 }
 
-static void fill_irq_ctx(struct isp_v4l_instance *isp, struct isp_irq_ctx *ctx)
-{
-	memset(ctx, 0, sizeof(*ctx));
-	ctx->is_sink_online_mode = isp->node.bctx.is_sink_online_mode;
-	ctx->is_src_online_mode = isp->node.bctx.is_src_online_mode;
-	if (isp->sink_ctx.pad)
-		ctx->sink_ctx = &isp->sink_ctx;
-	if (isp->src_ctx.pad)
-		ctx->src_ctx = &isp->src_ctx;
-}
-
 static int isp_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
@@ -447,10 +455,44 @@ static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	return rc;
 }
 
+static void fill_irq_ctx(struct isp_v4l_instance *isp, u32 i, int enable,
+			 struct isp_irq_ctx *ctx)
+{
+	ctx->is_sink_online_mode = isp->node.bctx.is_sink_online_mode;
+	if (isp->sink_ctx.pad)
+		ctx->sink_ctx = &isp->sink_ctx;
+	if (isp->src_ctx[i].pad) {
+		if (enable) {
+			ctx->src_ctx[i] = &isp->src_ctx[i];
+			if (isp->src_ctx[i].online)
+				set_online(ctx->is_src_online_mode, i);
+			else
+				set_offline(ctx->is_src_online_mode, i);
+		} else {
+			ctx->src_ctx[i] = NULL;
+			set_online(ctx->is_src_online_mode, i); /* set back to default */
+		}
+	}
+}
+
+static int isp_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
+{
+	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_irq_ctx irq_ctx;
+	int index = get_src_pad_index(isp, pad);
+
+	if (pad >= isp->node.num_pads || index < 0)
+		return -EINVAL;
+
+	isp_get_ctx(isp->dev, isp->id, &irq_ctx);
+	fill_irq_ctx(isp, index, enable, &irq_ctx);
+	isp_set_ctx(isp->dev, isp->id, &irq_ctx);
+	return 0;
+}
+
 static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
-	struct isp_irq_ctx ctx;
 	int rc;
 
 	if (enable) {
@@ -458,8 +500,6 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
 		else
 			isp_set_input_select(isp->dev, isp->id, isp->id, 0);  //FIXME
-		fill_irq_ctx(isp, &ctx);
-		isp_set_ctx(isp->dev, isp->id, &ctx);
 	} else {
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
@@ -475,9 +515,6 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 	} else {
-		memset(&ctx, 0, sizeof(ctx));
-		isp_set_ctx(isp->dev, isp->id, &ctx);
-
 		if (!isp->node.bctx.is_sink_online_mode)
 			cam_reqbufs(&isp->sink_ctx, 0, NULL);
 		else
@@ -719,7 +756,7 @@ static int isp_async_bound(struct subdev_node *sn)
 			container_of(sn, struct isp_v4l_instance, node);
 	struct isp_v4l_instance *ins;
 	struct isp_v4l_device *v4l_dev;
-	u32 i = 0, j = 0;
+	u32 i = 0, j;
 	int rc;
 
 	if (unlikely(!sn))
@@ -730,7 +767,8 @@ static int isp_async_bound(struct subdev_node *sn)
 	while (i < isp->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
 		cam_ctx_release(&ins->sink_ctx);
-		cam_ctx_release(&ins->src_ctx);
+		for (j = 0; j < ISP_OUT_CHNL_MAX; j++)
+			cam_ctx_release(&ins->src_ctx[j]);
 
 		if (ins != isp) {
 			rc = v4l2_device_register_subdev
@@ -743,6 +781,7 @@ static int isp_async_bound(struct subdev_node *sn)
 	return 0;
 
 _err:
+	j = 0;
 	while (j < i) {
 		ins = &v4l_dev->insts[j];
 
@@ -796,6 +835,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = isp_enum_out_format;
 		n->bctx.enum_framesize = isp_enum_out_framesize;
 		n->bctx.enum_frameinterval = isp_enum_out_frameinterval;
+		n->bctx.set_stream = isp_set_stream;
 		n->bctx.set_cap = isp_set_cap;
 
 		n->dev = dev;
@@ -813,8 +853,11 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->pads[0].flags = MEDIA_PAD_FL_SINK;
 		n->pads[1].flags =
 				MEDIA_PAD_FL_SOURCE | MEDIA_PAD_FL_MUST_CONNECT;
-		if (i < ISP_SINK_ONLINE_PATH_MAX)
+		inst->src_pads[0] = &n->pads[1];
+		if (i < ISP_SINK_ONLINE_PATH_MAX) {
 			n->pads[2].flags = MEDIA_PAD_FL_SOURCE;
+			inst->src_pads[1] = &n->pads[2];
+		}
 
 		rc = subdev_init(n, ISP_DEV_NAME, v4l_dev->isp_dev.id,
 				 i, &isp_subdev_ops, &isp_media_ops);
@@ -863,13 +906,14 @@ static int isp_v4l_remove(struct platform_device *pdev)
 	struct isp_v4l_device *v4l_dev =
 			container_of(isp_dev, struct isp_v4l_device, isp_dev);
 	int rc;
-	u32 i;
+	u32 i, j;
 
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
 
 	for (i = 0; i < v4l_dev->isp_dev.num_insts; i++) {
 		cam_ctx_release(&v4l_dev->insts[i].sink_ctx);
-		cam_ctx_release(&v4l_dev->insts[i].src_ctx);
+		for (j = 0; j < ISP_OUT_CHNL_MAX; j++)
+			cam_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}
 

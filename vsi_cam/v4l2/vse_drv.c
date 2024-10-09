@@ -71,13 +71,12 @@ static struct ires {
 	container_of(sn, struct vse_v4l_instance, node); \
 })
 
-static int get_channel_index(struct vse_v4l_instance *vse,
-			     const struct media_pad *pad)
+static int get_channel_index(struct vse_v4l_instance *vse, u32 pad)
 {
 	int i;
 
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++)
-		if (vse->src_pads[i] == pad)
+		if (vse->src_pads[i] && vse->src_pads[i]->index == pad)
 			return i;
 	return -1;
 }
@@ -122,7 +121,7 @@ static int vse_link_setup(struct media_entity *entity,
 	if (local->flags & MEDIA_PAD_FL_SINK) {
 		buf_ctx = &vse->sink_ctx;
 	} else {
-		index = get_channel_index(vse, local);
+		index = get_channel_index(vse, local->index);
 		if (index < 0)
 			return -EINVAL;
 		buf_ctx = &vse->src_ctx[index];
@@ -304,7 +303,7 @@ static int vse_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	u32 i, format;
 
 	if (pad < inst->node.num_pads)
-		channel = get_channel_index(inst, &inst->node.pads[pad]);
+		channel = get_channel_index(inst, pad);
 
 	if (channel < 0)
 		return -EINVAL;
@@ -498,21 +497,6 @@ static bool vse_is_standalone(struct v4l2_buf_ctx *ctx)
 	return true;
 }
 
-static void fill_irq_ctx(struct vse_v4l_instance *vse, struct vse_irq_ctx *ctx)
-{
-	u32 i;
-
-	memset(ctx, 0, sizeof(*ctx));
-	ctx->is_sink_online_mode = vse->node.bctx.is_sink_online_mode;
-	if (vse->sink_ctx.pad)
-		ctx->sink_ctx = &vse->sink_ctx;
-	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-		if (vse->src_ctx[i].pad)
-			ctx->src_ctx[i] = &vse->src_ctx[i];
-		// ctx->stitches[i] = stitches[scene][i];
-	}
-}
-
 static int vse_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
@@ -541,10 +525,44 @@ static struct cam_buf_ops vse_buf_ops = {
 	.queue_setup = vse_queue_setup,
 };
 
+static void fill_irq_ctx(struct vse_v4l_instance *vse, u32 i, int enable,
+			 struct vse_irq_ctx *ctx)
+{
+	ctx->is_sink_online_mode = vse->node.bctx.is_sink_online_mode;
+	if (vse->sink_ctx.pad)
+		ctx->sink_ctx = &vse->sink_ctx;
+	if (vse->src_ctx[i].pad) {
+		if (enable) {
+			ctx->src_ctx[i] = &vse->src_ctx[i];
+			// ctx->stitches[i] = stitches[scene][i];
+		} else {
+			ctx->src_ctx[i] = NULL;
+		}
+	}
+}
+
+static int vse_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
+{
+	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_irq_ctx irq_ctx;
+	int index;
+
+	if (pad >= vse->node.num_pads)
+		return -EINVAL;
+
+	index = get_channel_index(vse, pad);
+	if (index < 0)
+		return -EINVAL;
+
+	vse_get_ctx(vse->dev, vse->id, &irq_ctx);
+	fill_irq_ctx(vse, index, enable, &irq_ctx);
+	vse_set_ctx(vse->dev, vse->id, &irq_ctx);
+	return 0;
+}
+
 static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
-	struct vse_irq_ctx ctx;
 	int rc;
 
 	if (enable) {
@@ -564,8 +582,8 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 			return rc;
 		}
 
-		fill_irq_ctx(vse, &ctx);
-		vse_set_ctx(vse->dev, vse->id, &ctx);
+		if (!vse->node.bctx.is_sink_online_mode)
+			cam_reqbufs(&vse->sink_ctx, 4, &vse_buf_ops);
 
 		rc = vse_set_state(vse->dev, vse->id, enable);
 		if (rc < 0)
@@ -584,8 +602,6 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 
-		memset(&ctx, 0, sizeof(ctx));
-		vse_set_ctx(vse->dev, vse->id, &ctx);
 		if (!vse->node.bctx.is_sink_online_mode)
 			cam_reqbufs(&vse->sink_ctx, 0, NULL);
 
@@ -644,7 +660,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	int rc;
 
 	if (fmt->pad < inst->node.num_pads)
-		channel = get_channel_index(inst, &inst->node.pads[fmt->pad]);
+		channel = get_channel_index(inst, fmt->pad);
 
 	if (channel < 0)
 		return -EINVAL;
@@ -672,7 +688,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		msg.id = CAM_MSG_STATE_CHANGED;
 		msg.inst = inst->id;
 		msg.state = CAM_STATE_INITED;
-		pr_info("%s set vse state to INITED\n", __func__);
+		pr_debug("%s set vse state to INITED\n", __func__);
 		vse_post(inst->dev, &msg, true);
 
 		rc = vse_set_iformat(inst->dev, inst->id, &f);
@@ -785,7 +801,7 @@ static int vse_s_attr(struct vse_v4l_instance *inst, void *arg)
 	cam_ext_ctrl = (struct cam_v4l2_ext_control *)arg;
 
 	if (cam_ext_ctrl->pad < inst->node.num_pads)
-		chnl = get_channel_index(inst, &inst->node.pads[cam_ext_ctrl->pad]);
+		chnl = get_channel_index(inst, cam_ext_ctrl->pad);
 
 	rc = copy_from_user(&vse_attr, cam_ext_ctrl->controls->ptr, sizeof(vse_attr));
 	if (rc < 0)
@@ -827,7 +843,7 @@ static int vse_g_attr(struct vse_v4l_instance *inst, void *arg)
 	cam_ext_ctrl = (struct cam_v4l2_ext_control *)arg;
 
 	if (cam_ext_ctrl->pad < inst->node.num_pads)
-		chnl = get_channel_index(inst, &inst->node.pads[cam_ext_ctrl->pad]);
+		chnl = get_channel_index(inst, cam_ext_ctrl->pad);
 
 	if (chnl < 0)
 		return -EINVAL;
@@ -1156,6 +1172,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = vse_enum_out_format;
 		n->bctx.enum_framesize = vse_enum_out_framesize;
 		n->bctx.enum_frameinterval = vse_enum_out_frameinterval;
+		n->bctx.set_stream = vse_set_stream;
 		n->bctx.set_cap = vse_set_cap;
 		n->bctx.init_output_ctx = vse_init_output_ctx;
 		n->bctx.is_standalone = vse_is_standalone;

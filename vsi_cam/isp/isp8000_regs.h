@@ -58,7 +58,6 @@
 #define MI_MCMn_RAW_ADDR(__base)    ((__base) + 0x00)
 #define MI_MCMn_RAW_SIZE(__base)    ((__base) + 0x04)
 #define MI_MCMn_RAW_OFFS(__base)    ((__base) + 0x08)
-#define MI_MCM_RDMA_START           (0x0000166c)
 #define MI_MCM_CTRL                 (0x00001600)
 #define MI_MCM_G2_CTRL              (0x00005000)
 

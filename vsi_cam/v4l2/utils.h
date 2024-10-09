@@ -34,11 +34,13 @@ struct cam_buf {
 
 struct cam_ctx {
 	struct media_pad *pad;
+	bool online;
 	enum cam_frame_status status;
 	void *priv;
 };
 
 struct v4l2_buf_ctx {
+	u32 magic;
 	bool is_sink_online_mode, is_src_online_mode;
 	u32 (*get_format)(struct v4l2_buf_ctx *ctx);
 	int (*set_format)(struct v4l2_buf_ctx *ctx, u32 format, bool is_try);
@@ -47,6 +49,7 @@ struct v4l2_buf_ctx {
 			      struct v4l2_frmsizeenum *fsize);
 	int (*enum_frameinterval)(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmivalenum *fival);
+	int (*set_stream)(struct v4l2_buf_ctx *ctx, u32 pad, int enable);
 	void (*ready)(struct v4l2_buf_ctx *ctx, u32 pad, int on);
 	int (*qbuf)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
 	int (*drop)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);

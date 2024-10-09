@@ -121,7 +121,7 @@ int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_t
 int vse_set_hist_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_hist_info info[VSE_HIST_MAX]);
 int vse_set_bin_level(struct vse_device *vse, u32 inst, u32 chnl, u8 bin_level[BIN_LEVEL_NUM]);
 int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id);
-int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx);
+int vse_get_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_add_job(struct vse_device *vse, u32 inst);
 int vse_wake_up(struct vse_device *vse, u32 inst);

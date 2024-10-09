@@ -8,7 +8,8 @@
 struct isp_v4l_instance {
 	struct subdev_node node;
 	struct isp_device *dev;
-	struct cam_ctx sink_ctx, src_ctx;
+	struct cam_ctx sink_ctx, src_ctx[ISP_OUT_CHNL_MAX];
+	struct media_pad *src_pads[ISP_OUT_CHNL_MAX];
 	struct v4l2_fract out_fps;
 	u32 out_pixelformat;
 	u32 id;

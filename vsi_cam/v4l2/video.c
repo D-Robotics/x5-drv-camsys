@@ -344,9 +344,15 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_buf_ctx *ctx;
 	int rc;
 
 	vdev->buf_sequence = 0;
+	ctx = v4l2_get_subdevdata(sd);
+	if (ctx && ctx->set_stream)
+		ctx->set_stream(ctx, pad->index, 1);
+
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
 	if (rc < 0)
 		return rc;
@@ -361,11 +367,17 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_buf_ctx *ctx;
 	int rc;
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 0);
 	if (rc < 0)
 		return;
+
+	ctx = v4l2_get_subdevdata(sd);
+	if (ctx && ctx->set_stream)
+		ctx->set_stream(ctx, pad->index, 0);
 
 	notify_buf_ready(vdev, 0);
 

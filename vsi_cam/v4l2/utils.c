@@ -9,6 +9,9 @@
 #include "sif.h"
 #include "sif_drv.h"
 
+#define BCTX_MAGIC         (0x12345678)
+#define is_v4l2_buf_ctx(x) ((x) && (x)->magic == BCTX_MAGIC)
+
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 		const struct v4l2_subdev_ops *ops,
 		const struct media_entity_operations *mops)
@@ -37,6 +40,7 @@ int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 	}
 
 	sd->fwnode = of_fwnode_handle(n->dev->of_node);
+	n->bctx.magic = BCTX_MAGIC;
 	return 0;
 }
 
@@ -83,6 +87,7 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 	struct media_entity *ent;
 	struct media_pad *pad;
 	struct v4l2_subdev *rsd;
+	struct v4l2_buf_ctx *ctx;
 	u16 i = 0;
 	int rc;
 
@@ -99,9 +104,17 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 				continue;
 			}
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			ctx = v4l2_get_subdevdata(rsd);
+
+			if (enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream)
+				ctx->set_stream(ctx, pad->index, 1);
+
 			rc = v4l2_subdev_call(rsd, video, s_stream, enable);
 			if (rc < 0)
 				return rc;
+
+			if (!enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream)
+				ctx->set_stream(ctx, pad->index, 0);
 		}
 		i++;
 	}

@@ -426,24 +426,6 @@ static inline void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path,
 	isp_write(isp, MI_MCMn_RAW_OFFS(base), 0x0);
 }
 
-void isp_set_rdma_buffer(struct isp_device *isp, phys_addr_t rdma_addr)
-{
-	u32 mcm_mi_ctrl;
-	u32 mi_ctrl;
-
-	isp_write(isp, MI_MCM_RDMA_START, rdma_addr);
-
-	mcm_mi_ctrl = isp_read(isp, MI_MCM_CTRL);
-	mcm_mi_ctrl |= BIT(6);
-	isp_write(isp, MI_MCM_CTRL, mcm_mi_ctrl); /* force update */
-
-	mi_ctrl = isp_read(isp, MIV2_CTRL);
-	mi_ctrl |= BIT(15);
-	isp_write(isp, MIV2_CTRL, mi_ctrl); /* start rdma */
-
-	dev_dbg(isp->dev, "rdma_addr %llu\n", rdma_addr);
-}
-
 static inline void isp_set_hdr_raw_buffer(struct isp_device *isp, u32 n,
 					  phys_addr_t phys_addr, struct cam_format *fmt)
 {
@@ -530,7 +512,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 				rc = -ENOMEM;
 				goto _exit;
 			} else {
-				if (!ctx->is_src_online_mode || ctx->ddr_en) {
+				if (has_offline(ctx->is_src_online_mode)) {
 					node = list_first_entry_or_null(ctx->src_buf_list2,
 									struct cam_list_node, entry);
 					if (!node) {
@@ -568,7 +550,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 				rc = -ENOMEM;
 				goto _exit;
 			} else {
-				if (!ctx->is_src_online_mode || ctx->ddr_en) {
+				if (has_offline(ctx->is_src_online_mode)) {
 					node = list_first_entry_or_null(ctx->src_buf_list2,
 									struct cam_list_node, entry);
 					if (!node) {
@@ -656,9 +638,13 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 
 		refcount_inc(&isp->set_state_refcnt);
 		//trigger vse
-		if (ins->ctx.is_src_online_mode && isp->mode == ISP_STRM_MODE) {
-			pr_debug("%s isp%d trigger vse...\n", __func__, inst);
-			cam_trigger(ins->ctx.src_ctx);
+		if (isp->mode == ISP_STRM_MODE) {
+			for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
+				if (is_online(ins->ctx.is_src_online_mode, i)) {
+					pr_debug("%s isp%d trigger vse...\n", __func__, inst);
+					cam_trigger(ins->ctx.src_ctx[i]);
+				}
+			}
 		}
 		break;
 	case CAM_STATE_STOPPED:
@@ -705,7 +691,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 			}
 			ins->tile_count = 0;
 		} else {
-			if (!ctx->is_src_online_mode || ctx->ddr_en) {
+			if (has_offline(ctx->is_src_online_mode)) {
 				if (ins->src_node)
 					isp_set_mp_buffer(isp, get_phys_addr(ins->src_node->data, 0),
 							  &ins->fmt.ofmt);
@@ -719,6 +705,24 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 _exit:
 	mutex_unlock(&isp->set_state_lock);
 	return rc;
+}
+
+int isp_get_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx)
+{
+	struct isp_instance *ins;
+	unsigned long flags;
+
+	if (!isp || !ctx)
+		return -EINVAL;
+
+	if (inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[inst];
+	spin_lock_irqsave(&ins->lock, flags);
+	*ctx = ins->ctx;
+	spin_unlock_irqrestore(&ins->lock, flags);
+	return 0;
 }
 
 int isp_set_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx)
@@ -900,7 +904,7 @@ static int isp_set_schedule_online_stream(struct isp_device *isp, bool isp_irq_c
 	ctx = &ins->ctx;
 	rc = new_frame(ctx);
 	spin_unlock_irqrestore(&ins->lock, flags);
-	if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
+	if (has_offline(ctx->is_src_online_mode)) {
 		if (!rc)
 			ins->shd_src_node = ins->src_node;
 		// if shd_src_node failed to update (there is no more mp buffer), use
@@ -939,7 +943,7 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 	struct isp_instance *ins;
 	struct cam_list_node *node = NULL;
 	struct ibuf *mcm_ib = NULL;
-	u32 inst;
+	u32 i, inst;
 	int rc = 0;
 
 	if (!isp || !sch)
@@ -950,7 +954,7 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 	ctx = &ins->ctx;
 	mcm_ib = list_first_entry_or_null(&isp->ibm[inst].list2, struct ibuf, entry);
 	if (mcm_ib) {
-		if (ctx->src_ctx && (!ctx->is_src_online_mode || ctx->ddr_en)) {
+		if (has_offline(ctx->is_src_online_mode)) {
 			node = list_first_entry_or_null(ctx->src_buf_list2, struct cam_list_node,
 							entry);
 			if (node) {
@@ -985,8 +989,10 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 		return -EFAULT;
 	}
 
-	if (ins->ctx.is_src_online_mode)
-		cam_trigger(ins->ctx.src_ctx);
+	for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
+		if (is_online(ins->ctx.is_src_online_mode, i))
+			cam_trigger(ins->ctx.src_ctx[i]);
+	}
 
 	isp->error = 0;
 	isp->sch.next_mi_inst = inst;
@@ -1009,7 +1015,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 	struct cam_list_node *node = NULL;
 	struct isp_msg msg;
 	int rc = 0;
-	u32 inst;
+	u32 i, inst;
 
 	if (!isp || !sch)
 		return -EINVAL;
@@ -1023,7 +1029,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 			return -1;
 	}
 
-	if ((!ctx->is_src_online_mode || ctx->ddr_en) && ctx->src_ctx) {
+	if (has_offline(ctx->is_src_online_mode)) {
 		node = list_first_entry_or_null(ctx->src_buf_list2, struct cam_list_node,
 						entry);
 		if (!node)
@@ -1035,7 +1041,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 			pr_debug("%s: isp list_add_tail src_buf_list3\n", __func__);
 			list_del(&node->entry);
 			list_add_tail(&node->entry, ctx->src_buf_list3);
-		} else if (ctx->is_src_online_mode) {
+		} else if (!has_offline(ctx->is_src_online_mode)) {
 			sch->mp_buf.mem.addr = 0;
 		} else {
 			pr_err("%s: invalid node!\n", __func__);
@@ -1052,8 +1058,10 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 		sch->tile_en = ins->tile_en ? 1 : 0;
 		sch->online_mcm = ins->online_mcm;
 
-		if (ctx->is_src_online_mode)
-			cam_trigger(ctx->src_ctx);
+		for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
+			if (is_online(ctx->is_src_online_mode, i))
+				cam_trigger(ctx->src_ctx[i]);
+		}
 
 		isp->error = 0;
 		isp->sch.next_mi_inst = sch->id;

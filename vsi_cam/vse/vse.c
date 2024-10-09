@@ -413,17 +413,20 @@ int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id)
 	return 0;
 }
 
-int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx)
+int vse_get_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx)
 {
 	struct vse_instance *ins;
 	unsigned long flags;
 
-	if (!vse || inst >= vse->num_insts || chnl >= VSE_OUT_CHNL_MAX)
+	if (!vse || !ctx)
+		return -EINVAL;
+
+	if (inst >= vse->num_insts)
 		return -EINVAL;
 
 	ins = &vse->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
-	ins->ctx.src_ctx[chnl] = ctx;
+	*ctx = ins->ctx;
 	spin_unlock_irqrestore(&ins->lock, flags);
 	return 0;
 }
