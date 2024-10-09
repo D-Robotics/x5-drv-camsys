@@ -296,17 +296,15 @@ static int csi_s_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 			ctrl = (struct sen_ctrl *)arg;
 			if (v4l2_ctrl_sensor_need_off_auto(ctrl->ctrl_id, &auto_id, &auto_off)) {
 				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, auto_id);
-				if (!vctrl) {
-					pr_debug("%s ctrl 0x%x not found\n", __func__, ctrl->ctrl_id);
-					return -EINVAL;
+				if (vctrl) {
+					if (vctrl->flags & V4L2_CTRL_FLAG_READ_ONLY) {
+						pr_debug("%s ctrl 0x%x is read only\n", __func__, ctrl->ctrl_id);
+						return -EINVAL;
+					}
+					rc = v4l2_ctrl_s_ctrl(vctrl, auto_off);
+					if (rc < 0)
+						return rc;
 				}
-				if (vctrl->flags & V4L2_CTRL_FLAG_READ_ONLY) {
-					pr_debug("%s ctrl 0x%x is read only\n", __func__, ctrl->ctrl_id);
-					return -EINVAL;
-				}
-				rc = v4l2_ctrl_s_ctrl(vctrl, auto_off);
-				if (rc < 0)
-					return rc;
 			}
 			vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ctrl->ctrl_id);
 			if (!vctrl) {
@@ -471,7 +469,6 @@ static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			rc = csi_query_sensor_ctrl(rsd, arg);
 			break;
 		default:
-			rc = -EINVAL;
 			break;
 	}
 

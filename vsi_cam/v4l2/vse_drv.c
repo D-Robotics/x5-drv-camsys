@@ -45,11 +45,13 @@ static struct cam_rect *crops[] = {
 	cropsx,
 	cropsx,
 	cropsx,
+	cropsx,
 };
 
 static struct ires {
 	u16 width, height;
 } iress[] = {
+	{ 1920, 1080 },
 	{ 1920, 1080 },
 	{ 1920, 1080 },
 	{ 1920, 1080 },
@@ -438,6 +440,64 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 	cap->res[5][0].sw.max_height = 3076;
 }
 
+static int is_vse_sink_linked(struct v4l2_subdev *sd)
+{
+	struct media_entity *ent;
+	struct media_pad *pad;
+	u16 i = 0;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad)
+				return 0;
+			else
+				return 1;
+		}
+		i++;
+	}
+
+	return -EINVAL;
+}
+
+static int vse_init_output_ctx(struct v4l2_buf_ctx *ctx)
+{
+	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct v4l2_subdev *sd = &inst->node.sd;
+	struct cam_ctx * buf_ctx;
+	struct media_pad *pad;
+
+	if (inst->id < VSE_SINK_ONLINE_PATH_MAX)
+		return 0;
+
+	if (is_vse_sink_linked(sd))
+		return 0;
+
+	buf_ctx = &inst->sink_ctx;
+	pad = &inst->node.pads[0];
+
+	return cam_ctx_init(buf_ctx, sd->dev, (void *)pad, true);
+}
+
+static bool vse_is_standalone(struct v4l2_buf_ctx *ctx)
+{
+	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct v4l2_subdev *sd = &inst->node.sd;
+
+	if (inst->id < VSE_SINK_ONLINE_PATH_MAX)
+		return false;
+
+	if (is_vse_sink_linked(sd))
+		return false;
+
+	return true;
+}
+
 static void fill_irq_ctx(struct vse_v4l_instance *vse, struct vse_irq_ctx *ctx)
 {
 	u32 i;
@@ -503,9 +563,6 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 			pr_err("%s failed to call vse_set_source (rc=%d)!\n", __func__, rc);
 			return rc;
 		}
-
-		if (!vse->node.bctx.is_sink_online_mode)
-			cam_reqbufs(&vse->sink_ctx, 4, &vse_buf_ops);
 
 		fill_irq_ctx(vse, &ctx);
 		vse_set_ctx(vse->dev, vse->id, &ctx);
@@ -801,6 +858,76 @@ static int get_name_for_ext_ctrl(uint32_t id, char *name)
 	return 0;
 }
 
+static int vse_request_output_buffer(struct vse_v4l_instance *vse, void * arg)
+{
+	if (!vse->node.bctx.is_sink_online_mode) {
+		vse->capture_queue_offset = *(unsigned long *)arg;
+		return cam_reqbufs(&vse->sink_ctx, 4, &vse_buf_ops);
+	}
+
+	return 0;
+}
+
+static int vse_query_output_buffer(struct vse_v4l_instance *vse, void * arg)
+{
+	struct cam_buf *buf;
+	struct v4l2_buffer *v4l_buf = (struct v4l2_buffer *)arg;
+	int rc = 0;
+
+	if(!vse)
+		return -EINVAL;
+
+	buf = get_cam_buf_by_index(&vse->sink_ctx, v4l_buf->index);
+	v4l_buf->m.offset = buf->vb.vb2_buf.planes[0].m.offset + vse->capture_queue_offset;
+	v4l_buf->length =  buf->vb.vb2_buf.planes[0].length;
+
+	return rc;
+}
+
+static int vse_dq_output_buffer(struct vse_v4l_instance *vse, void *arg)
+{
+	struct cam_buf *buf;
+	struct v4l2_buffer *v4l_buf;
+
+	v4l_buf = (struct v4l2_buffer *)arg;
+	buf = vse_dqbuf(&vse->node.bctx);
+	if(!buf)
+		return -EINVAL;
+	v4l_buf->index = buf->vb.vb2_buf.index;
+
+	return 0;
+}
+
+static int vse_q_output_buffer(struct vse_v4l_instance *vse, void * arg)
+{
+	struct cam_buf *buf;
+	struct v4l2_buffer *v4l_buf = (struct v4l2_buffer *)arg;
+
+	if(!vse)
+		return -EINVAL;
+
+	buf = get_cam_buf_by_index(&vse->sink_ctx, v4l_buf->index);
+	if(!buf)
+		return -EINVAL;
+
+	return vse_qbuf(&vse->node.bctx, buf);
+}
+
+static int vse_mmap_output_buffer(struct vse_v4l_instance *vse, void * arg)
+{
+	struct cam_buf *buf;
+	struct vm_area_struct *vma = (struct vm_area_struct *)arg;
+
+	if(!vse)
+		return -EINVAL;
+
+	buf = get_cam_buf_by_index(&vse->sink_ctx, 0);
+	if(!buf)
+		return -EINVAL;
+
+	return vb2_mmap(buf->vb.vb2_buf.vb2_queue, vma);
+}
+
 static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
@@ -845,6 +972,21 @@ static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 				default:
 					return -EINVAL;
 			}
+			break;
+		case CAM_REQ_BUF:
+			rc = vse_request_output_buffer(vse, arg);
+			break;
+		case CAM_QUERY_BUF:
+			rc = vse_query_output_buffer(vse, arg);
+			break;
+		case CAM_DQ_BUF:
+			rc = vse_dq_output_buffer(vse, arg);
+			break;
+		case CAM_Q_BUF:
+			rc = vse_q_output_buffer(vse, arg);
+			break;
+		case CAM_MMAP:
+			rc = vse_mmap_output_buffer(vse, arg);
 			break;
 		default:
 			break;
@@ -1015,6 +1157,8 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_framesize = vse_enum_out_framesize;
 		n->bctx.enum_frameinterval = vse_enum_out_frameinterval;
 		n->bctx.set_cap = vse_set_cap;
+		n->bctx.init_output_ctx = vse_init_output_ctx;
+		n->bctx.is_standalone = vse_is_standalone;
 
 		n->dev = dev;
 		n->num_pads = VSE_OUT_CHNL_MAX + 1;

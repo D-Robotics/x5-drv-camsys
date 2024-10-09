@@ -44,6 +44,8 @@ int cam_drop_irq_ext(struct cam_ctx *ctx, struct cam_buf *buf);
 
 int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf);
 
+struct cam_buf *get_cam_buf_by_index(struct cam_ctx *ctx, uint32_t index);
+
 __weak int cam_ready(struct cam_ctx *ctx, int on);
 
 #endif /* _CAM_BUF_H_ */

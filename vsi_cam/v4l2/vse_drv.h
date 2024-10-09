@@ -18,6 +18,7 @@ struct vse_v4l_instance {
 	bool fmt_changed;
 	refcount_t state_count;
 	u32 out_pixelformat;
+	unsigned long capture_queue_offset;
 	u32 id;
 };
 

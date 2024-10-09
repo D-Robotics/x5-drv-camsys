@@ -501,3 +501,18 @@ int cam_ready(struct cam_ctx *ctx, int on)
 	vctx->ready(vctx, pad->index, on);
 	return 0;
 }
+
+struct cam_buf *get_cam_buf_by_index(struct cam_ctx *ctx, uint32_t index)
+{
+	struct cam_buf *buf;
+	struct vb2_buffer *vb2_buf;
+	struct local_buf_ctx *lbc;
+
+	if(!ctx || !ctx->priv)
+		return NULL;
+	lbc = (struct local_buf_ctx *)ctx->priv;
+	vb2_buf = lbc->queue.bufs[index];
+	buf = vb2_buf_to_cam_buf(vb2_buf);
+
+	return buf;
+}

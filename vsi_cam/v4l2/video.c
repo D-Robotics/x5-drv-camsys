@@ -77,12 +77,18 @@ static struct entity_link links4[] = {
 	// { VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
+/* vse stand alone */
+static struct entity_link links5[] = {
+	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
 static struct entity_link *links[] = {
 	links0,
 	links1,
 	links2,
 	links3,
 	links4,
+	links5
 };
 
 static u32 links_size[] = {
@@ -91,6 +97,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links2),
 	ARRAY_SIZE(links3),
 	ARRAY_SIZE(links4),
+	ARRAY_SIZE(links5),
 };
 
 struct vid_video_device {
@@ -104,6 +111,7 @@ struct vid_video_device {
 	spinlock_t irqlock; /* lock for cam buf */
 	u32 buf_sequence;
 	u32 id;
+	unsigned long capture_queue_offset;
 	bool opened, closed;
 	struct list_head queued_list;
 	struct list_head entry;
@@ -723,6 +731,89 @@ static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext
 	return v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
 }
 
+static int vid_ioc_reqbufs(struct file *file, void *fh, struct v4l2_requestbuffers *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	int rc = 0;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = vb2_ioctl_reqbufs(file, fh, b);
+	if (rc < 0)
+		return -EINVAL;
+	if (!b->count)
+		return rc;
+	vdev->capture_queue_offset =
+		vdev->queue.num_buffers * vdev->queue.bufs[1]->planes[0].m.offset;
+
+	return v4l2_subdev_call(sd, core, command, CAM_REQ_BUF, (void *)&vdev->capture_queue_offset);
+}
+
+static int vid_ioc_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return vb2_ioctl_querybuf(file, fh, b);
+	else
+		return v4l2_subdev_call(sd, core, command, CAM_QUERY_BUF, (void *)b);
+}
+
+static int vid_ioc_qbuf(struct file *file, void *fh, struct v4l2_buffer *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return vb2_ioctl_qbuf(file, fh, b);
+	else
+		return v4l2_subdev_call(sd, core, command, CAM_Q_BUF, (void *)b);
+}
+
+static int vid_ioc_dqbuf(struct file *file, void *fh, struct v4l2_buffer *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return vb2_ioctl_dqbuf(file, fh, b);
+	else
+		return v4l2_subdev_call(sd, core, command, CAM_DQ_BUF, (void *)b);
+}
+
+static int vid_g_fmt_vid_out(struct file *file, void *fh, struct v4l2_format *f)
+{
+	return 0;
+}
+
 static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_querycap = vid_querycap,
 	.vidioc_enum_fmt_vid_cap = vid_enum_fmt,
@@ -735,10 +826,10 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_streamoff = vid_streamoff,
 	.vidioc_create_bufs = vb2_ioctl_create_bufs,
 	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
-	.vidioc_reqbufs = vb2_ioctl_reqbufs,
-	.vidioc_querybuf = vb2_ioctl_querybuf,
-	.vidioc_qbuf = vb2_ioctl_qbuf,
-	.vidioc_dqbuf = vb2_ioctl_dqbuf,
+	.vidioc_reqbufs = vid_ioc_reqbufs,
+	.vidioc_querybuf = vid_ioc_querybuf,
+	.vidioc_qbuf = vid_ioc_qbuf,
+	.vidioc_dqbuf = vid_ioc_dqbuf,
 	.vidioc_expbuf = vb2_ioctl_expbuf,
 	.vidioc_default = vid_ioctl,
 	.vidioc_g_parm = vid_g_parm,
@@ -752,6 +843,7 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
 	.vidioc_queryctrl = vid_queryctrl,
 	.vidioc_query_ext_ctrl = vid_query_ext_ctrl,
+	.vidioc_g_fmt_vid_out = vid_g_fmt_vid_out,
 };
 
 static int vid_open(struct file *file)
@@ -836,11 +928,32 @@ static const struct media_entity_operations vid_media_ops = {
 	.link_validate = vid_link_validate,
 };
 
+static int vid_mmap(struct file * file, struct vm_area_struct * vma)
+{
+	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (offset < vdev->capture_queue_offset)
+		return vb2_fop_mmap(file, vma);
+	else {
+		vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
+		return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
+	}
+}
+
 static const struct v4l2_file_operations video_ops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = video_ioctl2,
 	.poll = vb2_fop_poll,
-	.mmap = vb2_fop_mmap,
+	.mmap = vid_mmap,
 	.open = vid_open,
 	.release = vid_release,
 };
@@ -921,6 +1034,8 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 		goto _video_dev_reg_err;
 	}
 
+	v->video.vfl_dir = VFL_DIR_M2M;
+
 	list_add_tail(&v->entry, &vdev->video_device_list);
 	return v;
 
@@ -938,6 +1053,7 @@ _vb2_queue_init_err:
 static void destroy_video_device(struct vid_video_device *vdev)
 {
 	if (vdev) {
+		memset(&vdev->video.vfl_dir, 0, sizeof(vdev->video.vfl_dir));
 		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
 		video_unregister_device(&vdev->video);
 		media_entity_cleanup(&vdev->video.entity);
@@ -1227,4 +1343,31 @@ int vid_subdev_set_cap(struct vid_device *vdev)
 	}
 
 	return 0;
+}
+
+int vid_subdev_init_output_ctx(struct vid_device *vdev)
+{
+	struct vid_video_device *v;
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct v4l2_buf_ctx *ctx;
+	int rc = 0;
+
+	list_for_each_entry(v, &vdev->video_device_list, entry) {
+		pad = media_pad_remote_pad_first(&v->pad);
+		if (!pad)
+			return -ENOLINK;
+		sd = media_entity_to_v4l2_subdev(pad->entity);
+		ctx = v4l2_get_subdevdata(sd);
+		if (ctx && ctx->is_standalone && ctx->is_standalone(ctx))
+			v->video.vfl_dir = VFL_DIR_M2M;
+		else
+			continue;
+		if (ctx && ctx->init_output_ctx) {
+			rc = ctx->init_output_ctx(ctx);
+			if (rc < 0)
+				break;
+		}
+	}
+	return rc;
 }

@@ -126,6 +126,12 @@ static int sd_async_notifier_complete(struct v4l2_async_notifier *notifier)
 		return rc;
 	}
 
+	rc = vid_subdev_init_output_ctx(vid_dev);
+	if (rc < 0) {
+		destroy_links(vid_dev);
+		return rc;
+	}
+
 	rc = v4l2_device_register_subdev_nodes(&vid_dev->v4l2_dev);
 	if (rc < 0)
 		destroy_links(vid_dev);

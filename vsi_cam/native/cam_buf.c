@@ -123,3 +123,8 @@ int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf)
 {
 	return 0;
 }
+
+struct cam_buf *get_cam_buf_by_index(struct cam_ctx *ctx, uint32_t index)
+{
+	return NULL;
+}

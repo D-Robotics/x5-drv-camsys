@@ -442,7 +442,6 @@ static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			}
 			break;
 		default:
-			rc = -EINVAL;
 			break;
 	}
 	return rc;

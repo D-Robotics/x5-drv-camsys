@@ -55,6 +55,8 @@ struct v4l2_buf_ctx {
 	void (*trigger)(struct v4l2_buf_ctx *ctx);
 	bool (*is_completed)(struct v4l2_buf_ctx *ctx);
 	void (*set_cap)(struct v4l2_buf_ctx *ctx);
+	int (*init_output_ctx)(struct v4l2_buf_ctx *ctx);
+	bool (*is_standalone)(struct v4l2_buf_ctx *ctx);
 };
 
 struct subdev_node {
@@ -73,6 +75,11 @@ enum v4l_core_ctrl_cmd {
 	CAM_GET_EXT_CTRL,
 	CAM_QUERY_CTRL,
 	CAM_QUERY_EXT_CTRL,
+	CAM_REQ_BUF,
+	CAM_QUERY_BUF,
+	CAM_Q_BUF,
+	CAM_DQ_BUF,
+	CAM_MMAP,
 };
 
 struct cam_v4l2_ext_control {
