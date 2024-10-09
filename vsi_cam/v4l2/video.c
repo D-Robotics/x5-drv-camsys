@@ -43,6 +43,8 @@ static struct entity_link links1[] = {
 	{ ISP_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 /* sif online isp online vse */
@@ -59,6 +61,14 @@ static struct entity_link links2[] = {
 	{ VSE_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-2", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-3", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ ISP_DEV_NAME "0-1", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ ISP_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+	{ SIF_DEV_NAME "2-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+	{ SIF_DEV_NAME "3-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
 };
 
 /* sif offline vse */
