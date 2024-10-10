@@ -818,10 +818,16 @@ s32 vin_node_bind_check(struct vio_subdev *vdev, struct vio_subdev *remote_vdev,
 	vin_ochn_attr_t *vin_ochn_attr;
 	u32 id;
 
+	if ((virt_addr_valid(vdev->vctx[0]) == 0) ||
+			vdev->vctx[0]->state == (BIT((s32)VIO_VIDEO_CLOSE))) {
+		vio_err("vin_node_bind_check invalid vctx\n");
+		return -1;
+	}
+
+	id = vdev->vctx[0]->id;
 	subdev = container_of(vdev, struct vin_node_subdev, vdev);/*PRQA S 2810,0497*/
 	vin_attr = &subdev->vin_attr;
 	cim_attr = &vin_attr->vin_node_attr.cim_attr;
-	id = vdev->vctx[0]->id;
 
 	if (online) {
 		if (id != VNODE_ID_CAP) {
@@ -856,6 +862,11 @@ void vin_node_set_ochn_bind_param(struct vio_video_ctx *vctx)
 	vin_attr_t *vin_attr;
 	vin_ichn_attr_t *vin_ichn_attr;
 	struct chn_attr *chn_attr;
+
+	if ((virt_addr_valid(vctx) == 0) || vctx->state == (BIT((s32)VIO_VIDEO_CLOSE))) {
+		vio_err("vin_node_set_ochn_bind_param invalid vctx\n");
+		return;
+	}
 
 	vdev = vctx->vdev;
 	subdev = container_of(vdev, struct vin_node_subdev, vdev);/*PRQA S 2810,0497*/
