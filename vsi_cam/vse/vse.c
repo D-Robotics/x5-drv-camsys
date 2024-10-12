@@ -607,7 +607,6 @@ int vse_close(struct vse_device *vse, u32 inst)
 		if (refcount_read(&vse->open_cnt) == REFCNT_INIT_VAL)
 			dis_clk = true;
 	}
-	mutex_unlock(&vse->open_lock);
 
 	if (!dis_clk)
 		goto _exit;

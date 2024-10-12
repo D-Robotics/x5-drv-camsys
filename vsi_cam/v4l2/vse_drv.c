@@ -46,11 +46,13 @@ static struct cam_rect *crops[] = {
 	cropsx,
 	cropsx,
 	cropsx,
+	cropsx,
 };
 
 static struct ires {
 	u16 width, height;
 } iress[] = {
+	{ 1920, 1080 },
 	{ 1920, 1080 },
 	{ 1920, 1080 },
 	{ 1920, 1080 },
@@ -480,7 +482,10 @@ static int vse_init_output_ctx(struct v4l2_buf_ctx *ctx)
 	buf_ctx = &inst->sink_ctx;
 	pad = &inst->node.pads[0];
 
-	return cam_ctx_init(buf_ctx, sd->dev, (void *)pad, true);
+	if (!buf_ctx->pad)
+		return cam_ctx_init(buf_ctx, sd->dev, (void *)pad, true);
+	else
+		return 0;
 }
 
 static bool vse_is_standalone(struct v4l2_buf_ctx *ctx)

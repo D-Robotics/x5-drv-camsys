@@ -13,7 +13,6 @@ struct local_buf_ctx {
 	struct list_head done_list;
 	spinlock_t buflock; /* lock for local buf */
 	struct cam_buf_ops *ops;
-	bool enabled;
 };
 
 static enum vb2_memory memory = VB2_MEMORY_MMAP;
@@ -123,12 +122,14 @@ int cam_reqbufs(struct cam_ctx *ctx, unsigned int num,
 
 	lbc->ops = ops;
 
-	if (lbc->enabled && lbc->count && !num) {
+	if (lbc->count && !num) {
 		rc = vb2_core_streamoff(&lbc->queue, lbc->queue.type);
 		if (rc < 0)
 			return rc;
-		lbc->enabled = false;
 	}
+
+	if (lbc->count == num)
+		return 0;
 
 	rc = vb2_core_reqbufs(&lbc->queue, memory, 0, &num);
 	if (rc < 0)
@@ -144,7 +145,6 @@ int cam_reqbufs(struct cam_ctx *ctx, unsigned int num,
 		rc = vb2_core_streamon(&lbc->queue, lbc->queue.type);
 		if (rc < 0)
 			goto _err;
-		lbc->enabled = true;
 	}
 	lbc->count = num;
 	return 0;

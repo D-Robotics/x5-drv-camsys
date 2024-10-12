@@ -79,17 +79,38 @@ static struct entity_link links3[] = {
 	{ VSE_DEV_NAME "0-5", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* sif offline isp offline vse */
+/* sif offline isp offline vse 6 channel */
 static struct entity_link links4[] = {
 	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-4", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-	// { VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* vse stand alone */
+/* vse stand alone 6 channel */
 static struct entity_link links5[] = {
 	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* sif online isp online vse 6 channel */
+static struct entity_link links6[] = {
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 static struct entity_link *links[] = {
@@ -98,7 +119,8 @@ static struct entity_link *links[] = {
 	links2,
 	links3,
 	links4,
-	links5
+	links5,
+	links6,
 };
 
 static u32 links_size[] = {
@@ -108,6 +130,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links3),
 	ARRAY_SIZE(links4),
 	ARRAY_SIZE(links5),
+	ARRAY_SIZE(links6),
 };
 
 struct vid_video_device {
