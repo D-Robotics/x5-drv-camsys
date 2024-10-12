@@ -139,6 +139,7 @@ static int dw_crc_remove(struct platform_device *pdev)
 
 	if (crc)
 		mutex_destroy(&crc->lock);
+	devm_kfree(&pdev->dev, crc);
 	return 0;
 }
 

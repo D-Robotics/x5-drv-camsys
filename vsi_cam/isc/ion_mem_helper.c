@@ -67,6 +67,7 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 				     ion_heap_mask, ion_flags);
 	if (IS_ERR(_buf->ion_handle)) {
 		pr_err("%s ion_alloc buf failed\n", __func__);
+		devm_kfree(dev, _buf);
 		return -EFAULT;
 	}
 	size = buf->size;
@@ -75,6 +76,7 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 
 	if (!_buf->vaddr) {
 		ion_free(g_ion_client, _buf->ion_handle);
+		devm_kfree(dev, _buf);
 		return -ENOMEM;
 	}
 

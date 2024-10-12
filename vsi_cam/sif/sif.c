@@ -682,6 +682,7 @@ int sif_remove(struct platform_device *pdev, struct sif_device *sif)
 
 	put_cam_ctrl_device(sif->ctrl_dev);
 	put_cam_pulse_device(sif->pulse_dev);
+	devm_kfree(&pdev->dev, sif->insts);
 	dev_dbg(&pdev->dev, "VS SIF driver #%d (base) removed\n", sif->id);
 	return 0;
 }

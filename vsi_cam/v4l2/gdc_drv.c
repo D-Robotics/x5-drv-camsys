@@ -622,7 +622,9 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 		cam_ctx_release(&v4l_dev->insts[i].sink_ctx);
 		cam_ctx_release(&v4l_dev->insts[i].src_ctx);
 		subdev_deinit(&v4l_dev->insts[i].node);
+		devm_kfree(dev, v4l_dev->insts[i].node.pads);
 	}
+	devm_kfree(dev, v4l_dev->insts);
 
 	rc = gdc_remove(pdev, &v4l_dev->gdc_dev);
 	if (rc < 0) {
@@ -635,6 +637,7 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 		dev_err(dev, "failed to call gdc_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}
+	devm_kfree(dev, v4l_dev);
 
 	dev_dbg(dev, "ARM GDC driver (v4l) removed\n");
 	return 0;

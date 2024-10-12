@@ -325,6 +325,7 @@ static int csiw_probe(struct platform_device *pdev)
 
 static int csiw_remove(struct platform_device *pdev)
 {
+	devm_kfree(&pdev->dev, platform_get_drvdata(pdev));
 	return 0;
 }
 

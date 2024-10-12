@@ -9,6 +9,7 @@ struct job_queue {
 	spinlock_t lock; /* lock for job queue */
 	struct job *jobs;
 	void *job_data_space;
+	int nr_jobs;
 };
 
 struct job {
@@ -38,6 +39,7 @@ int push_job(struct job_queue *q, struct irq_job *ij)
 	list_del(&job->entry);
 
 	list_add_tail(&job->entry, &q->done_queue);
+	rc = ++q->nr_jobs;
 
 _exit:
 	spin_unlock_irqrestore(&q->lock, flags);
@@ -66,6 +68,7 @@ int pop_job(struct job_queue *q, struct irq_job *ij)
 	list_del(&job->entry);
 
 	list_add_tail(&job->entry, &q->idle_queue);
+	q->nr_jobs--;
 
 _exit:
 	spin_unlock_irqrestore(&q->lock, flags);
@@ -89,6 +92,7 @@ int remove_job(struct job_queue *q, struct irq_job *ij)
 		if (cur_ij.irq_ctx_index == ij->irq_ctx_index) {
 			list_del(&cur_job->entry);
 			list_add_tail(&cur_job->entry, &q->idle_queue);
+			q->nr_jobs--;
 		}
 	}
 
@@ -179,5 +183,6 @@ void reset_job_queue(struct job_queue *q)
 
 	spin_lock_irqsave(&q->lock, flags);
 	list_splice_tail_init(&q->done_queue, &q->idle_queue);
+	q->nr_jobs = 0;
 	spin_unlock_irqrestore(&q->lock, flags);
 }

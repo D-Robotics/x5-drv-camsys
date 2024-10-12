@@ -1270,7 +1270,9 @@ static int vse_v4l_remove(struct platform_device *pdev)
 		for (j = 0; j < VSE_OUT_CHNL_MAX; j++)
 			cam_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
 		subdev_deinit(&v4l_dev->insts[i].node);
+		devm_kfree(dev, v4l_dev->insts[i].node.pads);
 	}
+	devm_kfree(dev, v4l_dev->insts);
 
 	rc = vse_remove(pdev, &v4l_dev->vse_dev);
 	if (rc < 0) {
@@ -1281,6 +1283,7 @@ static int vse_v4l_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	vse_debugfs_remo(&v4l_dev->vse_dev);
 #endif
+	devm_kfree(dev, v4l_dev);
 
 	dev_dbg(dev, "VS VSE driver (v4l) removed\n");
 	return 0;

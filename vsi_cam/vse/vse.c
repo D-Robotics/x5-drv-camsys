@@ -454,7 +454,7 @@ int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx)
 static inline int _add_job(struct vse_device *vse, u32 inst)
 {
 	struct irq_job job = { inst };
-	int rc;
+	int rc = 0;
 
 	if (vse->mode != VSE_SCM_MODE) {
 		pr_debug("add job inst:%d\n", inst);
@@ -464,7 +464,7 @@ static inline int _add_job(struct vse_device *vse, u32 inst)
 			return rc;
 		}
 	}
-	return 0;
+	return rc;
 }
 
 int vse_add_job(struct vse_device *vse, u32 inst)
@@ -743,6 +743,7 @@ int vse_remove(struct platform_device *pdev, struct vse_device *vse)
 			dma_free_coherent(vse->dev, ins->cmd_buf.size, ins->cmd_buf_va, ins->cmd_buf.addr);
 	}
 	put_cam_ctrl_device(vse->ctrl_dev);
+	devm_kfree(&pdev->dev, vse->insts);
 	dev_dbg(&pdev->dev, "VS VSE driver (base) removed\n");
 	return rc;
 }

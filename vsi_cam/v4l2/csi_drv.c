@@ -648,7 +648,6 @@ static int csi_v4l_probe(struct platform_device *pdev)
 	if (v4l_dev->csi_dev.cfg)
 		dev_dbg(dev, "cfg clock: %ld Hz\n", clk_get_rate(v4l_dev->csi_dev.cfg));
 
-
 	dev_dbg(dev, "VS CSI driver (v4l) probed done\n");
 	return 0;
 }
@@ -658,9 +657,15 @@ static int csi_v4l_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct csi_v4l_device *v4l_dev = platform_get_drvdata(pdev);
 	int rc;
+	u32 i;
 
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
-	csi_inst_remove(v4l_dev->insts, v4l_dev->csi_dev.num_insts);
+
+	for (i = 0; i < v4l_dev->csi_dev.num_insts; i++) {
+		subdev_deinit(&v4l_dev->insts[i].node);
+		devm_kfree(dev, v4l_dev->insts[i].node.pads);
+	}
+	devm_kfree(dev, v4l_dev->insts);
 
 	rc = csi_remove(pdev, &v4l_dev->csi_dev);
 	if (rc < 0) {
@@ -673,6 +678,7 @@ static int csi_v4l_remove(struct platform_device *pdev)
 		dev_err(dev, "failed to call csi_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}
+	devm_kfree(dev, v4l_dev);
 
 	dev_dbg(dev, "VS CSI driver (v4l) removed\n");
 	return 0;

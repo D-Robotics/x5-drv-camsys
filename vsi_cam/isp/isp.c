@@ -1530,6 +1530,7 @@ int isp_remove(struct platform_device *pdev, struct isp_device *isp)
 	if (unlikely(rc))
 		dev_err(&pdev->dev, "fail to free hdr_buf_list (err=%d)\n", rc);
 	put_cam_ctrl_device(isp->ctrl_dev);
+	devm_kfree(&pdev->dev, isp->insts);
 	pm_runtime_disable(isp->dev);
 
 	dev_dbg(&pdev->dev, "VS ISP driver (base) removed\n");

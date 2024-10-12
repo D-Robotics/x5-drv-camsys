@@ -165,6 +165,7 @@ static int cam_pulse_probe(struct platform_device *pdev)
 
 static int cam_pulse_remove(struct platform_device *pdev)
 {
+	devm_kfree(&pdev->dev, platform_get_drvdata(pdev));
 	return 0;
 }
 

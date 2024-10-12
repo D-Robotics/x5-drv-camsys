@@ -202,6 +202,7 @@ static int vid_remove(struct platform_device *pdev)
 	v4l2_device_unregister(&vid_dev->v4l2_dev);
 	media_device_unregister(&vid_dev->mdev);
 	media_device_cleanup(&vid_dev->mdev);
+	devm_kfree(dev, vid_dev);
 	dev_dbg(dev, "VS video driver (v4l) removed\n");
 	return 0;
 }

@@ -257,8 +257,13 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		vse_write(vse, VSE_MI_ICR1, mis1);
 		pr_debug("+mi mis1:0x%x\n", mis1);
 	}
-	if (mis1 & 0x5)
+	if (mis1 & 0x5) {
+		/** If mp bus timeout occurs, we report an artificial
+		 *  interrupt status and drop the current frame data.
+		 */
 		mis = BIT(13);
+		pr_info("mi bus timed-out!\n");
+	}
 
 	if (mis & BIT(13)) {
 		inst = &vse->insts[vse->next_irq_ctx];

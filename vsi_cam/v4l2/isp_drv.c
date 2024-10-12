@@ -975,7 +975,9 @@ static int isp_v4l_remove(struct platform_device *pdev)
 		for (j = 0; j < ISP_OUT_CHNL_MAX; j++)
 			cam_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
 		subdev_deinit(&v4l_dev->insts[i].node);
+		devm_kfree(dev, v4l_dev->insts[i].node.pads);
 	}
+	devm_kfree(dev, v4l_dev->insts);
 
 	rc = isp_remove(pdev, &v4l_dev->isp_dev);
 	if (rc < 0) {
@@ -986,6 +988,7 @@ static int isp_v4l_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	isp_debugfs_remo(&v4l_dev->isp_dev);
 #endif
+	devm_kfree(dev, v4l_dev);
 
 	dev_dbg(dev, "VS ISP driver (v4l) removed\n");
 	return 0;

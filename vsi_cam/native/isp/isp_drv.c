@@ -1043,6 +1043,7 @@ static int isp_nat_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	isp_debugfs_remo(&nat_dev->isp_dev);
 #endif
+	devm_kfree(dev, nat_dev);
 
 	dev_dbg(dev, "VS ISP driver (native) removed\n");
 	return 0;

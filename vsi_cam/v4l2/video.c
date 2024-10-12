@@ -913,8 +913,11 @@ static int vid_release(struct file *file)
 		return 0;
 	}
 
-	if (WARN_ON(vdev->queue.num_buffers > 0))
+	if (vdev->queue.num_buffers > 0) {
+		pr_warn("%s num_buffers of vdev queue is not 0 (%d)\n",
+			__func__, vdev->queue.num_buffers);
 		return -EFAULT;
+	}
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
 	if (!pad)
@@ -1081,6 +1084,7 @@ static void destroy_video_device(struct vid_video_device *vdev)
 		media_entity_cleanup(&vdev->video.entity);
 		vb2_queue_release(&vdev->queue);
 		mutex_destroy(&vdev->lock);
+		devm_kfree(vdev->queue.dev, vdev);
 	}
 }
 

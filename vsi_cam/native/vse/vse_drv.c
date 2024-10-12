@@ -1179,6 +1179,7 @@ static int vse_nat_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	vse_debugfs_remo(&nat_dev->vse_dev);
 #endif
+	devm_kfree(dev, nat_dev);
 
 	dev_dbg(dev, "VS VSE driver (native) removed\n");
 	return 0;
