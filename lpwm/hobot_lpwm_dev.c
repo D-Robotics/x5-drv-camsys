@@ -685,8 +685,7 @@ static void lpwm_kernel_remove(struct platform_device *pdev)
 	clk_disable_unprepare(lpwm->sclk);
 	clk_disable_unprepare(lpwm->pclk);
 
-	if (lpwm->priv)
-		osal_kfree(lpwm->priv);
+	devm_kfree(&pdev->dev, lpwm->priv);
 }
 
 /**
