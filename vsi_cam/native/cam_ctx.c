@@ -24,15 +24,14 @@ int cam_trigger(struct cam_ctx *ctx)
 			ops = get_ops(vdev->vnode->id);
 		if (ops && ops->trigger)
 			return ops->trigger((struct cam_ctx *)vdev);
-	} else if (vdev->vnode->next){
+	} else if (vdev->vnode->next) {
 		vnode = vdev->vnode->next;
 		if (vnode->id < MODULE_NUM)
 			ops = get_ops(vnode->id);
 		if (ops && ops->trigger)
 			return ops->trigger((struct cam_ctx *)vnode->ich_subdev[0]);
-	} else {
-		pr_err("cam trigger null\n");
 	}
+
 	return -EBUSY;
 }
 
