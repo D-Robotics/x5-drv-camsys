@@ -623,6 +623,7 @@ static s32 vpf_prepare_buffers(struct vio_subdev *vdev)
 			continue;
 		(void)memcpy(&frameinfo, &frame->frameinfo, sizeof(frameinfo));
 		frameinfo.bufferindex = (s32)i;
+		frameinfo.internal_buf = frame->internal_buf;
 		ret = vio_subdev_qbuf(vdev, &frameinfo);
 	}
 	vio_info("[%s][S%d] %s: done\n", vdev->name, vdev->vnode->flow_id, __func__);

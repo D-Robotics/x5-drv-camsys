@@ -14,6 +14,9 @@
 #include "vio_node_api.h"
 #include "hobot_vpf_manager.h"
 
+#define IS_CUSTOM_CAPBUF(id, internal_buf) \
+	(((id) >= VNODE_ID_CAP) && ((internal_buf) == 0))
+
 /**
  * @NO{S09E05C01}
  * @ASIL{B}
@@ -65,9 +68,14 @@ s32 vio_subdev_qbuf(struct vio_subdev *vdev, const struct frame_info *frameinfo)
 	}
 	vio_x_barrier_irqr(framemgr, flags);/*PRQA S 2996*/
 
+
 	if ((frame->state == FS_FREE) || (frame->state == FS_USED)) {
-		if (frame->frameinfo.ion_id[0] != frameinfo->ion_id[0])
+		if (frame->frameinfo.ion_id[0] != frameinfo->ion_id[0]) {
 			frame->buf_shared = 0;
+			vio_dbg("[%s][S%d][F%d] %s ion_id %d input ion_id %d\n",
+				vdev->name, vnode->flow_id, index, __func__,
+				frame->frameinfo.ion_id[0], frameinfo->ion_id[0]);
+		}
 		(void)memcpy(&frame->frameinfo, frameinfo, sizeof(struct frame_info));
 
 		if (frame->internal_buf == 0 && frame->buf_shared == 0) {
@@ -308,7 +316,8 @@ void vio_frame_done(struct vio_subdev *vdev)
 		(void)memcpy(&frame->frameinfo.crc_value[0], &vdev->crc_value[0],
 				sizeof(u32) * VIO_BUFFER_MAX_PLANES);
 
-		if (vdev->pingpong_ring == 1u &&
+		if (!IS_CUSTOM_CAPBUF(vdev->id, frame->internal_buf) &&
+				vdev->pingpong_ring == 1u &&
 				vdev->id >= VNODE_ID_CAP &&
 				(framemgr->queued_count[FS_REQUEST] + framemgr->queued_count[FS_PROCESS]) <= 1u) {
 			vio_drop_calculate(&vdev->fdebug, SW_DROP, &vnode->frameid);
