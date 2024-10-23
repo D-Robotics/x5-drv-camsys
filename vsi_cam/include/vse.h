@@ -106,6 +106,7 @@ void vse_set_mi_buffer(struct vse_device *vse, u32 chnl,
 		       phys_addr_t phys_addr, struct cam_format *fmt);
 void vse_set_cmd(struct vse_device *vse, u32 inst);
 int vse_post(struct vse_device *vse, struct vse_msg *msg, bool sync);
+int vse_check_osd_info(struct vse_osd_info[VSE_OSD_MAX], bool is_up_chnl, u32 target_x, u32 target_y);
 int vse_set_source(struct vse_device *vse, u32 inst, u32 source);
 int vse_set_fps_rate(struct vse_device *vse, u32 inst, u32 chnl, struct vse_fps_rate *fps);
 int vse_set_iformat(struct vse_device *vse, u32 inst, struct cam_format *fmt);
@@ -115,7 +116,7 @@ int vse_set_format(struct vse_device *vse, u32 inst, u32 chnl,
 		   struct vse_format *fmt, struct vse_stitching *stitch);
 int vse_set_cascade(struct vse_device *vse, u32 inst, u32 cas_id, bool en_cas);
 int vse_set_state(struct vse_device *vse, u32 inst, int enable);
-int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info);
+int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info info[VSE_OSD_MAX]);
 int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf);
 int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl);
 int vse_set_hist_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_hist_info info[VSE_HIST_MAX]);

@@ -140,7 +140,7 @@ struct vse_msg {
 		struct vse_hist_info hist_info[VSE_HIST_MAX];
 		__u8   bin_level[BIN_LEVEL_NUM];
 		struct vse_format fmt;
-		struct vse_osd_info osd_info;
+		struct vse_osd_info osd_info[VSE_OSD_MAX];
 		struct vse_lut_tbl lut_tbl;
 		struct mem_buf cmd;
 		struct vse_osd_buf osd;

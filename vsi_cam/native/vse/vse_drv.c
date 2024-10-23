@@ -815,7 +815,7 @@ static int vse_set_osd_cfg(struct cam_ctx *ctx, u32 ochn_id)
 	struct vio_subdev *subdev = NULL;
 	struct vse_nat_instance *vse_ins = NULL;
 	struct vse_osd_cfg *osd_hw_cfg = NULL;
-	struct vse_osd_info osd_info;
+	struct vse_osd_info osd_info[MAX_OSD_NUM];
 	struct vse_hist_info hist_info[VSE_HIST_MAX];
 	int ret = 0;
 	int i = 0;
@@ -825,16 +825,17 @@ static int vse_set_osd_cfg(struct cam_ctx *ctx, u32 ochn_id)
 	osd_hw_cfg = &vse_ins->osd_hw_cfg;
 
 	if (osd_hw_cfg->osd_box_update) {
+		memset(osd_info, 0, sizeof(osd_info));
 		for (i = 0; i < MAX_OSD_NUM; i++) {
-			memset(&osd_info, 0, sizeof(struct vse_osd_info));
-			osd_info.roiId = i;
-			osd_info.roiEnable = osd_hw_cfg->osd_box[i].osd_en;
-			osd_info.roiStartX = osd_hw_cfg->osd_box[i].start_x;
-			osd_info.roiStartY = osd_hw_cfg->osd_box[i].start_y;
-			osd_info.roiHsize  = osd_hw_cfg->osd_box[i].width;
-			osd_info.roiVsize  = osd_hw_cfg->osd_box[i].height;
-			ret |= vse_set_osd_info(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, &osd_info);
+			osd_info[i].roiId = i;
+			osd_info[i].roiEnable = osd_hw_cfg->osd_box[i].osd_en;
+			osd_info[i].roiStartX = osd_hw_cfg->osd_box[i].start_x;
+			osd_info[i].roiStartY = osd_hw_cfg->osd_box[i].start_y;
+			osd_info[i].roiHsize  = osd_hw_cfg->osd_box[i].width;
+			osd_info[i].roiVsize  = osd_hw_cfg->osd_box[i].height;
 		}
+		if (!vse_check_osd_info(osd_info, ochn_id == VSE_UP_SCALE_4K, vse_ins->ochn_attr.target_w, vse_ins->ochn_attr.target_h))
+			ret |= vse_set_osd_info(&vse_ins->dev->vse_dev, vse_ins->id, ochn_id, osd_info);
 		osd_hw_cfg->osd_box_update = false;
 	}
 

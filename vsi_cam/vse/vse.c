@@ -39,6 +39,58 @@ static bool check_oformat(struct vse_instance *ins, u32 chnl,
 }
 #endif
 
+static inline bool is_rec_overlap(struct vse_osd_info *rec1, struct vse_osd_info *rec2)
+{
+	bool res = false;
+
+	res = !((rec2->roiStartX + rec2->roiHsize <= rec1->roiStartX) ||
+		  (rec2->roiStartX >= rec1->roiStartX + rec1->roiHsize) ||
+		  (rec2->roiStartY + rec2->roiVsize <= rec1->roiStartY) ||
+		  (rec2->roiStartY >= rec1->roiStartY + rec1->roiVsize));
+
+	return res;
+}
+
+int vse_check_osd_info(struct vse_osd_info osd_info[VSE_OSD_MAX], bool is_up_chnl, u32 target_x, u32 target_y)
+{
+	int i, j;
+
+	for (i = 0; i < VSE_OSD_MAX ; i++) {
+		if (!osd_info[i].roiEnable)
+			continue;
+
+		// check osd area boundary
+		if (osd_info[i].roiStartX + osd_info[i].roiHsize > target_x ||
+			osd_info[i].roiStartY + osd_info[i].roiVsize > target_y) {
+				pr_err("%s: vse osd area out-of-boundary\n", __func__);
+				return -EINVAL;
+		}
+
+		// check upscale channel osd even
+		if (is_up_chnl) {
+			if (osd_info[i].roiStartX % 2 != 0 || osd_info[i].roiStartY % 2 != 0 ||
+				osd_info[i].roiHsize % 2 != 0 || osd_info[i].roiVsize % 2 != 0) {
+				pr_err("%s: vse upscale chnl osd is not even\n", __func__);
+				return -EINVAL;
+			}
+		}
+
+		if (i == 0)
+			continue;
+		// checkou osd area overlap
+		for (j = i - 1; j >= 0; j--) {
+			if (!osd_info[j].roiEnable)
+				continue;
+			if (is_rec_overlap(&osd_info[i], &osd_info[j])) {
+				pr_err("%s: vse osd area overlap\n", __func__);
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
+
 int vse_post(struct vse_device *vse, struct vse_msg *msg, bool sync)
 {
 	struct isc_post_param param = {
@@ -314,7 +366,7 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable)
 	return 0;
 }
 
-int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info)
+int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info info[VSE_OSD_MAX])
 {
 	struct vse_msg msg;
 
@@ -324,7 +376,7 @@ int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_
 	msg.id = VSE_MSG_OSD_INFO;
 	msg.inst = inst;
 	msg.channel = chnl;
-	memcpy(&msg.osd_info, info, sizeof(struct vse_osd_info));
+	memcpy(&msg.osd_info, info, sizeof(struct vse_osd_info) * VSE_OSD_MAX);
 
 	return vse_post(vse, &msg, false);
 }
