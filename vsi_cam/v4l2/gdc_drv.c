@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#define pr_fmt(fmt) "[gdc_drv]: %s: " fmt, __func__
+
 #include <linux/clk.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -88,6 +90,24 @@ static const struct media_entity_operations gdc_media_ops = {
 
 static void gdc_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
+	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+	int rc;
+
+	if (gdc && on) {
+		rc = gdc_wake_up(gdc->dev, gdc->id);
+		if (rc < 0)
+			pr_err("%s failed to handle buf ready (err=%d)\n", __func__ , rc);
+	}
+}
+
+static int gdc_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+{
+	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+
+	if (!ctx || !buf)
+		return -EINVAL;
+
+	return cam_drop(&gdc->sink_ctx, buf);
 }
 
 static int gdc_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
@@ -326,6 +346,13 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 
 		fill_irq_ctx(gdc, &ctx);
 		gdc_set_ctx(gdc->dev, gdc->id, &ctx);
+		rc = gdc_set_state(gdc->dev, gdc->id, enable);
+		if (rc < 0)
+			return rc;
+
+		rc = subdev_set_stream(sd, enable);
+		if (rc < 0)
+			return rc;
 	} else {
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
@@ -336,14 +363,8 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 
 		if (!gdc->node.bctx.is_sink_online_mode)
 			cam_reqbufs(&gdc->sink_ctx, 0, NULL);
-	}
 
-	rc = gdc_set_state(gdc->dev, gdc->id, enable);
-	if (rc < 0)
-		return rc;
-
-	if (enable) {
-		rc = subdev_set_stream(sd, enable);
+		rc = gdc_set_state(gdc->dev, gdc->id, enable);
 		if (rc < 0)
 			return rc;
 	}
@@ -418,6 +439,33 @@ static int gdc_enum_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+	int rc = 0;
+
+	switch(cmd) {
+		case CAM_SET_CTRL:
+		case CAM_GET_CTRL:
+		case CAM_QUERY_CTRL:
+		case CAM_SET_EXT_CTRL:
+		case CAM_GET_EXT_CTRL:
+		case CAM_QUERY_EXT_CTRL:
+		case CAM_REQ_BUF:
+		case CAM_QUERY_BUF:
+		case CAM_DQ_BUF:
+		case CAM_Q_BUF:
+		case CAM_MMAP:
+		default:
+			break;
+	}
+
+	return rc;
+}
+
+static const struct v4l2_subdev_core_ops gdc_core_ops = {
+	.command = gdc_command,
+};
+
 static const struct v4l2_subdev_video_ops gdc_video_ops = {
 	.s_stream = gdc_s_stream,
 	.g_frame_interval = gdc_g_frame_interval,
@@ -433,6 +481,7 @@ static const struct v4l2_subdev_pad_ops gdc_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops gdc_subdev_ops = {
+	.core = &gdc_core_ops,
 	.video = &gdc_video_ops,
 	.pad = &gdc_pad_ops,
 };
@@ -458,6 +507,7 @@ static int gdc_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (rc < 0)
 		return rc;
 
+	inst->out_pixelformat = 0;
 	return gdc_close(inst->dev, inst->id);
 }
 
@@ -550,6 +600,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		n->bctx.qbuf = gdc_qbuf;
 		n->bctx.dqbuf = gdc_dqbuf;
 		n->bctx.acqbuf = gdc_acqbuf;
+		n->bctx.drop = gdc_drop;
 		n->bctx.get_format = gdc_get_out_format;
 		n->bctx.set_format = gdc_set_out_format;
 		n->bctx.enum_format = gdc_enum_out_format;

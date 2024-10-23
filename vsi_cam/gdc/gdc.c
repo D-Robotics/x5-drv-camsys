@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#define pr_fmt(fmt) "[gdc_drv]: %s: " fmt, __func__
+
 #include <linux/clk.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -7,11 +9,13 @@
 #include "cam_ctrl.h"
 #include "cam_dev.h"
 #include "dw_crc.h"
-#include "isc.h"
+// #include "isc.h"
 #include "gdc_uapi.h"
+#include "gdc_cfg_buffer.h"
 
 #include "gdc.h"
 
+#ifdef EN_CHK_FMT
 static bool check_format(struct gdc_instance *ins, struct cam_format *fmt)
 {
 	u32 i;
@@ -26,60 +30,43 @@ static bool check_format(struct gdc_instance *ins, struct cam_format *fmt)
 	}
 	return false;
 }
+#endif
 
-void gdc_post(struct gdc_device *gdc, void *msg, u32 len)
+static int gdc_alloc_cfg_buffer(struct gdc_device *gdc, u32 inst)
 {
-	struct isc_post_param param = {
-		.msg = msg,
-		.msg_len = len,
-		.lock = &gdc->isc_lock,
-		.sync = false,
-	};
+	struct mem_buf *buf;
+	u32 size;
+	int rc;
 
-	if (gdc->isc)
-		isc_post(gdc->isc, &param);
-}
+	size = ARRAY_SIZE(gdc_cfgs);
+	if (!size)
+		return -EINVAL;
 
-void set_ibuffer(struct gdc_device *gdc, struct cam_format *fmt,
-		 struct mem_buf *cfg, phys_addr_t buf)
-{
-	pr_info("gdc_read (0x00000060)=(0x%08x)\n", gdc_read(gdc, 0x00000060));
-	gdc_write(gdc, 0x00000010, cfg->addr);
-	gdc_write(gdc, 0x00000014, 0x733);//cfg->size);
-	gdc_write(gdc, 0x00000020, fmt->width);
-	gdc_write(gdc, 0x00000024, fmt->height);
-	gdc_write(gdc, 0x00000028, buf);
-	gdc_write(gdc, 0x0000002c, fmt->stride);
-	gdc_write(gdc, 0x00000030, buf + fmt->stride * fmt->height);
-	gdc_write(gdc, 0x00000034, fmt->stride);
-}
+	buf = &gdc->cfg_bufs[inst];
+	if (buf->size > 0 && buf->size != size) {
+		rc = mem_free(gdc->dev, &gdc->cfg_buf_list, buf);
+		if (unlikely(rc)) {
+			pr_err("mem_free fail, (err=%d)\n", rc);
+			return rc;
+		}
+	}
+	if (buf->size != size) {
+		buf->size = size;
+		rc = mem_alloc(gdc->dev, &gdc->cfg_buf_list, buf);
+		if (unlikely(rc)) {
+			pr_err("mem_alloc fail, (err=%d)\n", rc);
+			return rc;
+		}
+	}
 
-void set_obuffer(struct gdc_device *gdc, struct cam_format *fmt, phys_addr_t buf)
-{
-	gdc_write(gdc, 0x00000040, fmt->width);
-	gdc_write(gdc, 0x00000044, fmt->height);
-	gdc_write(gdc, 0x00000048, buf);
-	gdc_write(gdc, 0x0000004c, fmt->stride);
-	gdc_write(gdc, 0x00000050, buf + fmt->stride * fmt->height);
-	gdc_write(gdc, 0x00000054, fmt->stride);
-}
-
-void gdc_start(struct gdc_device *gdc)
-{
-	gdc_write(gdc, 0x00000064, 0x00000001);
-	gdc_write(gdc, 0x00000064, 0x00000000);
-}
-
-void gdc_stop(struct gdc_device *gdc)
-{
-	gdc_write(gdc, 0x00000064, 0x00000002);
-	gdc_write(gdc, 0x00000064, 0x00000000);
+	return 0;
 }
 
 int gdc_set_format(struct gdc_device *gdc, u32 inst, struct gdc_format *fmt)
 {
 	struct gdc_instance *ins;
-	struct gdc_msg msg;
+	void *vaddr;
+	int rc;
 
 	if (!gdc || !fmt)
 		return -EINVAL;
@@ -88,36 +75,47 @@ int gdc_set_format(struct gdc_device *gdc, u32 inst, struct gdc_format *fmt)
 		return -EINVAL;
 
 	ins = &gdc->insts[inst];
-
+#ifdef EN_CHK_FMT
 	if (!check_format(ins, &fmt->ofmt))
 		return -EINVAL;
-
+#endif
 	memcpy(&ins->fmt, fmt, sizeof(ins->fmt));
 
-	msg.id = CAM_MSG_FORMAT_CHANGED;
-	msg.inst = inst;
-	memcpy(&msg.fmt, fmt, sizeof(msg.fmt));
-	gdc_post(gdc, &msg, sizeof(msg));
+	rc = gdc_alloc_cfg_buffer(gdc, inst);
+	if (rc < 0)
+		return rc;
+
+	vaddr = get_virt_addr(gdc->dev, &gdc->cfg_buf_list, &gdc->cfg_bufs[inst]);
+	memcpy(vaddr, gdc_cfgs, ARRAY_SIZE(gdc_cfgs) * sizeof(gdc_cfgs[0]));
+
+	return 0;
+}
+
+int32_t gdc_get_format(struct gdc_device *gdc, uint32_t inst, struct gdc_format *fmt)
+{
+	struct gdc_instance ins = gdc->insts[inst];
+
+	memcpy(fmt, &ins.fmt, sizeof(struct gdc_format));
+
 	return 0;
 }
 
 int gdc_set_state(struct gdc_device *gdc, u32 inst, int enable)
 {
-	struct gdc_msg msg;
+	struct gdc_instance *ins;
 
 	if (!gdc || inst >= gdc->num_insts)
 		return -EINVAL;
 
-	if (!enable)
-		gdc_stop(gdc);
+	ins = &gdc->insts[inst];
 
-	msg.id = CAM_MSG_STATE_CHANGED;
-	msg.inst = inst;
-	if (enable)
-		msg.state = CAM_STATE_STARTED;
-	else
-		msg.state = CAM_STATE_STOPPED;
-	gdc_post(gdc, &msg, sizeof(msg));
+	if (enable) {
+		ins->state = CAM_STATE_STARTED;
+	 	gdc_start(gdc);
+	} else {
+		ins->state = CAM_STATE_STOPPED;
+	 	gdc_stop(gdc);
+	}
 	return 0;
 }
 
@@ -139,12 +137,32 @@ int gdc_set_ctx(struct gdc_device *gdc, u32 inst, struct gdc_irq_ctx *ctx)
 	return 0;
 }
 
+void gdc_set_cmd(struct gdc_device *gdc, u32 inst)
+{
+	struct gdc_irq_ctx *ctx;
+	struct gdc_instance *ins;
+
+	if(!gdc)
+		return;
+
+	gdc->error = 0;
+	ins = &gdc->insts[inst];
+	ctx = &ins->ctx;
+	if (ctx->sink_buf && ctx->src_buf) {
+		gdc_hw_init(gdc);
+		gdc_hw_set_format(gdc, inst, &ins->fmt);
+		gdc_set_in_buffer(gdc, &ins->fmt.ifmt, ins->ctx.sink_buf);
+		gdc_set_out_buffer(gdc, &ins->fmt.ofmt, ins->ctx.src_buf);
+		gdc_set_cfg_buffer(gdc, gdc->cfg_bufs[inst].addr, gdc->cfg_bufs[inst].size);
+		gdc_hw_start_process(gdc);
+	}
+}
+
 int gdc_add_job(struct gdc_device *gdc, u32 inst)
 {
 	struct irq_job job = { inst };
-	struct gdc_instance *ins;
 	struct gdc_irq_ctx *ctx;
-	phys_addr_t buf;
+	unsigned long flags;
 	int rc;
 
 	rc = push_job(gdc->jq, &job);
@@ -153,67 +171,85 @@ int gdc_add_job(struct gdc_device *gdc, u32 inst)
 		return rc;
 	}
 
+	spin_lock_irqsave(&gdc->err_lock, flags);
 	if (gdc->error) {
-		ins = &gdc->insts[gdc->next_irq_ctx];
 		ctx = get_next_irq_ctx(gdc);
-		if (ctx->sink_buf && ctx->src_buf) {
-			gdc->error = 0;
-			buf = get_phys_addr(ctx->sink_buf, 0);
-			pr_info("%s sink_buf=%x\n", __func__, (u32)buf);
-			set_ibuffer(gdc, &ins->fmt.ifmt, &ins->cfg_buf, buf);
-			buf = get_phys_addr(ctx->src_buf, 0);
-			pr_info("%s src_buf=%x\n", __func__, (u32)buf);
-			set_obuffer(gdc, &ins->fmt.ofmt, buf);
-			gdc_start(gdc);
+		if (ctx) {
+			gdc_set_cmd(gdc, gdc->next_irq_ctx);
 		}
 	}
+	spin_unlock_irqrestore(&gdc->err_lock, flags);
 	return 0;
 }
 
-static void gdc_bound(struct isc_handle *isc, void *arg)
+int gdc_wake_up(struct gdc_device *gdc, u32 inst)
 {
-	struct gdc_device *gdc = (struct gdc_device *)arg;
+	struct irq_job job = { inst };
+	struct gdc_irq_ctx *ctx;
 	unsigned long flags;
+	int rc = 0;
 
-	if (gdc) {
-		spin_lock_irqsave(&gdc->isc_lock, flags);
-		if (!gdc->isc) {
-			isc_get(isc);
-			gdc->isc = isc;
-		}
-		spin_unlock_irqrestore(&gdc->isc_lock, flags);
+	spin_lock_irqsave(&gdc->err_lock, flags);
+	if (gdc->error) {
+		rc = push_job(gdc->jq, &job);
+		if (rc < 0)
+			goto _exit;
+
+		ctx = get_next_irq_ctx(gdc);
+		if (ctx)
+			gdc_set_cmd(gdc, gdc->next_irq_ctx);
 	}
+
+_exit:
+	spin_unlock_irqrestore(&gdc->err_lock, flags);
+	return rc;
 }
-
-static void gdc_unbind(void *arg)
-{
-	struct gdc_device *gdc = (struct gdc_device *)arg;
-	unsigned long flags;
-
-	if (gdc) {
-		spin_lock_irqsave(&gdc->isc_lock, flags);
-		if (gdc->isc) {
-			isc_put(gdc->isc);
-			gdc->isc = NULL;
-		}
-		spin_unlock_irqrestore(&gdc->isc_lock, flags);
-	}
-}
-
-static struct isc_notifier_ops gdc_notifier_ops = {
-	.bound = gdc_bound,
-	.unbind = gdc_unbind,
-	.got = gdc_msg_handler,
-};
 
 int gdc_open(struct gdc_device *gdc, u32 inst)
 {
-	return 0;
+	int rc = 0;
+
+	if (!gdc)
+		return -EINVAL;
+
+	mutex_lock(&gdc->open_lock);
+	refcount_inc(&gdc->open_cnt);
+	mutex_unlock(&gdc->open_lock);
+	return rc;
 }
 
 int gdc_close(struct gdc_device *gdc, u32 inst)
 {
-	return 0;
+	struct gdc_instance *ins;
+	bool dis_gdc = false;
+	int rc = 0;
+
+	if (!gdc)
+		return -EINVAL;
+
+	if (inst >= gdc->num_insts)
+		return -EINVAL;
+
+	ins = &gdc->insts[inst];
+	memset(&ins->fmt, 0, sizeof(ins->fmt));
+	ins->error = 1;
+
+	mutex_lock(&gdc->open_lock);
+	if (refcount_read(&gdc->open_cnt) > REFCNT_INIT_VAL) {
+		refcount_dec(&gdc->open_cnt);
+		if (refcount_read(&gdc->open_cnt) == REFCNT_INIT_VAL)
+			dis_gdc = true;
+	}
+	mutex_unlock(&gdc->open_lock);
+
+	if (!dis_gdc)
+		goto _exit;
+
+	reset_job_queue(gdc->jq);
+	gdc_stop(gdc);
+
+_exit:
+	return rc;
 }
 
 int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
@@ -267,7 +303,9 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	gdc->hclk = gdc_dt.clks[2].clk;
 	gdc->vse_core = gdc_dt.clks[3].clk;
 	gdc->vse_ups = gdc_dt.clks[4].clk;
-	spin_lock_init(&gdc->isc_lock);
+	spin_lock_init(&gdc->err_lock);
+	mutex_init(&gdc->open_lock);
+	refcount_set(&gdc->open_cnt, REFCNT_INIT_VAL);
 
 	gdc->error = 1;
 
@@ -290,34 +328,21 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 		return -ENOMEM;
 	}
 
-	rc = isc_register(GDC_UID(gdc->id), &gdc_notifier_ops, gdc);
-	if (rc < 0) {
-		dev_err(dev, "failed to call isc_register (err=%d)\n", rc);
-		destroy_job_queue(gdc->jq);
-		return rc;
-	}
-
 	for (i = 0; i < gdc_dt.num_insts; i++)
 		spin_lock_init(&gdc->insts[i].lock);
 
-	INIT_LIST_HEAD(&gdc->in_buf_list);
+	INIT_LIST_HEAD(&gdc->cfg_buf_list);
 	dev_dbg(dev, "ARM GDC driver (base) probed done\n");
 	return 0;
 }
 
 int gdc_remove(struct platform_device *pdev, struct gdc_device *gdc)
 {
-	int rc;
-
-	rc = isc_unregister(GDC_UID(gdc->id));
-	if (rc < 0)
-		dev_err(&pdev->dev, "failed to call isc_unregister (err=%d)\n", rc);
-
 	destroy_job_queue(gdc->jq);
 	put_cam_ctrl_device(gdc->ctrl_dev);
 
 	dev_dbg(&pdev->dev, "ARM GDC driver (base) removed\n");
-	return rc;
+	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

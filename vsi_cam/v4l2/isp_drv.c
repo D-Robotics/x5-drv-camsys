@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#define pr_fmt(fmt) "[isp_drv]: %s: " fmt, __func__
+
 #include <linux/clk.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -655,7 +657,7 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 	}
 
 	inst->dev->mode = ISP_MCM_MODE;
-	if (inst->id < ISP_SINK_ONLINE_PATH_MAX) {
+	if (inst->node.bctx.is_sink_online_mode) {
 		isp->online_mcm = true;
 		isp_set_stream_idx(inst->dev, inst->id, inst->id);
 	} else {

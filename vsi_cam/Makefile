@@ -78,6 +78,7 @@ obj-$(CONFIG_VIDEO_VS_CSI2_SNPS_V4L) += vs_csi2_snps_v4l.o
 
 vs_gdc_arm_v4l-objs += $(cam_common)
 vs_gdc_arm_v4l-objs += gdc/gdc.o
+vs_gdc_arm_v4l-objs += gdc/gdc_api.o
 vs_gdc_arm_v4l-objs += gdc/gdc_handler.o
 vs_gdc_arm_v4l-objs += v4l2/gdc_drv.o v4l2/cam_ctx.o v4l2/cam_buf.o v4l2/utils.o
 

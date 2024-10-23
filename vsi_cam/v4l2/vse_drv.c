@@ -16,49 +16,19 @@
 
 static int scene;
 module_param(scene, int, 0644);
-#if 0
-static struct vse_stitching stitchesx[] = {
-	{ false },
-	{ false },
-	{ false },
-	{ false },
-	{ false },
-	{ false },
-};
-
-static struct vse_stitching *stitches[] = {
-	stitchesx,
-	stitchesx,
-	stitchesx,
-	stitchesx,
-	stitchesx,
-};
-#endif
 
 static struct cam_rect cropsx[] = {
 	{}, {}, {}, {}, {}, {},
 };
 
 static struct cam_rect *crops[] = {
-	cropsx,
-	cropsx,
-	cropsx,
-	cropsx,
-	cropsx,
-	cropsx,
-	cropsx,
+	cropsx, // only one osd crop kept for now
 };
 
 static struct ires {
 	u16 width, height;
 } iress[] = {
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
-	{ 1920, 1080 },
+	{ 1920, 1080 }, // only one resolution kept for now
 };
 
 #define sd_to_vse_v4l_instance(s) \
@@ -473,7 +443,7 @@ static int vse_init_output_ctx(struct v4l2_buf_ctx *ctx)
 	struct cam_ctx * buf_ctx;
 	struct media_pad *pad;
 
-	if (inst->id < VSE_SINK_ONLINE_PATH_MAX)
+	if (inst->node.bctx.is_sink_online_mode)
 		return 0;
 
 	if (is_vse_sink_linked(sd))
@@ -493,7 +463,7 @@ static bool vse_is_standalone(struct v4l2_buf_ctx *ctx)
 	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
 	struct v4l2_subdev *sd = &inst->node.sd;
 
-	if (inst->id < VSE_SINK_ONLINE_PATH_MAX)
+	if (inst->node.bctx.is_sink_online_mode)
 		return false;
 
 	if (is_vse_sink_linked(sd))
@@ -578,7 +548,7 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 
 		refcount_inc(&vse->state_count);
 
-		if (vse->id < VSE_SINK_ONLINE_PATH_MAX)
+		if (vse->node.bctx.is_sink_online_mode)
 			rc = vse_set_source(vse->dev, vse->id, VSE_SRC_STRM0);
 		else
 			rc = vse_set_source(vse->dev, vse->id, VSE_SRC_RDMA);
@@ -656,7 +626,6 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 {
 	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
 	struct cam_format f;
-	// struct vse_stitching *stitch;
 	struct v4l2_subdev_format s_f = *fmt;
 	struct cam_rect crop;
 	struct vse_fps_rate fps;
@@ -669,13 +638,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 
 	if (channel < 0)
 		return -EINVAL;
-#if 0
-	stitch = stitches[scene];
-	if (stitch[channel].enabled) {
-		hfactor = stitch[channel].hfactor;
-		vfactor = stitch[channel].vfactor;
-	}
-#endif
+
 	memset(&f, 0, sizeof(f));
 	f.format = CAM_FMT_NV12;
 	f.width = iress[scene].width;
@@ -728,22 +691,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		pr_err("vse_set_fps_dst_rate failed");
 		goto _exit;
 	}
-#if 0
-	if (!stitch[channel].enabled)
-		return 0;
 
-	if (WARN_ON(channel != stitch[channel].left_top))
-		return 0;
-
-	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
-		if (stitch[i].enabled && i != channel) {
-			crop = crops[scene][i];
-			rc = vse_set_oformat(inst->dev, inst->id, i, &f, &crop, true);
-			if (rc < 0)
-				return rc;
-		}
-	}
-#endif
 _exit:
 	mutex_unlock(&inst->fmt_lock);
 	return rc;
