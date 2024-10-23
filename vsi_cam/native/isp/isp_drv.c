@@ -558,8 +558,10 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 		}
 
 		inst->ctx.is_sink_online_mode = !!src_inst->online_mode;
-		inst->ctx.src_ctx[0] = (struct cam_ctx *)vctx->vdev;
-		set_online(inst->ctx.is_src_online_mode, 0);
+		if (!!inst->online_mode) {
+			inst->ctx.src_ctx[0] = (struct cam_ctx *)vctx->vdev;
+			set_online(inst->ctx.is_src_online_mode, 0);
+		}
 		if (inst->ochn_attr.ddr_en) {
 			inst->ctx.src_ctx[1] = (struct cam_ctx *)vctx->vdev;
 			set_offline(inst->ctx.is_src_online_mode, 1);
