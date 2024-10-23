@@ -567,7 +567,7 @@ int sif_close(struct sif_device *sif, u32 inst)
 	if (!dis_clk)
 		goto _exit;
 
-	sif_reset(sif);
+	// sif_reset(sif);
 	rc = sif_runtime_suspend(sif->dev);
 
 _exit:
