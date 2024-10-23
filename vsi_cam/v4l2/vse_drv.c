@@ -648,6 +648,7 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 	if (!inst->fmt_changed || memcmp(&f, &inst->ifmt, sizeof(f))) {
 		struct vse_msg msg;
 
+		inst->fmt_changed = true;
 		s_f.format.width = f.width;
 		s_f.format.height = f.height;
 		rc = subdev_set_fmt(sd, state, &s_f);
@@ -664,13 +665,12 @@ static int vse_set_fmt(struct v4l2_subdev *sd,
 		if (rc < 0)
 			goto _exit;
 		memcpy(&inst->ifmt, &f, sizeof(f));
-		inst->fmt_changed = true;
-	}
 
-	if (inst->node.bctx.is_sink_online_mode)
-		vse_set_cascade(inst->dev, inst->id, inst->id, true); //FIXME
-	else
-		vse_set_cascade(inst->dev, inst->id, inst->id, false);
+		if (inst->node.bctx.is_sink_online_mode)
+			vse_set_cascade(inst->dev, inst->id, inst->id, true); //FIXME
+		else
+			vse_set_cascade(inst->dev, inst->id, inst->id, false);
+	}
 
 	f.width = ALIGN_DOWN(fmt->format.width / hfactor, 16);
 	f.height = fmt->format.height / vfactor;
