@@ -424,6 +424,11 @@ int32_t common_init(uint8_t chn, uint8_t mode)
 	// update hal ctrl info & wake_up
 	get_common_info(chn);
 	get_tuning_info(chn);
+	// just give exptime a init value to prevent that: user did not config this value
+	// maybe the value 400 is not suitable for all sensor
+	if (sensor_param[chn].exposure_time_init == 0) {
+		sensor_param[chn].exposure_time_init = 400;
+	}
 	sensor_ctl[chn].gain_buf[0] = sensor_param[chn].analog_gain_init;
 	sensor_ctl[chn].dgain_buf[0] = sensor_param[chn].digital_gain_init;
 	sensor_ctl[chn].line_buf[0] = sensor_param[chn].exposure_time_init;
