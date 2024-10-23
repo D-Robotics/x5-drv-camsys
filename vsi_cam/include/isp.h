@@ -163,7 +163,7 @@ int isp_set_iformat(struct isp_device *isp, u32 inst, struct cam_format *fmt, st
 		    bool hdr_en);
 int isp_set_oformat(struct isp_device *isp, u32 inst, struct cam_format *fmt);
 int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt);
-int isp_set_state(struct isp_device *isp, u32 inst, int state);
+int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type type);
 int isp_get_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
 int isp_set_stream_idx(struct isp_device *isp, u32 inst, int idx);
@@ -176,7 +176,7 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_m
 int isp_get_schedule(struct isp_device *isp, u32 *inst);
 int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset);
 int isp_open(struct isp_device *isp, u32 inst);
-int isp_close(struct isp_device *isp, u32 inst);
+int isp_close(struct isp_device *isp, u32 inst, enum group_type type);
 int isp_probe(struct platform_device *pdev, struct isp_device *isp);
 int isp_remove(struct platform_device *pdev, struct isp_device *isp);
 

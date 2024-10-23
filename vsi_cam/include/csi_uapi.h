@@ -9,12 +9,6 @@
 
 #define CSI_UID(n) cam_fourcc('c', 's', 'i', (n) + '0')
 
-#define CSI_MSG_SET_VC_CFG    (0x1)
-#define CSI_MSG_SET_LANES     (0x2)
-#define CSI_MSG_SET_LANE_RATE (0x3)
-#define CSI_MSG_SET_TPG_MODE  (0x4)
-#define CSI_MSG_SET_BYPASS    (0x5)
-
 #define CSI_IPI_ADV_FEAT_EVSELPROG   BIT(16)
 #define CSI_IPI_ADV_FEAT_EN_VIDEO    BIT(17)
 #define CSI_IPI_ADV_FEAT_EN_LS       BIT(18)

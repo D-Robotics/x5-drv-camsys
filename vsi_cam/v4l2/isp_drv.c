@@ -509,7 +509,8 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
 		else
 			isp_set_input_select(isp->dev, isp->id, isp->id, 0);  //FIXME
-		rc = isp_set_state(isp->dev, isp->id, enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED);
+		rc = isp_set_state(isp->dev, isp->id,
+			enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
 
@@ -526,7 +527,8 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 
-		rc = isp_set_state(isp->dev, isp->id, enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED);
+		rc = isp_set_state(isp->dev, isp->id,
+			enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
 		if (!isp->node.bctx.is_sink_online_mode)
@@ -667,7 +669,7 @@ static int isp_set_fmt(struct v4l2_subdev *sd,
 		 inst->id, isp->online_mcm, inst->dev->mode, inst->id);
 
 	// FIXME
-	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED);
+	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED, V4L_GROUP);
 
 	rc = isp_set_format(inst->dev, inst->id, &f);
 	if (rc < 0)
@@ -787,7 +789,7 @@ static int isp_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	rc = subdev_close(sd);
 	if (rc < 0)
 		goto _exit;
-	rc = isp_close(inst->dev, inst->id);
+	rc = isp_close(inst->dev, inst->id, V4L_GROUP);
 
 _exit:
 	mutex_unlock(&inst->open_lock);

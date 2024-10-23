@@ -122,9 +122,15 @@ struct isp_metadata {
 	__u8 last;
 };
 
+enum group_type {
+    V4L_GROUP = 0,
+    CUSTOM_GROUP,
+};
+
 struct isp_msg {
 	__u32 id;
 	__u32 inst;
+	__u32 group; /* enum group_type */
 	union {
 		struct cam_reg reg;
 		struct cam_input in;

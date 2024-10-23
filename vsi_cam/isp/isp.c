@@ -459,7 +459,7 @@ void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam
 	dev_dbg(isp->dev, "stride %d, height %d, phys_addr %llx\n", fmt->stride, fmt->height, phys_addr);
 }
 
-int isp_set_state(struct isp_device *isp, u32 inst, int state)
+int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type type)
 {
 	struct isp_msg msg;
 	struct isp_instance *ins;
@@ -680,6 +680,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state)
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = inst;
 	msg.state = state;
+	msg.group = type;
 	rc = isp_post(isp, &msg, true);
 
 	if (state == CAM_STATE_STARTED) {
@@ -1314,7 +1315,7 @@ _exit:
 	return rc;
 }
 
-int isp_close(struct isp_device *isp, u32 inst)
+int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 {
 	struct isp_instance *ins;
 	bool dis_clk = false;
@@ -1355,7 +1356,7 @@ int isp_close(struct isp_device *isp, u32 inst)
 	}
 
 	ins->meta_inst = isp->num_insts;
-	rc = isp_set_state(isp, inst, CAM_STATE_CLOSED);
+	rc = isp_set_state(isp, inst, CAM_STATE_CLOSED, type);
 	if (rc < 0)
 		dev_err(isp->dev, "failed to call isp_set_state (err=%d)\n", rc);
 

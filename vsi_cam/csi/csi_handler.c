@@ -268,95 +268,9 @@ static const struct csi_irq_reg csi_err_regs[] = {
 	}
 };
 
-static u32 handle_set_vc_cfg(struct csi_device *csi, struct csi_msg *m)
-{
-	if (m->inst >= csi->num_insts - 1)
-		return -EINVAL;
-
-	return csi_ipi_set_vc_cfg(csi, m->inst, &m->vc_cfg);
-}
-
-static s32 handle_set_format(struct csi_device *csi, struct csi_msg *msg)
-{
-	struct cam_format f;
-	struct csi_ipi_base_cfg ipi_cfg;
-
-	f.width = msg->fmt.width;
-	f.height = msg->fmt.height;
-	f.format = msg->fmt.format;
-	ipi_cfg.id = msg->inst;
-	ipi_cfg.adv_val = CSI_IPI_ADV_FEAT_EVSELPROG | CSI_IPI_ADV_FEAT_EN_VIDEO
-			| CSI_IPI_ADV_FEAT_EN_EBD | CSI_IPI_ADV_FEAT_MODE_LEGACY;
-	ipi_cfg.cut_through = true;
-	ipi_cfg.mem_auto_flush = true;
-	csi_ipi_init(csi, &ipi_cfg, &f);
-	csi->subirq_func = NULL;
-	csi->irq_done_func = NULL;
-	csi_irq_enable(csi);
-	return 0;
-}
-
-static s32 handle_set_state(struct csi_device *csi, struct csi_msg *msg)
-{
-	if (msg->state)
-		csi_ipi_start(csi, msg->inst);
-	else
-		csi_ipi_stop(csi, msg->inst);
-	return 0;
-}
-
-static s32 handle_reset_control(struct csi_device *csi, struct csi_msg *msg)
-{
-	if (csi->rst) {
-		reset_control_assert(csi->rst);
-		udelay(2);
-		reset_control_deassert(csi->rst);
-	}
-	return 0;
-}
-
 s32 csi_msg_handler(void *msg, u32 len, void *arg)
 {
-	struct csi_device *csi = (struct csi_device *)arg;
-	struct csi_msg *m = (struct csi_msg *)msg;
-	s32 rc = 0;
-
-	if (!csi || !msg || !len)
-		return -EINVAL;
-
-	if (csi->is_native)
-		return 0;
-	switch (m->id) {
-	case CSI_MSG_SET_VC_CFG:
-		rc = handle_set_vc_cfg(csi, m);
-		break;
-	case CSI_MSG_SET_LANES:
-		csi_set_lanes(csi, m->num_lanes, 0);
-		break;
-	case CSI_MSG_SET_LANE_RATE:
-		rc = csi_set_lane_rate(csi, m->lane_rate);
-		break;
-	case CSI_MSG_SET_TPG_MODE:
-		/* ppipg clk should be enable before RST release if tpg needed */
-		csi_set_tpg_mode(csi, m->tpg_cfg.tpg_en, m->tpg_cfg.pkt2pkt_time,
-				 0, 0, DATA_TYPE_RGB888);
-		break;
-	case CSI_MSG_SET_BYPASS:
-		csi->is_bypass = m->bypass ? true : false;
-		break;
-	case CAM_MSG_SET_FORMAT:
-		rc = handle_set_format(csi, m);
-		break;
-	case CAM_MSG_SET_STATE:
-		rc = handle_set_state(csi, m);
-		break;
-	case CAM_MSG_RESET_CONTROL:
-		rc = handle_reset_control(csi, m);
-		break;
-	default:
-		return -EINVAL;
-	}
-	return rc;
+	return 0;
 }
 
 void csi_irq_enable(struct csi_device *csi)

@@ -527,6 +527,77 @@ static void csi_inst_remove(struct csi_v4l_instance *insts, u32 num)
 		subdev_deinit(&insts[i].node);
 }
 
+static int config_csi(struct csi_v4l_instance *csi)
+{
+	struct csi_device *csi_dev;
+	struct v4l2_subdev *sd;
+	struct csi_vc_cfg vc_cfg;
+	u32 lane_rate, num_lanes;
+	struct device *dev;
+	struct fwnode_handle *csi_fwnode, *endpoint;
+	int rc = 0;
+
+	vc_cfg.vc_mode   = CSI_VC_CAMERA;
+	vc_cfg.vc_ebd_en = 1;
+	sd = &csi->node.sd;
+	csi_dev = csi->dev;
+
+	dev = sd->dev;
+	if (!dev) {
+		pr_err("No device found for csi subdev\n");
+		return -EINVAL;
+	}
+
+	csi_fwnode = dev_fwnode(dev);
+	if (!csi_fwnode) {
+		dev_err(dev, "No fwnode found for csi device\n");
+		return -EINVAL;
+	}
+
+	endpoint = fwnode_graph_get_next_endpoint(csi_fwnode, NULL);
+	if (!endpoint) {
+		dev_err(dev, "No endpoint found for csi\n");
+		return -EINVAL;
+	}
+
+	rc = fwnode_property_read_u32(endpoint, "vc_id", &vc_cfg.vc_id);
+	if (rc) {
+		dev_err(dev, "Failed to read vc_id: %d\n", rc);
+		goto _exit;
+	}
+
+	rc = fwnode_property_read_u32(endpoint, "lane-rate", &lane_rate);
+	if (rc) {
+		dev_err(dev, "Failed to read lane-rate: %d\n", rc);
+		goto _exit;
+	}
+
+	num_lanes = fwnode_property_count_u32(endpoint, "data-lanes");
+	if (num_lanes <= 0) {
+		dev_err(dev, "Invalid number of data lanes: %d\n", num_lanes);
+		rc = -EINVAL;
+		goto _exit;
+	}
+
+	rc = csi_ipi_set_vc_cfg(csi_dev, csi->id, &vc_cfg);
+	if (rc) {
+		dev_err(dev, "csi_ipi_set_vc_cfg failed: %d\n", rc);
+		goto _exit;
+	}
+
+	csi_set_lanes(csi_dev, num_lanes, 0);
+
+	rc = csi_set_lane_rate(csi_dev, lane_rate);
+	if (rc) {
+		dev_err(dev, "csi_set_lane_rate failed: %d\n", rc);
+		goto _exit;
+	}
+
+_exit:
+	fwnode_handle_put(endpoint);
+	return rc;
+}
+
 static int csi_async_bound(struct subdev_node *sn)
 {
 	struct csi_v4l_instance *csi =
@@ -543,6 +614,10 @@ static int csi_async_bound(struct subdev_node *sn)
 
 	while (i < csi->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
+
+		rc = config_csi(ins);
+		if (rc < 0)
+			return rc;
 
 		if (ins != csi) {
 			rc = v4l2_device_register_subdev

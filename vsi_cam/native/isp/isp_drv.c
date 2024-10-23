@@ -167,7 +167,7 @@ static s32 isp_nat_close(struct vio_video_ctx *vctx)
 		}
 	} else if (vctx->id == VNODE_ID_CAP) {
 		pr_info("%s set isp state to CLOSED\n", __func__);
-		rc = isp_close(&inst->dev->isp_dev, vctx->ctx_id);
+		rc = isp_close(&inst->dev->isp_dev, vctx->ctx_id, CUSTOM_GROUP);
 		if (rc < 0) {
 			pr_err("%s failed to call isp_close(err=%d).\n", __func__, rc);
 			return rc;
@@ -421,7 +421,7 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	}
 	inst->stream_idx = dev->isp_dev.insts[vctx->ctx_id].online_mcm ? i : 0;
 	isp_set_stream_idx(&dev->isp_dev, vctx->ctx_id, inst->stream_idx);
-	return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_INITED);
+	return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_INITED, CUSTOM_GROUP);
 }
 
 static s32 isp_video_get_cfg(struct vio_video_ctx *vctx, unsigned long arg)
@@ -577,7 +577,7 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 
 		if (!inst->metadata_en) {
 			pr_info("%s inst: %d, set isp state to STARTED\n", __func__, vctx->ctx_id);
-			return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STARTED);
+			return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STARTED, CUSTOM_GROUP);
 		}
 	}
 	return 0;
@@ -597,7 +597,7 @@ static s32 isp_video_streamoff(struct vio_video_ctx *vctx)
 
 		if (!inst->metadata_en) {
 			pr_info("%s inst: %d, set isp state to STOPPED\n", __func__, vctx->ctx_id);
-			rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED);
+			rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED, CUSTOM_GROUP);
 			if (rc < 0) {
 				pr_err("%s failed to call isp_set_state(err=%d).\n", __func__, rc);
 				return rc;
