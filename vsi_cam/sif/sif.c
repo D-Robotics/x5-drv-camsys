@@ -558,6 +558,7 @@ int sif_close(struct sif_device *sif, u32 inst)
 		return -EINVAL;
 
 	mutex_lock(&sif->open_lock);
+	sif_reset_ipi(sif, inst);
 	if (refcount_read(&sif->open_cnt) > REFCNT_INIT_VAL) {
 		refcount_dec(&sif->open_cnt);
 		if (refcount_read(&sif->open_cnt) == REFCNT_INIT_VAL)
