@@ -571,13 +571,14 @@ static int32_t hobot_lpwm_probe(struct platform_device *pdev)
 	int32_t ret = LPWM_RET_OK;
 	struct hobot_lpwm_ins *lpwm;
 
-	lpwm = (struct hobot_lpwm_ins *)devm_kzalloc(&pdev->dev,
+	lpwm = (struct hobot_lpwm_ins *)osal_kmalloc(
 						     sizeof(struct hobot_lpwm_ins),
-						     GFP_KERNEL);
+						     0);
 	if (IS_ERR(lpwm)) {
 		lpwm_err(NULL, "devm kzalloc failed!\n");
 		return -ENOMEM;
 	}
+	memset(lpwm, 0, sizeof(struct hobot_lpwm_ins));
 
 	ret = lpwm_preinit(pdev, lpwm);
 	if (ret != LPWM_RET_OK) {
