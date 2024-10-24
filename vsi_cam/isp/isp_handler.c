@@ -262,12 +262,25 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct isp_instance *inst, bool timeout, u32 mode,
-			struct cam_frame_info *info)
+void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout)
 {
 	struct isp_irq_ctx *ctx = &inst->ctx;
 	struct cam_list_node *node;
 	ktime_t now_time = ktime_get_boottime();
+	struct cam_frame_info *info = NULL;
+	struct ibuf *ib = NULL;
+	struct cam_ctx *src_ctx = NULL;
+	u32 i;
+
+	if (inst->online_mcm) {
+		ib = list_first_entry_or_null(&isp->ibm[isp->cur_mi_irq_ctx].list3, struct ibuf,
+				      entry);
+		if (ib) {
+			info = &ib->info;
+			list_del(&ib->entry);
+			list_add_tail(&ib->entry, &isp->ibm[isp->cur_mi_irq_ctx].list1);
+		}
+	}
 
 	if (ctx->sink_buf) {
 		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
@@ -277,9 +290,6 @@ static inline void frame_done(struct isp_instance *inst, bool timeout, u32 mode,
 	node = list_first_entry_or_null(ctx->src_buf_list3,
 					struct cam_list_node, entry);
 	if (node) {
-		u32 i;
-		struct cam_ctx *src_ctx = NULL;
-
 		if (has_offline(ctx->is_src_online_mode)) {
 			i = get_offline(ctx->is_src_online_mode);
 			src_ctx = ctx->src_ctx[i];
@@ -289,7 +299,7 @@ static inline void frame_done(struct isp_instance *inst, bool timeout, u32 mode,
 			cam_drop_irq(src_ctx, node->data);
 		} else {
 			if (ctx->is_sink_online_mode) {
-				if (mode == ISP_STRM_MODE)
+				if (isp->mode == ISP_STRM_MODE)
 					sif_get_frame_des(src_ctx);
 				else
 					cam_update_frame_info(src_ctx, info);
@@ -300,9 +310,10 @@ static inline void frame_done(struct isp_instance *inst, bool timeout, u32 mode,
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
 	}
+
 	if (inst->last_frame_done)
-		inst->frame_interval += ktime_to_ms
-				(ktime_sub(now_time, inst->last_frame_done));
+		inst->frame_interval += ktime_to_ms(ktime_sub(now_time, inst->last_frame_done));
+
 	inst->last_frame_done = now_time;
 	inst->frame_count++;
 }
@@ -380,15 +391,15 @@ int new_frame(struct isp_irq_ctx *ctx)
 	return 0;
 }
 
-static inline int handle_mcm(struct isp_device *isp, u32 path, bool error)
+int handle_mcm(struct isp_device *isp, u32 path, bool error)
 {
-	u32 inst = isp->stream_idx_mapping[path];
+	int inst = isp->stream_idx_mapping[path];
 	struct isp_instance *ins;
 	struct ibuf *ib;
 	struct cam_frame_info *info;
 
 	pr_debug("%s: path[%d], inst:%d\n", __func__, path, inst);
-	if (unlikely(inst >= isp->num_insts))
+	if (inst >= isp->num_insts || inst < 0)
 		return -1;
 
 	ins = &isp->insts[inst];
@@ -454,12 +465,8 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
 	struct isp_mcm_sch sch;
-	struct isp_instance *ins;
 	struct mi_mis_group mi_mis;
-	u32 isp_mis = 0;
-	u32 cur_mi_irq_ctx = INVALID_INST;
-	int rc;
-	u32 ris, isp_ris, value;
+	u32 isp_mis = 0, value;
 
 	pr_debug("+\n");
 	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
@@ -484,52 +491,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 
 	// skip buffer management if running unit test!
 	if (!isp->unit_test) {
-		isp_ris = isp_read(isp, ISP_RIS);
-		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK) {
-			ris = isp_read(isp, MIV2_RIS1);
-			if (isp_ris & BIT(26)) {
-				if (!(ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK)) {
-					pr_info("%s sensor0 dataloss but no buf full\n", __func__);
-					ris |= MIV2_MIS_MCM_RAW0_BUF_FULL_MASK;
-				}
-			}
-			handle_mcm(isp, 0, ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
-			isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
-		}
-		if (mi_mis.miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK) {
-			ris = isp_read(isp, MIV2_RIS1);
-			if (isp_ris & BIT(25)) {
-				if (!(ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK)) {
-					pr_info("%s sensor1 dataloss but no buf full\n", __func__);
-					ris |= MIV2_MIS_MCM_RAW1_BUF_FULL_MASK;
-				}
-			}
-			handle_mcm(isp, 1, ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
-			isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
-		}
-		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK) {
-			ris = isp_read(isp, MIV2_RIS3);
-			if (isp_ris & BIT(24)) {
-				if (!(ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK)) {
-					pr_info("%s sensor2 dataloss but no buf full\n", __func__);
-					ris |= MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK;
-				}
-			}
-			handle_mcm(isp, 2, ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
-			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
-		}
-		if (mi_mis.miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK) {
-			ris = isp_read(isp, MIV2_RIS3);
-			if (isp_ris & BIT(23)) {
-				if (!(ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK)) {
-					pr_info("%s sensor3 dataloss but no buf full\n", __func__);
-					ris |= MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK;
-				}
-			}
-			handle_mcm(isp, 3, ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
-			isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
-		}
-
+		isp_add_schedule(isp, &mi_mis);
 		if (mi_mis.miv2_mis1 & 0x1) {
 			/** If mp bus timeout occurs, we report an artificial
 			 *  interrupt status and drop the current frame data.
@@ -538,7 +500,6 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			isp_mis = 0x8002;
 			pr_info("mp bus timed-out!\n");
 		}
-
 		if (mi_mis.miv2_mis & 0x1) {
 			value = isp_read(isp, MI_MP_BUS_TIMEO);
 			value |= 0x1;
@@ -546,44 +507,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			value = isp_read(isp, MIV2_IMSC1);
 			value &= ~0x1;
 			isp_write(isp, MIV2_IMSC1, value);
-			rc = isp_get_schedule(isp, &cur_mi_irq_ctx);
-			if (rc) {
-				if (cur_mi_irq_ctx == INVALID_INST)
-					pr_err("fail to get currect isp instance id!\n");
-			} else {
-				pr_debug("isp:%d, mi frame done!\n", cur_mi_irq_ctx);
-				isp->cur_mi_irq_ctx = cur_mi_irq_ctx;
-				// handle isp frame end intr
-				ins = &isp->insts[isp->cur_mi_irq_ctx];
-				if (ins->state == CAM_STATE_STARTED) {
-					struct cam_frame_info *info = NULL;
-
-					if (ins->online_mcm) {
-						struct ibuf *ib;
-
-						ib = list_first_entry_or_null
-								(&isp->ibm[isp->cur_mi_irq_ctx].list3,
-								struct ibuf, entry);
-						if (ib) {
-							info = &ib->info;
-							list_del(&ib->entry);
-							list_add_tail(&ib->entry,
-								&isp->ibm[isp->cur_mi_irq_ctx].list1);
-						}
-					}
-					frame_done(ins, !!(mi_mis.miv2_mis1 & 0x1), isp->mode, info);
-					if (isp->mode == ISP_STRM_MODE)
-						ins->shd_src_node = NULL;
-				}
-			}
-		}
-
-		if (isp->mode == ISP_STRM_MODE) {
-			ins = &isp->insts[0];
-			if (ins->state != CAM_STATE_STARTED) {
-				irq_notify(isp, &mi_mis, isp_mis);
-				return IRQ_HANDLED;
-			}
+			isp_get_schedule(isp, &mi_mis);
 		}
 	}
 

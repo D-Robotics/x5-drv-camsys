@@ -1091,10 +1091,11 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_m
 	if (!isp || !sch)
 		return -EINVAL;
 
-	if (isp->mode == ISP_STRM_MODE)
-		return isp_set_schedule_online_stream(isp, isp_irq_call);
-
 	spin_lock_irqsave(&isp->sch.lock, flags);
+	if (isp->mode == ISP_STRM_MODE) {
+		isp_set_schedule_online_stream(isp, isp_irq_call);
+		goto _exit;
+	}
 	// judge frame end for MCM job (online/offline)
 	if ((miv2_mis & BIT(0) || miv2_mis & BIT(24) || isp_mis & BIT(1)) &&
 		isp->sch.frame_done_mask) {
@@ -1186,44 +1187,58 @@ _exit:
 	return rc;
 }
 
-int isp_get_schedule(struct isp_device *isp, u32 *inst)
+int isp_get_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
 {
 	unsigned long flags;
-	struct isp_instance *ins;
-	int rc = 0, id;
+	struct isp_instance *ins = NULL;
+	int rc = 0;
+	u32 id = INVALID_INST;
 
-	if (!isp || !inst)
+	if (!isp || !mi_mis)
 		return -EINVAL;
 
 	spin_lock_irqsave(&isp->sch.lock, flags);
 	if (isp->mode == ISP_STRM_MODE) {
-		*inst = 0;
+		ins = &isp->insts[0];
 		isp->sch.mi_idle = true;
-		goto _exit;
+		goto _frame_done;
 	}
 
 	id = isp->sch.next_mi_inst;
 	if (id == INVALID_INST || id >= isp->num_insts) {
-		*inst = INVALID_INST;
 		rc = -1;
-		goto _exit;
+		goto _frame_done;
 	}
 
 	ins = &isp->insts[id];
 	if (ins->tile_en) {
 		if (ins->tile_count == TILE_COUNT) {
-			*inst = INVALID_INST;
+			id = INVALID_INST;
+			ins = NULL;
 			rc = -1;
-			goto _exit;
+			goto _frame_done;
 		}
 		ins->tile_count++;
-		if (ins->tile_count < TILE_COUNT)
+		if (ins->tile_count < TILE_COUNT) {
+			pr_debug("isp:%d, tile mode hasn't been finished!\n", id);
 			rc = -1;
+		}
 	}
 
-	*inst = id;
+_frame_done:
+	if (!rc && ins) {
+		isp->cur_mi_irq_ctx = id;
+		pr_debug("isp:%d, mi frame done!\n", isp->cur_mi_irq_ctx);
+		if (ins->state == CAM_STATE_STARTED) {
+			frame_done(isp, ins, !!(mi_mis->miv2_mis1 & 0x1));
+			if (isp->mode == ISP_STRM_MODE)
+				ins->shd_src_node = NULL;
+		}
+	} else {
+		if (!ins)
+			pr_err("fail to get currect isp instance id!\n");
+	}
 
-_exit:
 	spin_unlock_irqrestore(&isp->sch.lock, flags);
 	return rc;
 }
@@ -1241,6 +1256,65 @@ int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset)
 		isp->sch.next_mi_inst = INVALID_INST;
 		isp->sch.mi_idle = true;
 		isp->sch.frame_done_mask = 0;
+	}
+	spin_unlock_irqrestore(&isp->sch.lock, flags);
+
+	return 0;
+}
+
+int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
+{
+	u32 ris, isp_ris;
+	unsigned long flags;
+
+	if (!isp)
+		return -EINVAL;
+
+	spin_lock_irqsave(&isp->sch.lock, flags);
+	isp_ris = isp_read(isp, ISP_RIS);
+	if (mi_mis->miv2_mis & MIV2_MIS_MCM_RAW0_FRAME_END_MASK) {
+		ris = isp_read(isp, MIV2_RIS1);
+		if (isp_ris & BIT(26)) {
+			if (!(ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK)) {
+				pr_info("%s sensor0 dataloss but no buf full\n", __func__);
+				ris |= MIV2_MIS_MCM_RAW0_BUF_FULL_MASK;
+			}
+		}
+		handle_mcm(isp, 0, ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
+		isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW0_BUF_FULL_MASK);
+	}
+	if (mi_mis->miv2_mis & MIV2_MIS_MCM_RAW1_FRAME_END_MASK) {
+		ris = isp_read(isp, MIV2_RIS1);
+		if (isp_ris & BIT(25)) {
+			if (!(ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK)) {
+				pr_info("%s sensor1 dataloss but no buf full\n", __func__);
+				ris |= MIV2_MIS_MCM_RAW1_BUF_FULL_MASK;
+			}
+		}
+		handle_mcm(isp, 1, ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
+		isp_write(isp, MIV2_ICR1, MIV2_MIS_MCM_RAW1_BUF_FULL_MASK);
+	}
+	if (mi_mis->miv2_mis3 & MIV2_MIS3_MCM_G2RAW0_FRAME_END_MASK) {
+		ris = isp_read(isp, MIV2_RIS3);
+		if (isp_ris & BIT(24)) {
+			if (!(ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK)) {
+				pr_info("%s sensor2 dataloss but no buf full\n", __func__);
+				ris |= MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK;
+			}
+		}
+		handle_mcm(isp, 2, ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
+		isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK);
+	}
+	if (mi_mis->miv2_mis3 & MIV2_MIS3_MCM_G2RAW1_FRAME_END_MASK) {
+		ris = isp_read(isp, MIV2_RIS3);
+		if (isp_ris & BIT(23)) {
+			if (!(ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK)) {
+				pr_info("%s sensor3 dataloss but no buf full\n", __func__);
+				ris |= MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK;
+			}
+		}
+		handle_mcm(isp, 3, ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
+		isp_write(isp, MIV2_ICR3, MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK);
 	}
 	spin_unlock_irqrestore(&isp->sch.lock, flags);
 

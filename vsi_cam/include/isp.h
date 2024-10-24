@@ -173,8 +173,9 @@ int isp_query_job(struct isp_device *isp, u32 *inst);
 int isp_remove_job(struct isp_device *isp, u32 inst);
 int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_mis,
 		     u32 isp_mis, bool isp_irq_call);
-int isp_get_schedule(struct isp_device *isp, u32 *inst);
+int isp_get_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis);
 int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset);
+int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis);
 int isp_open(struct isp_device *isp, u32 inst);
 int isp_close(struct isp_device *isp, u32 inst, enum group_type type);
 int isp_probe(struct platform_device *pdev, struct isp_device *isp);
@@ -195,8 +196,10 @@ int isp_runtime_resume(struct device *dev);
 #endif
 
 s32 isp_msg_handler(void *msg, u32 len, void *arg);
+void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout);
 struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp);
 int new_frame(struct isp_irq_ctx *ctx);
+int handle_mcm(struct isp_device *isp, u32 path, bool error);
 irqreturn_t isp_irq_handler(int irq, void *arg);
 irqreturn_t mi_irq_handler(int irq, void *arg);
 irqreturn_t fe_irq_handler(int irq, void *arg);
