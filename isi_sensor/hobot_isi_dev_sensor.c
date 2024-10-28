@@ -141,9 +141,18 @@ static void isi_set_sensor_again_param(struct isi_sensor_again_param_s *sensor_a
                         pr_err("isi callback sensor_set_again error \n");
                         return;
                 }
+
+		// SIF -> SENSOR FS EVENT will effect
+		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_again_param->chn, 0);
+		if (ret < 0) {
+			pr_err("isi callback sensor_update error \n");
+			return;
+		}
+
         } else {
                 pr_err("isi_sensor_cops is NULL \n");
         }
+
 }
 
 static int16_t isi_get_sensor_dgain_param(uint32_t chn)
@@ -194,20 +203,19 @@ static void isi_set_sensor_dgain_param(struct isi_sensor_dgain_param_s *sensor_d
                                 sensor_dgain_param->isi_sensor_dgain_info.dgain_num);
                 if (ret < 0) {
                         pr_err("isi callback sensor_set_dgain error \n");
+			return;
                 }
+
+		// SIF -> SENSOR FS EVENT will effect
+		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_dgain_param->chn, 0);
+		if (ret < 0) {
+			pr_err("isi callback sensor_update error \n");
+			return;
+		}
+
         } else {
                 pr_err("isi_sensor_cops is NULL \n");
         }
-
-	//X5 TODO FIXME
-	if (g_isi_sen->isi_sensor_cops != NULL) {
-		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_dgain_param->chn, 1);
-		if (ret < 0) {
-			pr_err("isi callback sensor_update error \n");
-		}
-	} else {
-		pr_err("isi_sensor_cops is NULL \n");
-	}
 }
 
 static int16_t isi_get_sensor_line_param(uint32_t chn)
@@ -260,20 +268,18 @@ static void isi_set_sensor_line_param(struct isi_sensor_line_param_s *sensor_lin
                                 &sensor_line_param->isi_sensor_line_info.line_buf[2]);
                 if (ret < 0) {
                         pr_err("isi callback sensor_set_line_param error \n");
+			return;
                 }
+
+		// SIF -> SENSOR FS EVENT will effect
+		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_line_param->chn, 0);
+		if (ret < 0) {
+			pr_err("isi callback sensor_update error \n");
+			return;
+		}
         } else {
                 pr_err("isi_sensor_cops is NULL \n");
         }
-
-	//X5 TODO FIXME
-	if (g_isi_sen->isi_sensor_cops != NULL) {
-		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_line_param->chn, 1);
-		if (ret < 0) {
-			pr_err("isi callback sensor_update error \n");
-		}
-	} else {
-		pr_err("isi_sensor_cops is NULL \n");
-	}
 }
 
 static int32_t isi_get_sensor_otp_param(isi_sensor_otp_param_t* potp)

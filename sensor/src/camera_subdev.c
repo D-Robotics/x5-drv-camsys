@@ -364,6 +364,7 @@ static int32_t common_update(uint32_t chn, struct sensor_priv_old *updata, int32
 static int32_t isi_update(uint32_t chn, int32_t effect)
 {
 	int32_t ret = 0;
+	struct sensor_device_s *sen = sensor_dev_get(chn);
 	struct os_dev* dev = sensor_osdev_get(chn);
 
 	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
@@ -373,12 +374,18 @@ static int32_t isi_update(uint32_t chn, int32_t effect)
 
 	if (sensor_param[chn].lines_per_second == 0u)
 		return -1;
+	sensor_frame_2a_record(sen, SENSOR_F2AS_UPDATE);
 
-	// update hal ctrl info & wake_up
-	set_sensor_aexp_info(chn, &sensor_ctl[chn]);
-	sensor_ctrl_wakeup_flag(chn);
-	// Initial local parameters
-	cmd_add_to_work(chn, (uint32_t)SENSOR_UPDATE, &sensor_ctl[chn]);
+	// ae param from sensor_ctrl[chn]
+
+	if (sensor_ctrl_mode_get(sen) == SENSOR_CTRLM_USER) {
+		// update hal ctrl info & wake_up
+		set_sensor_aexp_info(chn, &sensor_ctl[chn]);
+		sensor_ctrl_wakeup_flag(chn);
+	} else {
+		// Initial local parameters
+		cmd_add_to_work(chn, (uint32_t)SENSOR_UPDATE, &sensor_ctl[chn]);
+	}
 
 	if (effect != 0) {
 		sen_debug(dev, "%s chn %d update ae param and effect\n", __func__, chn);/*PRQA S 0685,1294*/
@@ -862,9 +869,8 @@ static void sensor_frame_event_2a(int32_t flow_id, enum _sensor_frame_event_e ev
 		return;
 	sensor_frame_event_record(sen, event);
 
-	// FIXME
-	//if (event == sen->param.ae_event_flag)
-	//	wake_up_ae_update(flow_id);
+	if (event == sen->param.ae_event_flag)
+		wake_up_ae_update(flow_id);
 }
 
 static int32_t sensor_get_ts_compensate(int32_t flow_id)
