@@ -20,6 +20,7 @@
 
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
+#include <linux/device.h>
 
 #include "hobot_sensor_ops.h"
 #include "camera_i2c.h"
@@ -28,21 +29,30 @@
 /* #include "inc/camera_subdev.h" */
 /* #include "inc/camera_i2c.h" */
 
+static int match_i2c_client_by_addr(struct device *dev, void *data)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	u32 *addr = data;
+
+	if (dev->type == &i2c_client_type && client->addr == *addr) {
+		return 1;  // find it
+	}
+	return 0;
+}
+
 static struct i2c_client *find_i2c_client_by_addr(struct i2c_adapter *adapter, uint32_t addr)
 {
-	struct i2c_client *client;
-	struct device *dev;
+    struct device *dev;
 
-	list_for_each_entry(dev, &adapter->dev.kobj.entry, kobj.entry) {
-		if (dev->type == &i2c_client_type) {
-			client = to_i2c_client(dev);
-			if (client->addr == addr) {
-				return client;
-			}
-		}
-	}
+    if (!adapter || !adapter->dev.kobj.parent)
+        return NULL;
 
-	return NULL;
+    dev = device_find_child(&adapter->dev, &addr, match_i2c_client_by_addr);
+
+    if (dev)
+        return to_i2c_client(dev);
+
+    return NULL;
 }
 
 /**
