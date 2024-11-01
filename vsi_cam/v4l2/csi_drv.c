@@ -401,6 +401,7 @@ static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 	struct v4l2_ctrl *vctrl;
 	u16 i = 0;
 	int rc = 0;
+	uint32_t range[3];
 
 	if (unlikely(!sd || !sd->entity.pads))
 		return -EINVAL;
@@ -424,28 +425,50 @@ static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 				memcpy(ctrl->ctrl_data, &fi.interval.denominator, sizeof(fi.interval.denominator));
 				break;
 			case V4L2_CID_EXP_RANGE:
-				uint32_t exp_range[3];
-
-				exp_range[0] = 1;
-				exp_range[1] = 1104;
-				exp_range[2] = 1;
-				memcpy(ctrl->ctrl_data, &exp_range, sizeof(exp_range));
+				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, V4L2_CID_EXPOSURE);
+				if (vctrl != NULL) {
+					range[0] = vctrl->minimum;
+					range[1] = vctrl->maximum;
+					range[2] = vctrl->step;
+				} else {
+					range[0] = 1;
+					range[1] = 1;
+					range[2] = 1;
+				}
+				memcpy(ctrl->ctrl_data, &range, sizeof(range));
+				pr_debug("%s cid:0x%x range min%d max%d step%d\n", __func__,
+						ctrl->ctrl_id, range[0], range[1], range[2]);
 				break;
 			case V4L2_CID_AGAIN_RANGE:
-				uint32_t again_range[3];
-
-				again_range[0] = 0;
-				again_range[1] = 1023;
-				again_range[2] = 16;
-				memcpy(ctrl->ctrl_data, &again_range, sizeof(again_range));
+				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, V4L2_CID_ANALOGUE_GAIN);
+				if (vctrl != NULL) {
+					range[0] = vctrl->minimum;
+					range[1] = vctrl->maximum;
+					range[2] = vctrl->step;
+				} else {
+					range[0] = 1;
+					range[1] = 1;
+					range[2] = 1;
+				}
+				memcpy(ctrl->ctrl_data, &range, sizeof(range));
+				pr_debug("%s cid:0x%x range min%d max%d step%d\n", __func__,
+						ctrl->ctrl_id, range[0], range[1], range[2]);
 				break;
-			case V4L2_CID_DGAIN_RANGE:
-				uint32_t dgain_range[3];
 
-				dgain_range[0] = 1;
-				dgain_range[1] = 1;
-				dgain_range[2] = 1;
-				memcpy(ctrl->ctrl_data, &dgain_range, sizeof(dgain_range));
+			case V4L2_CID_DGAIN_RANGE:
+				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, V4L2_CID_DIGITAL_GAIN);
+				if (vctrl != NULL) {
+					range[0] = vctrl->minimum;
+					range[1] = vctrl->maximum;
+					range[2] = vctrl->step;
+				} else {
+					range[0] = 1;
+					range[1] = 1;
+					range[2] = 1;
+				}
+				memcpy(ctrl->ctrl_data, &range, sizeof(range));
+				pr_debug("%s cid:0x%x range min%d max%d step%d\n", __func__,
+						ctrl->ctrl_id, range[0], range[1], range[2]);
 				break;
 			case V4L2_CID_BAYER_PATTERN:
 				uint32_t bayerPattern;
