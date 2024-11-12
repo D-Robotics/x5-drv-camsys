@@ -935,7 +935,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [30] = "err_f_bndry_match_vc30", [31] = "err_f_bndry_match_vc31" }
 #endif
 	},
-	{ 5, MIPI_HOST_1P5_INT_SEQ_FRM_FATAL, REG_MIPI_HOST_INT_ST_SEQ_FRAME_FATAL,
+	{ 7, MIPI_HOST_1P5_INT_SEQ_FRM_FATAL, REG_MIPI_HOST_INT_ST_SEQ_FRAME_FATAL,
 		REG_MIPI_HOST_INT_MSK_SEQ_FRAME_FATAL, REG_MIPI_HOST_INT_FORCE_SEQ_FRAME_FATAL,
 		0xffffffffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -957,7 +957,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [30] = "err_f_seq_vc30", [31] = "err_f_seq_vc31" }
 #endif
 	},
-	{ 6, MIPI_HOST_1P5_INT_CRC_FRM_FATAL, REG_MIPI_HOST_INT_ST_CRC_FRAME_FATAL,
+	{ 10, MIPI_HOST_1P5_INT_CRC_FRM_FATAL, REG_MIPI_HOST_INT_ST_CRC_FRAME_FATAL,
 		REG_MIPI_HOST_INT_MSK_CRC_FRAME_FATAL, REG_MIPI_HOST_INT_FORCE_CRC_FRAME_FATAL,
 		0xffffffffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -979,7 +979,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [30] = "err_frame_data_vc30", [31] = "err_frame_data_vc31" }
 #endif
 	},
-	{ 7, MIPI_HOST_1P5_INT_PLD_CRC_FATAL, REG_MIPI_HOST_INT_ST_PLD_CRC_FATAL,
+	{ 13, MIPI_HOST_1P5_INT_PLD_CRC_FATAL, REG_MIPI_HOST_INT_ST_PLD_CRC_FATAL,
 		REG_MIPI_HOST_INT_MSK_PLD_CRC_FATAL, REG_MIPI_HOST_INT_FORCE_PLD_CRC_FATAL,
 		0xffffffffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1001,7 +1001,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [30] = "err_crc_vc30", [31] = "err_crc_vc31" }
 #endif
 	},
-	{ 8, MIPI_HOST_1P5_INT_DATA_ID, REG_MIPI_HOST_INT_ST_DATA_ID,
+	{ 16, MIPI_HOST_1P5_INT_DATA_ID, REG_MIPI_HOST_INT_ST_DATA_ID,
 		REG_MIPI_HOST_INT_MSK_DATA_ID, REG_MIPI_HOST_INT_FORCE_DATA_ID,
 		0xffffffffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1023,7 +1023,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [30] = "err_id_vc30", [31] = "err_id_vc31" }
 #endif
 	},
-	{ 9, MIPI_HOST_1P5_INT_ECC_CORRECTED, REG_MIPI_HOST_INT_ST_ECC_CORRECT,
+	{ 19, MIPI_HOST_1P5_INT_ECC_CORRECTED, REG_MIPI_HOST_INT_ST_ECC_CORRECT,
 		REG_MIPI_HOST_INT_MSK_ECC_CORRECT, REG_MIPI_HOST_INT_FORCE_ECC_CORRECT,
 		0xffffffffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1045,7 +1045,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [30] = "err_ecc_corrected30", [31] = "err_ecc_corrected31" }
 #endif
 	},
-	{ 10, MIPI_HOST_1P5_INT_PHY, REG_MIPI_HOST_INT_ST_PHY,
+	{ 22, MIPI_HOST_1P5_INT_PHY, REG_MIPI_HOST_INT_ST_PHY,
 		REG_MIPI_HOST_INT_MSK_PHY, REG_MIPI_HOST_INT_FORCE_PHY,
 		0x00ff00ffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1061,7 +1061,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [24 ... 31] = NULL }
 #endif
 	},
-	{ 12, MIPI_HOST_1P5_INT_LINE, REG_MIPI_HOST_INT_ST_LINE,
+	{ 24, MIPI_HOST_1P5_INT_LINE, REG_MIPI_HOST_INT_ST_LINE,
 		REG_MIPI_HOST_INT_MSK_LINE, REG_MIPI_HOST_INT_FORCE_LINE,
 		0x00ff00ffU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1077,7 +1077,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [24 ... 31] = NULL }
 #endif
 	},
-	{ 13, MIPI_HOST_1P5_INT_IPI, REG_MIPI_HOST_INT_ST_IPI,
+	{ 27, MIPI_HOST_1P5_INT_IPI, REG_MIPI_HOST_INT_ST_IPI,
 		REG_MIPI_HOST_INT_MSK_IPI, REG_MIPI_HOST_INT_FORCE_IPI,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1088,7 +1088,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 14, MIPI_HOST_1P5_INT_IPI2, REG_MIPI_HOST_INT_ST_IPI2,
+	{ 28, MIPI_HOST_1P5_INT_IPI2, REG_MIPI_HOST_INT_ST_IPI2,
 		REG_MIPI_HOST_INT_MSK_IPI2, REG_MIPI_HOST_INT_FORCE_IPI2,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1099,7 +1099,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 15, MIPI_HOST_1P5_INT_IPI3, REG_MIPI_HOST_INT_ST_IPI3,
+	{ 29, MIPI_HOST_1P5_INT_IPI3, REG_MIPI_HOST_INT_ST_IPI3,
 		REG_MIPI_HOST_INT_MSK_IPI3, REG_MIPI_HOST_INT_FORCE_IPI3,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1110,7 +1110,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 16, MIPI_HOST_1P5_INT_IPI4, REG_MIPI_HOST_INT_ST_IPI4,
+	{ 30, MIPI_HOST_1P5_INT_IPI4, REG_MIPI_HOST_INT_ST_IPI4,
 		REG_MIPI_HOST_INT_MSK_IPI4, REG_MIPI_HOST_INT_FORCE_IPI4,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1121,7 +1121,8 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 17, MIPI_HOST_1P5_INT_IPI5, REG_MIPI_HOST_INT_ST_IPI5,
+#if 0
+	{ 31, MIPI_HOST_1P5_INT_IPI5, REG_MIPI_HOST_INT_ST_IPI5,
 		REG_MIPI_HOST_INT_MSK_IPI5, REG_MIPI_HOST_INT_FORCE_IPI5,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1132,7 +1133,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 18, MIPI_HOST_1P5_INT_IPI6, REG_MIPI_HOST_INT_ST_IPI6,
+	{ 32, MIPI_HOST_1P5_INT_IPI6, REG_MIPI_HOST_INT_ST_IPI6,
 		REG_MIPI_HOST_INT_MSK_IPI6, REG_MIPI_HOST_INT_FORCE_IPI6,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1143,7 +1144,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 19, MIPI_HOST_1P5_INT_IPI7, REG_MIPI_HOST_INT_ST_IPI7,
+	{ 33, MIPI_HOST_1P5_INT_IPI7, REG_MIPI_HOST_INT_ST_IPI7,
 		REG_MIPI_HOST_INT_MSK_IPI7, REG_MIPI_HOST_INT_FORCE_IPI7,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1154,7 +1155,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	},
-	{ 20, MIPI_HOST_1P5_INT_IPI8, REG_MIPI_HOST_INT_ST_IPI8,
+	{ 34, MIPI_HOST_1P5_INT_IPI8, REG_MIPI_HOST_INT_ST_IPI8,
 		REG_MIPI_HOST_INT_MSK_IPI8, REG_MIPI_HOST_INT_FORCE_IPI8,
 		0x0000007fU,
 #if MIPI_HOST_INT_DBG_ERRSTR
@@ -1165,6 +1166,7 @@ static const struct mipi_host_ireg_s mh_int_regs_1p5[] = {
 		  [7 ... 31] = NULL }
 #endif
 	}
+#endif
 };
 #define MIPI_HOST_IREG_NUM_1P5 (sizeof(mh_int_regs_1p5)/sizeof(mh_int_regs_1p5[0]))
 
@@ -3573,6 +3575,9 @@ static uint32_t mipi_host_subirq_loop(struct mipi_hdev_s *hdev, uint32_t irq)
 	struct mipi_host_ierr_s *ierr = &hdev->host.ierr;
 	const struct mipi_host_ireg_s *ireg;
 	struct mipi_host_icnt_s *icnt = &hdev->host.icnt;
+	struct mipi_host_s *host = &hdev->host;
+	void __iomem *iomem = host->iomem;
+
 	uint32_t *icnt_p = &icnt->st_main;
 	uint32_t mask, icnt_n;
 	uint32_t irq_do;
@@ -3600,6 +3605,19 @@ static uint32_t mipi_host_subirq_loop(struct mipi_hdev_s *hdev, uint32_t irq)
 
 		icnt_n = ireg->icnt_n;
 		icnt_p[icnt_n]++;
+
+		if ((host->ap == 0) && (iomem != NULL) &&
+			(MIPI_VERSION_GE(iomem, MIPI_IP_VERSION_1P5) != 0)){
+			/* bndry_frm_fatal, seq_frm_fatal, crc_frm_fatal, pld_crc_fatal, data_id,
+			 * ecc_corrected, line  Add virtual channel */
+			if (icnt_n == 4 || icnt_n == 7 || icnt_n == 10 || icnt_n == 13 ||
+				icnt_n == 16 || icnt_n == 19 || icnt_n == 24) {
+				if (subirq & 0x01)
+					icnt_p[icnt_n + 1]++;	//vc0
+				if (subirq & 0x02)
+					icnt_p[icnt_n + 2]++;	//vc1
+			}
+		}
 		valid_bits++;
 		irq_do &= ~mask;
 		if (irq_do == 0U) {

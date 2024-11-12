@@ -553,14 +553,28 @@ struct mipi_host_icnt_s {
 	uint32_t pkt_fatal;
 	uint32_t frm_fatal;
 	uint32_t bndry_frm_fatal;
+	uint32_t bndry_frm_fatal_vc0;
+	uint32_t bndry_frm_fatal_vc1;
 	uint32_t seq_frm_fatal;
+	uint32_t seq_frm_fatal_vc0;
+	uint32_t seq_frm_fatal_vc1;
 	uint32_t crc_frm_fatal;
+	uint32_t crc_frm_fatal_vc0;
+	uint32_t crc_frm_fatal_vc1;
 	uint32_t pld_crc_fatal;
+	uint32_t pld_crc_fatal_vc0;
+	uint32_t pld_crc_fatal_vc1;
 	uint32_t data_id;
+	uint32_t data_id_vc0;
+	uint32_t data_id_vc1;
 	uint32_t ecc_corrected;
+	uint32_t ecc_corrected_vc0;
+	uint32_t ecc_corrected_vc1;
 	uint32_t phy;
 	uint32_t pkt;
 	uint32_t line;
+	uint32_t line_vc0;
+	uint32_t line_vc1;
 	uint32_t ipi;
 	uint32_t ipi2;
 	uint32_t ipi3;
@@ -593,14 +607,28 @@ struct mipi_host_icnt_s {
 	"pkt_fatal", \
 	"frm_fatal", \
 	"bndry_frm_fatal", \
+	"bndry_frm_fatal_vc0", \
+	"bndry_frm_fatal_vc1", \
 	"seq_frm_fatal", \
+	"seq_frm_fatal_vc0", \
+	"seq_frm_fatal_vc1", \
 	"crc_frm_fatal", \
+	"crc_frm_fatal_vc0", \
+	"crc_frm_fatal_vc1", \
 	"pld_crc_fatal", \
+	"pld_crc_fatal_vc0", \
+	"pld_crc_fatal_vc1", \
 	"data_id", \
+	"data_id_vc0", \
+	"data_id_vc1", \
 	"ecc_corrected", \
+	"ecc_corrected_vc0", \
+	"ecc_corrected_vc1", \
 	"phy", \
 	"pkt", \
 	"line", \
+	"line_vc0", \
+	"line_vc1", \
 	"ipi", \
 	"ipi2", \
 	"ipi3", \
