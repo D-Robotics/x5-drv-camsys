@@ -253,6 +253,15 @@ static s32 isp_video_s_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 		case ctrl_id_ae_exposure_table:
 			size = sizeof(hbn_isp_exposure_table_t);
 			break;
+		case ctrl_id_exposure_roi:
+			size = sizeof(hbn_isp_exposure_roi_t);
+			break;
+		case ctrl_id_2dnr_attr:
+			size = sizeof(hbn_isp_2dnr_attr_t);
+			break;
+		case ctrl_id_3dnr_attr:
+			size = sizeof(hbn_isp_3dnr_attr_t);
+			break;
 		default:
 			return -EINVAL;
 		}
@@ -312,6 +321,15 @@ static s32 isp_video_g_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 			break;
 		case ctrl_id_ae_exposure_table:
 			size = sizeof(hbn_isp_exposure_table_t);
+			break;
+		case ctrl_id_exposure_roi:
+			size = sizeof(hbn_isp_exposure_roi_t);
+			break;
+		case ctrl_id_2dnr_attr:
+			size = sizeof(hbn_isp_2dnr_attr_t);
+			break;
+		case ctrl_id_3dnr_attr:
+			size = sizeof(hbn_isp_3dnr_attr_t);
 			break;
 		case ctrl_id_sensor_param:
 			ret = isp_get_sensor_param(vctx, (void *)arg);
