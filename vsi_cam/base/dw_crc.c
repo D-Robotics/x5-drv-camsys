@@ -23,6 +23,7 @@ struct dw_crc_device {
 
 int dw_reset(struct dw_crc_device *dev, enum dw_mod mod)
 {
+#if 0
 	struct reset_control *rst = NULL;
 	int rc = 0;
 
@@ -54,6 +55,9 @@ int dw_reset(struct dw_crc_device *dev, enum dw_mod mod)
 
 	mutex_unlock(&dev->lock);
 	return rc;
+#else
+	return 0;
+#endif
 }
 EXPORT_SYMBOL(dw_reset);
 
