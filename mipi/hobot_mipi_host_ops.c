@@ -4160,7 +4160,7 @@ static int32_t mipi_host_init(struct mipi_hdev_s *hdev, mipi_host_cfg_t *cfg)
 		return -1;
 	}
 
-	mipi_info(dev, "init begin\n");
+	mipi_debug(dev, "init begin\n");
 	mipi_info(dev, "%d lane %dx%d %dfps datatype 0x%x\n",
 			 cfg->lane, cfg->width, cfg->height, cfg->fps, cfg->datatype);
 	if (hdev->is_ex == 0) {
@@ -4226,7 +4226,7 @@ static int32_t mipi_host_init(struct mipi_hdev_s *hdev, mipi_host_cfg_t *cfg)
 	(void)memset((void *)(&host->icnt), 0, sizeof(host->icnt));
 #endif
 	(void)memcpy(&host->cfg, cfg, sizeof(mipi_host_cfg_t));
-	mipi_info(dev, "init end\n");
+	mipi_debug(dev, "init end\n");
 	return 0;
 }
 

@@ -512,7 +512,7 @@ void sensor_frame_event_record(struct sensor_device_s *sen, enum _sensor_frame_e
 				r->warn++;
 				sen_warn(dev, "%s %d --------- fs duplicate\n", __func__, r->count);
 			} else {
-				sen_info(dev, "%s %d --------- fs\n", __func__, r->count);
+				sen_debug(dev, "%s %d --------- fs\n", __func__, r->count);
 			}
 			break;
 		}
@@ -565,7 +565,7 @@ void sensor_frame_event_record(struct sensor_device_s *sen, enum _sensor_frame_e
 					diff_ns / 1000000U, (diff_ns % 1000000U) / 1000U);
 			} else {
 				frame->fs_fe.count++;
-				sen_info(dev, "%s %d -%d.%03dms fe\n", __func__, r->count,
+				sen_debug(dev, "%s %d -%d.%03dms fe\n", __func__, r->count,
 					diff_ns / 1000000U, (diff_ns % 1000000U) / 1000U);
 			}
 			break;

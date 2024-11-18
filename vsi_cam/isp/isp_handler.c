@@ -185,7 +185,7 @@ static s32 handle_query_metadata(struct isp_device *isp, struct isp_msg *msg)
 
 	ins = &isp->insts[msg->inst];
 	msg->meta_enabled = ins->meta_inst < isp->num_insts ? 1 : 0;
-	pr_info("%s meta_enabled: %d\n", __func__, msg->meta_enabled);
+
 	return 0;
 }
 
