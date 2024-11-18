@@ -832,12 +832,16 @@ static int get_name_for_ext_ctrl(uint32_t id, char *name)
 
 static int vse_request_output_buffer(struct vse_v4l_instance *vse, void * arg)
 {
+	int rc = 0;
+
 	if (!vse->node.bctx.is_sink_online_mode) {
+		mutex_lock(&vse->standalone_lock);
 		vse->capture_queue_offset = *(unsigned long *)arg;
-		return cam_reqbufs(&vse->sink_ctx, 4, &vse_buf_ops);
+		rc = cam_reqbufs(&vse->sink_ctx, 4, &vse_buf_ops);
+		mutex_unlock(&vse->standalone_lock);
 	}
 
-	return 0;
+	return rc;
 }
 
 static int vse_query_output_buffer(struct vse_v4l_instance *vse, void * arg)
@@ -1131,6 +1135,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		inst->dev = &v4l_dev->vse_dev;
 		mutex_init(&inst->open_lock);
 		mutex_init(&inst->fmt_lock);
+		mutex_init(&inst->standalone_lock);
 		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
 		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 		for (j = 0; j < VSE_OUT_CHNL_MAX; j++) {
@@ -1224,6 +1229,9 @@ static int vse_v4l_remove(struct platform_device *pdev)
 			cam_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
 		subdev_deinit(&v4l_dev->insts[i].node);
 		devm_kfree(dev, v4l_dev->insts[i].node.pads);
+		mutex_destroy(&v4l_dev->insts[i].open_lock);
+		mutex_destroy(&v4l_dev->insts[i].fmt_lock);
+		mutex_destroy(&v4l_dev->insts[i].standalone_lock);
 	}
 	devm_kfree(dev, v4l_dev->insts);
 
