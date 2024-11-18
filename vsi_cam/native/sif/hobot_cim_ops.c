@@ -639,6 +639,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	osal_atomic_set(&cim->sensor_fcount[ipi_index], 0);
 
 	ctx.sink_ctx = (struct cam_ctx *)vnode->ich_subdev[VIN_MAIN_FRAME];
+	ctx.src_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
 	if (cim_priv_attr->ddr_en) {
 		ctx.buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
 		ctx.buf = NULL;
@@ -717,6 +718,7 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
 
+	ctx.src_ctx = NULL;
 	if (cim_priv_attr->ddr_en) {
 		ctx.buf_ctx = NULL;
 		ctx.buf = NULL;

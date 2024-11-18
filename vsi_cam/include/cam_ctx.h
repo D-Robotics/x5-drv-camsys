@@ -58,4 +58,6 @@ int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info);
 
 bool vse_get_drop_status(struct cam_ctx *ctx);
 
+int cam_check_stream_path(struct cam_ctx *ctx, bool *stream_path);
+
 #endif /* _CAM_COM_H_ */

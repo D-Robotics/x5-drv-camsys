@@ -8,6 +8,7 @@
 #include "hobot_dev_vin_node.h"
 #include "vin_node_config.h"
 
+#include "cam_ops.h"
 #include "cam_ctx.h"
 #include "hbn_isp_api.h"
 #include "isp_drv.h"
@@ -935,6 +936,21 @@ static ssize_t isp_stat_show(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR(stat, 0444, isp_stat_show, NULL);
 
+static int isp_check_stream_path(struct cam_ctx *ctx, bool *stream_path)
+{
+	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
+	struct isp_nat_instance *inst;
+
+	inst = container_of(vdev, struct isp_nat_instance, vdev);
+	*stream_path = inst->dev->isp_dev.mode == ISP_STRM_MODE ? true : false;
+
+	return 0;
+}
+
+static const struct cam_ops isp_ops = {
+	.check_stream_path = isp_check_stream_path,
+};
+
 static int isp_nat_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1009,6 +1025,7 @@ static int isp_nat_probe(struct platform_device *pdev)
 		return -EFAULT;
 	}
 
+	add_ops(ISP_MODULE, &isp_ops);
 	platform_set_drvdata(pdev, nat_dev);
 	nat_dev->sensor_ops = vio_get_callback_ops(&empty_sensor_cops, VIN_MODULE, COPS_4);
 

@@ -10,6 +10,7 @@
 #include <linux/debugfs.h>
 
 #include "cam_ctrl.h"
+#include "cam_ctx.h"
 #include "cam_dev.h"
 #include "cam_pulse.h"
 #include "isc.h"
@@ -390,16 +391,20 @@ void sif_pre_stop_ipi(struct sif_device *dev, u32 inst)
 	struct sif_instance *sif;
 	unsigned long flags;
 	u32 reg_val;
+	bool stream_path = false;
 
 	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
-	if (sif->ctx.buf_ctx == NULL) {	//online datapath
-		reg_val = sif_read(dev, SIF_ISP_CTRL);
-		//IPI to ISP datapath will be disabled if it is set to 1
-		reg_val |= BIT(inst);
-		sif_write(dev, SIF_ISP_CTRL, reg_val);
+	if (sif->ctx.src_ctx) {
+		cam_check_stream_path(sif->ctx.src_ctx, &stream_path);
+		if (stream_path) {
+			reg_val = sif_read(dev, SIF_ISP_CTRL);
+			//IPI to ISP datapath will be disabled if it is set to 1
+			reg_val |= BIT(inst);
+			sif_write(dev, SIF_ISP_CTRL, reg_val);
+		}
 	}
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 

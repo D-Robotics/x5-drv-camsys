@@ -79,6 +79,7 @@ enum pre_irq_status {
 
 struct sif_irq_ctx {
 	struct cam_ctx *sink_ctx;
+	struct cam_ctx *src_ctx;
 	struct cam_ctx *buf_ctx;
 	struct cam_buf *buf, *next_buf;
 	struct cam_ctx *emb_buf_ctx;

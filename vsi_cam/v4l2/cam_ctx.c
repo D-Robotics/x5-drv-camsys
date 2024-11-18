@@ -173,3 +173,8 @@ bool vse_get_drop_status(struct cam_ctx *ctx)
 {
 	return !cam_acqbuf_irq(ctx, true);
 }
+
+int cam_check_stream_path(struct cam_ctx *ctx, bool *stream_path)
+{
+	return 0;
+}
