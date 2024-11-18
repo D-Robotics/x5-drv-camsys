@@ -7,6 +7,4 @@
 int create_default_links(struct vid_device *vdev);
 void destroy_links(struct vid_device *vdev);
 int vid_subdev_set_cap(struct vid_device *vdev);
-int vid_subdev_init_output_ctx(struct vid_device *vdev);
-
 #endif /* _VIDEO_H_ */

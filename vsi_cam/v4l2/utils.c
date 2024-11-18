@@ -49,8 +49,7 @@ void subdev_deinit(struct subdev_node *n)
 	media_entity_cleanup(&n->sd.entity);
 }
 
-int subdev_set_fmt(struct v4l2_subdev *sd,
-		   struct v4l2_subdev_state *state,
+int subdev_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 		   struct v4l2_subdev_format *fmt)
 {
 	struct media_entity *ent;
@@ -67,7 +66,7 @@ int subdev_set_fmt(struct v4l2_subdev *sd,
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
 				i++;
 				continue;
 			}
@@ -96,11 +95,10 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 		return -EINVAL;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
 				i++;
 				continue;
 			}
@@ -138,11 +136,10 @@ int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
 		return -EINVAL;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
 				i++;
 				continue;
 			}
@@ -167,11 +164,10 @@ struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_p
 		return NULL;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad)
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity))
 				return NULL;
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			if (rpad)
@@ -180,7 +176,6 @@ struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_p
 		}
 		i++;
 	}
-
 	return NULL;
 }
 
@@ -196,11 +191,10 @@ int subdev_open(struct v4l2_subdev *sd)
 		return -EINVAL;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
 				i++;
 				continue;
 			}
@@ -229,11 +223,10 @@ int subdev_close(struct v4l2_subdev *sd)
 		return -EINVAL;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
 				i++;
 				continue;
 			}
@@ -263,11 +256,10 @@ int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid)
 		return -EINVAL;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
 				i++;
 				continue;
 			}
@@ -278,7 +270,8 @@ int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid)
 				rc = ctx->map_info(ctx, devid, insid);
 				if (rc < 0)
 					return rc;
-				pr_debug("%s get %s info, devid:%d, insid:%d\n", sd->name, rsd->name, *devid, *insid);
+				pr_debug("%s get %s info, devid:%d, insid:%d\n",
+					 sd->name, rsd->name, *devid, *insid);
 
 			}
 		}
@@ -516,28 +509,26 @@ u32 mbus_code_to_pixelformat(u32 code)
 struct v4l2_subdev *isp_device_to_v4l2_subdev(void *data, uint32_t inst)
 {
 	struct isp_device *isp_dev = (struct isp_device *)data;
-	struct v4l2_subdev *sd;
-	struct isp_v4l_device *isp_v4l_dev = container_of(isp_dev, struct isp_v4l_device, isp_dev);
+	struct isp_v4l_device *isp_v4l_dev =
+			container_of(isp_dev, struct isp_v4l_device, isp_dev);
 	struct isp_v4l_instance *ins = &isp_v4l_dev->insts[inst];
 
-	sd = &ins->node.sd;
-	return sd;
+	return &ins->node.sd;
 }
 
 struct v4l2_subdev *sif_device_to_v4l2_subdev(void *data, uint32_t inst)
 {
 	struct sif_device *sif_dev = (struct sif_device *)data;
-	struct v4l2_subdev *sd;
-	struct sif_v4l_device *sif_v4l_dev = container_of(sif_dev, struct sif_v4l_device, sif_dev);
+	struct sif_v4l_device *sif_v4l_dev =
+			container_of(sif_dev, struct sif_v4l_device, sif_dev);
 	struct sif_v4l_instance *ins = &sif_v4l_dev->insts[inst];
 
-	sd = &ins->node.sd;
-	return sd;
+	return &ins->node.sd;
 }
 
 bool is_standalone_datapath(struct v4l2_subdev *sd)
 {
-	struct media_entity *ent;
+	struct media_entity *ent, *r_ent;
 	struct media_pad *pad;
 	u16 i = 0;
 
@@ -545,17 +536,18 @@ bool is_standalone_datapath(struct v4l2_subdev *sd)
 		return false;
 
 	ent = &sd->entity;
-
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad)
-				return true;
-			else
+			if (!pad) {
 				return false;
+			} else {
+				r_ent = pad->entity;
+				return (r_ent &&
+					r_ent->obj_type == MEDIA_ENTITY_TYPE_VIDEO_DEVICE);
+			}
 		}
 		i++;
 	}
-
 	return false;
 }

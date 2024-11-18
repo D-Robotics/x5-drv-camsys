@@ -26,7 +26,6 @@ struct vid_video_device {
 	spinlock_t irqlock; /* lock for cam buf */
 	u32 buf_sequence;
 	u32 id;
-	unsigned long capture_queue_offset;
 	bool opened, closed;
 	struct list_head queued_list;
 	struct list_head entry;
@@ -289,7 +288,7 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 		return rc;
 	}
 
-	init_fmt(f, v_f);
+	init_fmt(f);
 	return 0;
 }
 
@@ -580,82 +579,6 @@ static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext
 	return -ENOLINK;
 }
 
-static int vid_ioc_reqbufs(struct file *file, void *fh, struct v4l2_requestbuffers *b)
-{
-	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd;
-	int rc;
-
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
-	if (!sd)
-		return -ENOLINK;
-
-	rc = vb2_ioctl_reqbufs(file, fh, b);
-	if (rc < 0)
-		return rc;
-
-	if (!b->count)
-		return rc;
-
-	vdev->capture_queue_offset =
-		vdev->queue.num_buffers * vdev->queue.bufs[1]->planes[0].m.offset;
-
-	if (is_standalone_datapath(sd))
-		rc = v4l2_subdev_call(sd, core, command, CAM_REQ_BUF,
-			(void *)&vdev->capture_queue_offset);
-	return rc;
-}
-
-static int vid_ioc_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
-{
-	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd;
-
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
-	if (!sd)
-		return -ENOLINK;
-
-	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		return vb2_ioctl_querybuf(file, fh, b);
-	else
-		return v4l2_subdev_call(sd, core, command, CAM_QUERY_BUF, (void *)b);
-}
-
-static int vid_ioc_qbuf(struct file *file, void *fh, struct v4l2_buffer *b)
-{
-	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd;
-
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
-	if (!sd)
-		return -ENOLINK;
-
-	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		return vb2_ioctl_qbuf(file, fh, b);
-	else
-		return v4l2_subdev_call(sd, core, command, CAM_Q_BUF, (void *)b);
-}
-
-static int vid_ioc_dqbuf(struct file *file, void *fh, struct v4l2_buffer *b)
-{
-	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd;
-
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
-	if (!sd)
-		return -ENOLINK;
-
-	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		return vb2_ioctl_dqbuf(file, fh, b);
-	else
-		return v4l2_subdev_call(sd, core, command, CAM_DQ_BUF, (void *)b);
-}
-
-static int vid_g_fmt_vid_out(struct file *file, void *fh, struct v4l2_format *f)
-{
-	return -EINVAL;
-}
-
 static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_querycap = vid_querycap,
 	.vidioc_enum_fmt_vid_cap = vid_enum_fmt,
@@ -668,10 +591,10 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_streamoff = vid_streamoff,
 	.vidioc_create_bufs = vb2_ioctl_create_bufs,
 	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
-	.vidioc_reqbufs = vid_ioc_reqbufs,
-	.vidioc_querybuf = vid_ioc_querybuf,
-	.vidioc_qbuf = vid_ioc_qbuf,
-	.vidioc_dqbuf = vid_ioc_dqbuf,
+	.vidioc_reqbufs = vb2_ioctl_reqbufs,
+	.vidioc_querybuf = vb2_ioctl_querybuf,
+	.vidioc_qbuf = vb2_ioctl_qbuf,
+	.vidioc_dqbuf = vb2_ioctl_dqbuf,
 	.vidioc_expbuf = vb2_ioctl_expbuf,
 	.vidioc_default = vid_ioctl,
 	.vidioc_g_parm = vid_g_parm,
@@ -685,7 +608,6 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
 	.vidioc_queryctrl = vid_queryctrl,
 	.vidioc_query_ext_ctrl = vid_query_ext_ctrl,
-	.vidioc_g_fmt_vid_out = vid_g_fmt_vid_out,
 };
 
 static int vid_open(struct file *file)
@@ -751,29 +673,11 @@ static int vid_release(struct file *file)
 	vdev->fmt.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 	return 0;
 }
-
-static int vid_mmap(struct file *file, struct vm_area_struct *vma)
-{
-	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
-	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd;
-
-	if (offset < vdev->capture_queue_offset)
-		return vb2_fop_mmap(file, vma);
-
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
-	if (sd) {
-		vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
-		return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
-	}
-	return -ENOLINK;
-}
-
 static const struct v4l2_file_operations video_ops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = video_ioctl2,
 	.poll = vb2_fop_poll,
-	.mmap = vid_mmap,
+	.mmap = vb2_fop_mmap,
 	.open = vid_open,
 	.release = vid_release,
 };
@@ -854,8 +758,6 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 		goto _video_dev_reg_err;
 	}
 
-	v->video.vfl_dir = VFL_DIR_M2M;
-
 	list_add_tail(&v->entry, &vdev->video_device_list);
 	return v;
 
@@ -873,7 +775,6 @@ _vb2_queue_init_err:
 static void destroy_video_device(struct vid_video_device *vdev)
 {
 	if (vdev) {
-		memset(&vdev->video.vfl_dir, 0, sizeof(vdev->video.vfl_dir));
 		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
 		video_unregister_device(&vdev->video);
 		media_entity_cleanup(&vdev->video.entity);
@@ -1188,27 +1089,4 @@ int vid_subdev_set_cap(struct vid_device *vdev)
 			v4l2_subdev_ctx_call_no_return(sd, set_cap);
 	}
 	return 0;
-}
-
-int vid_subdev_init_output_ctx(struct vid_device *vdev)
-{
-	struct vid_video_device *v;
-	struct v4l2_subdev *sd;
-	struct v4l2_buf_ctx *ctx;
-	int rc = 0;
-
-	list_for_each_entry(v, &vdev->video_device_list, entry) {
-		(void)get_remote_pad_sd(&v->pad, &sd);
-		if (!sd)
-			return -ENOLINK;
-		ctx = v4l2_get_subdevdata(sd);
-		if (ctx && ctx->is_standalone && ctx->is_standalone(ctx))
-			v->video.vfl_dir = VFL_DIR_M2M;
-		else
-			continue;
-		rc = v4l2_subdev_ctx_call(sd, init_output_ctx);
-		if (rc < 0)
-			return rc;
-	}
-	return rc;
 }

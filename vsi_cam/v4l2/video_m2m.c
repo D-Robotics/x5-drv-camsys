@@ -32,10 +32,6 @@ struct vid_m2m_dev {
 	u32 buf_sequence[2];
 	u32 translen;
 	int aborting;
-	enum v4l2_colorspace colorspace;
-	enum v4l2_ycbcr_encoding ycbcr_enc;
-	enum v4l2_xfer_func xfer_func;
-	enum v4l2_quantization quantization;
 };
 
 struct vid_m2m_ctx {
@@ -355,6 +351,7 @@ static int vid_s_fmt(struct vid_m2m_dev *dev, struct media_pad *pad,
 		     struct v4l2_format *f)
 {
 	struct vb2_queue *vq;
+	struct v4l2_format *fmt;
 
 	vq = v4l2_m2m_get_vq(dev->m2m_ctx, f->type);
 	if (!vq)
@@ -364,6 +361,23 @@ static int vid_s_fmt(struct vid_m2m_dev *dev, struct media_pad *pad,
 		dev_err(dev->dev, "%s queue busy\n", __func__);
 		return -EBUSY;
 	}
+
+	fmt = get_fmt(dev, f->type);
+	if (!fmt)
+		return -EINVAL;
+
+	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
+	fmt->fmt.pix.width = f->fmt.pix.width;
+	fmt->fmt.pix.height = f->fmt.pix.height;
+
+	init_fmt(fmt);
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+		fmt->fmt.pix.colorspace = f->fmt.pix.colorspace;
+		fmt->fmt.pix.xfer_func = f->fmt.pix.xfer_func;
+		fmt->fmt.pix.ycbcr_enc = f->fmt.pix.ycbcr_enc;
+		fmt->fmt.pix.quantization = f->fmt.pix.quantization;
+	}
+
 	return try_fmt_vid(pad, f, false);
 }
 
@@ -379,8 +393,18 @@ static int vid_s_fmt_vid_out(struct file *file, void *fh,
 			     struct v4l2_format *f)
 {
 	struct vid_m2m_dev *dev = file2dev(file);
+	struct v4l2_format *fmt;
+	int rc;
 
-	return vid_s_fmt(dev, src_pad(dev), f);
+	rc = vid_s_fmt(dev, src_pad(dev), f);
+	if (!rc) {
+		fmt = get_fmt(dev, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		fmt->fmt.pix.colorspace = f->fmt.pix.colorspace;
+		fmt->fmt.pix.xfer_func = f->fmt.pix.xfer_func;
+		fmt->fmt.pix.ycbcr_enc = f->fmt.pix.ycbcr_enc;
+		fmt->fmt.pix.quantization = f->fmt.pix.quantization;
+	}
+	return rc;
 }
 
 static long vid_ioctl(struct file *file, void *fh, bool valid_prio,
@@ -530,6 +554,9 @@ static int vid_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct vid_m2m_dev *dev = vb2_get_drv_priv(q);
 	struct v4l2_format *fmt = get_fmt(dev, q->type);
+	struct v4l2_subdev *sd;
+	struct media_pad *pad;
+	int rc = 0;
 
 	if (!fmt)
 		return -EINVAL;
@@ -539,13 +566,38 @@ static int vid_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 
 	dev->buf_sequence[V4L2_M2M_SRC] = 0;
 	dev->buf_sequence[V4L2_M2M_DST] = 0;
-	return 0;
+
+	if (V4L2_TYPE_IS_CAPTURE(q->type)) {
+		pad = get_remote_pad_sd(sink_pad(dev), &sd);
+		if (!sd)
+			return -ENOLINK;
+
+		v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 1);
+		rc = v4l2_subdev_call(sd, video, s_stream, 1);
+	}
+	return rc;
 }
 
 static void vid_m2m_stop_streaming(struct vb2_queue *q)
 {
 	struct vid_m2m_dev *dev = vb2_get_drv_priv(q);
 	struct vb2_v4l2_buffer *vbuf;
+	struct v4l2_subdev *sd;
+	struct media_pad *pad;
+	int rc;
+
+	if (V4L2_TYPE_IS_CAPTURE(q->type)) {
+		pad = get_remote_pad_sd(sink_pad(dev), &sd);
+		if (!sd)
+			return;
+
+		rc = v4l2_subdev_call(sd, video, s_stream, 0);
+		if (rc < 0)
+			return;
+
+		v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 0);
+		notify_buf_ready(dev, 0);
+	}
 
 	for (;;) {
 		if (V4L2_TYPE_IS_OUTPUT(q->type))
@@ -613,6 +665,7 @@ static int vid_m2m_open(struct file *file)
 	struct v4l2_buf_ctx *bctx = video_drvdata(file);
 	struct vid_m2m_dev *dev = container_of(bctx, struct vid_m2m_dev, bctx);
 	struct vid_m2m_ctx *ctx = NULL;
+	struct v4l2_subdev *sd;
 	int rc = 0;
 
 	ctx = devm_kzalloc(dev->dev, sizeof(*ctx), GFP_KERNEL);
@@ -623,22 +676,42 @@ static int vid_m2m_open(struct file *file)
 	file->private_data = &ctx->fh;
 	ctx->dev = dev;
 	ctx->fh.m2m_ctx = dev->m2m_ctx;
-	dev->colorspace = V4L2_COLORSPACE_SRGB;
 
 	v4l2_fh_add(&ctx->fh);
 	dev_dbg(dev->dev, "created instance: %p, m2m_ctx: %p\n",
 		ctx, ctx->fh.m2m_ctx);
+
+	(void)get_remote_pad_sd(sink_pad(dev), &sd);
+	if (!sd) {
+		v4l2_fh_release(file);
+		return -ENOLINK;
+	}
+	if (sd->internal_ops && sd->internal_ops->open)
+		sd->internal_ops->open(sd, NULL/*subdev_fh*/);
 	return rc;
 }
 
 static int vid_m2m_release(struct file *file)
 {
+	struct v4l2_buf_ctx *bctx = video_drvdata(file);
+	struct vid_m2m_dev *dev = container_of(bctx, struct vid_m2m_dev, bctx);
 	struct vid_m2m_ctx *ctx = file2ctx(file);
+	struct v4l2_subdev *sd;
 
 	dev_dbg(ctx->dev->dev, "releasing instance %p\n", ctx);
+	(void)get_remote_pad_sd(sink_pad(dev), &sd);
+	if (!sd) {
+		v4l2_fh_release(file);
+		return -ENOLINK;
+	}
+
+	if (sd->internal_ops && sd->internal_ops->close)
+		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	devm_kfree(ctx->dev->dev, ctx);
+
 	return 0;
 }
 

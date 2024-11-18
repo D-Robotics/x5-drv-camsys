@@ -41,22 +41,58 @@ static inline struct media_pad *get_remote_pad_sd(struct media_pad *pad,
 	if (unlikely(!pad))
 		return NULL;
 	pad = media_pad_remote_pad_first(pad);
-	if (unlikely(!pad))
+	if (unlikely(!pad || !is_media_entity_v4l2_subdev(pad->entity)))
 		return NULL;
 	if (sd)
 		*sd = media_entity_to_v4l2_subdev(pad->entity);
 	return pad;
 }
 
-static void init_fmt(struct v4l2_format *f, struct video_fmt *v_f)
+static void init_fmt(struct v4l2_format *f)
 {
-	u32 bytesperline, sizeimage;
+	u32 bytesperline, sizeimage, bpp, bit_depth;
+
+	switch (f->fmt.pix.pixelformat) {
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+		bit_depth = 8;
+		bpp = 1;
+		break;
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SRGGB10:
+	case V4L2_PIX_FMT_SBGGR12:
+	case V4L2_PIX_FMT_SGBRG12:
+	case V4L2_PIX_FMT_SGRBG12:
+	case V4L2_PIX_FMT_SRGGB12:
+	case V4L2_PIX_FMT_YUYV:
+		bit_depth = 16;
+		bpp = 2;
+		break;
+	case V4L2_PIX_FMT_NV12:
+		bit_depth = 12;
+		bpp = 1;
+		break;
+	case V4L2_PIX_FMT_NV16:
+		bit_depth = 16;
+		bpp = 1;
+		break;
+	case V4L2_PIX_FMT_RGB32:
+		bit_depth = 32;
+		bpp = 4;
+		break;
+	default:
+		break;
+	}
 
 	v4l_bound_align_image(&f->fmt.pix.width, MIN_W, MAX_W, ALIGN_W,
 			      &f->fmt.pix.height, MIN_H, MAX_H, ALIGN_H, 0);
-	bytesperline = ALIGN(f->fmt.pix.width * v_f->bpp, STRIDE_ALIGN);
-	if (v_f->bpp == 1)
-		sizeimage = f->fmt.pix.height * (bytesperline * v_f->bit_depth / 8);
+	bytesperline = ALIGN(f->fmt.pix.width * bpp, STRIDE_ALIGN);
+	if (bpp == 1)
+		sizeimage = f->fmt.pix.height * (bytesperline * bit_depth / 8);
 	else
 		sizeimage = f->fmt.pix.height * bytesperline;
 
@@ -137,7 +173,7 @@ static int get_def_fmt(struct media_pad *pad, struct v4l2_format *f)
 	f->fmt.pix.pixelformat = pixelformat;
 	f->fmt.pix.width = width;
 	f->fmt.pix.height = height;
-	init_fmt(f, v_f);
+	init_fmt(f);
 	return 0;
 }
 
