@@ -124,6 +124,14 @@ static bool is_support_fmt(u32 fmt)
 	}
 }
 
+static bool is_same_cam_format(struct cam_format *f1, struct cam_format *f2)
+{
+	if (f1->width == f2->width && f1->height == f2->height
+		&& f1->format == f2->format)
+		return true;
+	return false;
+}
+
 static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx)
 {
 	return 0;
@@ -151,7 +159,6 @@ static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	senfmt.format.height = format->fmt.pix.height;
 	f.width = format->fmt.pix.width;
 	f.height = format->fmt.pix.height;
-	f.stride = ALIGN(f.width, STRIDE_ALIGN);
 	if (format->fmt.pix.pixelformat == V4L2_PIX_FMT_NV12 && inst->conv_nv12) {
 		senfmt.format.code = MEDIA_BUS_FMT_YUYV8_1X16;
 		f.format = pixelformat_to_cam_format(V4L2_PIX_FMT_NV16);
@@ -161,7 +168,7 @@ static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	}
 
 	mutex_lock(&inst->fmt_lock);
-	if (inst->fmt_changed && !memcmp(&f, &inst->fmt, sizeof(f)))
+	if (inst->fmt_changed && is_same_cam_format(&f, &inst->fmt))
 		goto _exit;
 
 	state.pads = &pads;
