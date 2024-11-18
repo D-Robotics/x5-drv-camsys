@@ -259,21 +259,31 @@ static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 	}
 }
 
+static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
+{
+	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_irq_ctx irq_ctx;
+
+	if (pad >= sif->node.num_pads)
+		return -EINVAL;
+
+	if (!sif->buf_ctx.pad || sif->buf_ctx.pad->index != pad)
+		return 0;
+
+	memset(&irq_ctx, 0, sizeof(irq_ctx));
+	if (enable)
+		irq_ctx.buf_ctx = &sif->buf_ctx;
+	return sif_set_ctx(sif->dev, sif->id, &irq_ctx, enable);
+}
+
 static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
-	struct sif_irq_ctx ctx;
 	int rc;
 
 	if (!enable) {
 		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL)
 			return 0;
-
-		if (inst->buf_ctx.pad) {
-			memset(&ctx, 0, sizeof(ctx));
-			sif_set_ctx(inst->dev, inst->id, &ctx);
-		}
-
 		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL)
 			refcount_dec(&inst->start_refcnt);
 
@@ -281,7 +291,6 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 			rc = subdev_set_stream(sd, enable);
 			if (rc < 0)
 				return rc;
-
 			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 			if (rc < 0)
 				return rc;
@@ -289,22 +298,19 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 			inst->fmt_changed = false;
 		}
 	} else {
-		if (inst->buf_ctx.pad) {
-			memset(&ctx, 0, sizeof(ctx));
-			ctx.buf_ctx = &inst->buf_ctx;
-			sif_set_ctx(inst->dev, inst->id, &ctx);
+		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL) {
+			refcount_inc(&inst->start_refcnt);
+			return 0;
 		}
 
-		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
-			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
-			if (rc < 0)
-				return rc;
-
-			rc = subdev_set_stream(sd, enable);
-			if (rc < 0)
-				return rc;
-		}
 		refcount_inc(&inst->start_refcnt);
+		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
+		if (rc < 0)
+			return rc;
+
+		rc = subdev_set_stream(sd, enable);
+		if (rc < 0)
+			return rc;
 	}
 	return 0;
 }
@@ -589,6 +595,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_framesize = sif_enum_out_framesize;
 		n->bctx.enum_frameinterval = sif_enum_out_frameinterval;
 		n->bctx.set_cap = sif_set_cap;
+		n->bctx.set_stream = sif_set_stream;
 
 		n->dev = dev;
 		n->num_pads = 3;

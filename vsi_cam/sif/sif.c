@@ -272,6 +272,34 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 	return 0;
 }
 
+static int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
+{
+	struct sif_instance *sif;
+	unsigned long flags;
+	u32 val, irq_val;
+
+	if (!dev || inst >= dev->num_insts)
+		return -EINVAL;
+
+	sif = &dev->insts[inst];
+
+	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
+	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
+	val = sif_read(dev, SIF_DMA_CTL);
+	val |= SIF_DMA_CONFIG_IPI[inst];
+	if (enable) {
+		val |= SIF_ENABLE_IPI[inst];
+		irq_val |= SIF_IRQ_DONE;
+	} else {
+		val &= ~SIF_ENABLE_IPI[inst];
+		irq_val &= ~(SIF_IRQ_DONE);
+	}
+	sif_write(dev, SIF_DMA_CTL, val);
+	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
+	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+	return 0;
+}
+
 static void sif_start_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
@@ -320,10 +348,6 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	irq_val |= SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN | SIF_PIXEL_BUF_AFULL_IRQ_EN;
 	val = sif_read(dev, SIF_DMA_CTL);
 	val |= SIF_DMA_CONFIG_IPI[inst];
-	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
-		val |= SIF_ENABLE_IPI[inst];
-		irq_val |= SIF_IRQ_DONE;
-	}
 	sif_write(dev, SIF_DMA_CTL, val);
 
 	if (sif->ctx.emb_buf_ctx)
@@ -343,7 +367,6 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
 	unsigned long flags;
-	u32 val;
 	u32 irq_val;
 
 	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
@@ -352,13 +375,6 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
 	irq_val &= ~(SIF_IRQ_FS | SIF_IPI_FRAME_END_EN | SIF_IRQ_OF | SIF_FRAME_SIZE_ERROR_EN | SIF_PIXEL_BUF_AFULL_IRQ_EN);
-	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
-		val = sif_read(dev, SIF_DMA_CTL);
-		val &= ~SIF_ENABLE_IPI[inst];
-		val |= SIF_DMA_CONFIG_IPI[inst];
-		sif_write(dev, SIF_DMA_CTL, val);
-		irq_val &= ~(SIF_IRQ_DONE);
-	}
 
 	if (sif->ctx.emb_buf_ctx)
 		irq_val &= ~SIF_IRQ_EBD_DMA_DONE;
@@ -456,10 +472,11 @@ int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post)
 	return 0;
 }
 
-int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx)
+int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx, int enable)
 {
 	struct sif_instance *ins;
 	unsigned long flags;
+	int rc = 0;
 
 	if (!sif || !ctx || inst >= sif->num_insts)
 		return -EINVAL;
@@ -468,7 +485,10 @@ int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx)
 	spin_lock_irqsave(&ins->lock, flags);
 	ins->ctx = *ctx;
 	spin_unlock_irqrestore(&ins->lock, flags);
-	return 0;
+
+	if (ins->ctx.buf_ctx || inst != sif->ipi_base)
+		rc = sif_set_dma(sif, inst, enable);
+	return rc;
 }
 
 int sif_set_cam_pulse_gen(struct cam_pulse_device *dev, bool enable)

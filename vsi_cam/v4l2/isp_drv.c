@@ -509,8 +509,7 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
 		else
 			isp_set_input_select(isp->dev, isp->id, isp->id, 0);  //FIXME
-		rc = isp_set_state(isp->dev, isp->id,
-			enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED, V4L_GROUP);
+		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STARTED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
 
@@ -527,8 +526,7 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 
-		rc = isp_set_state(isp->dev, isp->id,
-			enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED, V4L_GROUP);
+		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STOPPED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
 		if (!isp->node.bctx.is_sink_online_mode)

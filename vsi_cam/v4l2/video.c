@@ -808,6 +808,7 @@ static int vid_release(struct file *file)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	int rc;
 
 	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
 		return 0;
@@ -817,10 +818,10 @@ static int vid_release(struct file *file)
 		return 0;
 	}
 
-	if (vdev->queue.num_buffers > 0) {
-		pr_warn("%s num_buffers of vdev queue is not 0 (%d)\n",
-			__func__, vdev->queue.num_buffers);
-		return -EFAULT;
+	rc = vb2_fop_release(file);
+	if (rc < 0) {
+		pr_err("%s vb2_fop_release fail (err=%d)\n", vdev->video.name, rc);
+		return rc;
 	}
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
@@ -831,7 +832,10 @@ static int vid_release(struct file *file)
 	if (sd->internal_ops && sd->internal_ops->close)
 		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
 
-	v4l2_fh_release(file);
+	if (vdev->queue.num_buffers > 0)
+		pr_warn("%s num_buffers of vdev queue is not 0 (%d)\n",
+			__func__, vdev->queue.num_buffers);
+
 	INIT_LIST_HEAD(&vdev->queued_list);
 	memset(&vdev->fmt, 0, sizeof(vdev->fmt));
 	vdev->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;

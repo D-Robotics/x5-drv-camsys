@@ -152,7 +152,7 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 		   bool post, enum sif_channel_type channel_type);
 int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post);
 void sif_pre_stop_ipi(struct sif_device *dev, u32 inst);
-int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx);
+int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx, int enable);
 int sif_open(struct sif_device *sif, u32 inst);
 int sif_close(struct sif_device *sif, u32 inst);
 int sif_probe(struct platform_device *pdev, struct sif_device *sif);

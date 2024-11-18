@@ -648,7 +648,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 		ctx.emb_buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_EMB];
 		ctx.emb_buf = NULL;
 	}
-	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx);
+	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx, 1);
 	if (rc < 0)
 		vio_err("[S%d][ipi%d]%s failed to call sif_set_ctx\n",
 			vctx->ctx_id, ipi_index, __func__);
@@ -726,7 +726,7 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 		ctx.emb_buf_ctx = NULL;
 		ctx.emb_buf = NULL;
 	}
-	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx);
+	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx, 0);
 	if (rc < 0)
 		vio_err("[S%d][ipi%d]%s failed to call sif_set_ctx\n",
 			vctx->ctx_id, ipi_index, __func__);
