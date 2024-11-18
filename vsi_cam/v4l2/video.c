@@ -410,6 +410,12 @@ static int vid_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	int rc;
 
+	if (vb2_is_busy(&vdev->queue)) {
+		pr_warn("%s num_buffers of vdev queue is not 0 (%d)\n",
+			__func__, vdev->queue.num_buffers);
+		return -EBUSY;
+	}
+
 	if (!vid_check_pixelformat(vdev, f->fmt.pix.pixelformat)) {
 		rc = get_def_fmt(vdev, f);
 		if (rc < 0)
@@ -839,10 +845,6 @@ static int vid_release(struct file *file)
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 	if (sd->internal_ops && sd->internal_ops->close)
 		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
-
-	if (vdev->queue.num_buffers > 0)
-		pr_warn("%s num_buffers of vdev queue is not 0 (%d)\n",
-			__func__, vdev->queue.num_buffers);
 
 	INIT_LIST_HEAD(&vdev->queued_list);
 	memset(&vdev->fmt, 0, sizeof(vdev->fmt));
