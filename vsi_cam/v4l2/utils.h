@@ -93,6 +93,7 @@ struct v4l2_buf_ctx {
 	int (*init_output_ctx)(struct v4l2_buf_ctx *ctx);
 	bool (*is_standalone)(struct v4l2_buf_ctx *ctx);
 	int (*map_info)(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid);
+	int (*check_datapath)(struct v4l2_buf_ctx *ctx, bool *online);
 };
 
 struct subdev_node {

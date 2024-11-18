@@ -665,6 +665,11 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	if (rc < 0)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
+	rc = sif_set_dma(&cim->sif, ipi_index, 1);
+	if (rc < 0)
+		vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+			vctx->ctx_id, ipi_index, __func__);
+	sif_set_isp_ctrl(&cim->sif, ipi_index, 1, false);
 	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
 	return ret;
@@ -718,6 +723,12 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
 
+	rc = sif_set_dma(&cim->sif, ipi_index, 0);
+	if (rc < 0)
+		vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+			vctx->ctx_id, ipi_index, __func__);
+
+	memset(&ctx, 0, sizeof(ctx));
 	ctx.src_ctx = NULL;
 	if (cim_priv_attr->ddr_en) {
 		ctx.buf_ctx = NULL;
@@ -780,7 +791,7 @@ s32 cim_subdev_pre_stop(struct vio_video_ctx *vctx)
 	ipi_index = cim_priv_attr->ipi_index;
 	osal_mutex_lock(&cim->mlock);
 
-	sif_pre_stop_ipi(&cim->sif, ipi_index);
+	sif_set_isp_ctrl(&cim->sif, ipi_index, 0, false);
 
 	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);

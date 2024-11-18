@@ -31,7 +31,7 @@ int cam_trigger(struct cam_ctx *ctx)
 			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
 	}
 
-	if (!vctx)
+	if (!vctx || !(vctx->trigger))
 		return -EINVAL;
 
 	vctx->trigger(vctx);
@@ -59,7 +59,7 @@ bool cam_is_completed(struct cam_ctx *ctx)
 			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
 	}
 
-	if (!vctx)
+	if (!vctx || !(vctx->is_completed))
 		return true;
 
 	return vctx->is_completed(vctx);
@@ -176,6 +176,28 @@ bool vse_get_drop_status(struct cam_ctx *ctx)
 
 int cam_check_datapath(struct cam_ctx *ctx, bool *online)
 {
-	*online = true;
+	struct v4l2_subdev *sd;
+	struct media_pad *pad;
+	struct v4l2_buf_ctx *vctx = NULL;
+
+	if (!ctx || !ctx->pad)
+		return -EINVAL;
+
+	pad = media_pad_remote_pad_first(ctx->pad);
+	if (!pad)
+		return -EINVAL;
+
+	if (is_media_entity_v4l2_video_device(pad->entity)) {
+		return -EINVAL;
+	} else if (is_media_entity_v4l2_subdev(pad->entity)) {
+		sd = media_entity_to_v4l2_subdev(pad->entity);
+		if (sd)
+			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
+	}
+
+	if (!vctx || !(vctx->check_datapath) || !online)
+		return -EINVAL;
+
+	vctx->check_datapath(vctx, online);
 	return 0;
 }

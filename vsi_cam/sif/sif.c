@@ -268,7 +268,7 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 	return 0;
 }
 
-static int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
+int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 {
 	struct sif_instance *sif;
 	unsigned long flags;
@@ -278,6 +278,18 @@ static int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 		return -EINVAL;
 
 	sif = &dev->insts[inst];
+
+	spin_lock_irqsave(&sif->lock, flags);
+	if (!sif->ctx.buf_ctx && inst == sif->ipi_base) {
+		spin_unlock_irqrestore(&sif->lock, flags);
+		goto _exit;
+	}
+	if (!enable) {
+		sif->ctx.buf_ctx = NULL;
+		sif->ctx.buf = NULL;
+		sif->ctx.next_buf = NULL;
+	}
+	spin_unlock_irqrestore(&sif->lock, flags);
 
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
 	irq_val = sif_read(dev, SIF_IPI_IRQ_EN(inst));
@@ -293,6 +305,8 @@ static int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 	sif_write(dev, SIF_DMA_CTL, val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+
+_exit:
 	return 0;
 }
 
@@ -300,13 +314,11 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
 	struct sif_irq_ctx *ctx;
-	struct cam_ctx *src_ctx = NULL;
 	phys_addr_t p_addr = 0;
 	phys_addr_t p_uv_addr = 0;
 	unsigned long flags;
 	u32 val;
-	u32 irq_val, reg_val;
-	bool online = false;
+	u32 irq_val;
 
 	dev_dbg(dev->dev,"%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
@@ -354,17 +366,6 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	sif_write(dev, SIF_IPI_IRQ_CLR(inst), irq_val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
 
-	// for hdr mode, it should be the same as base ipi.
-	if (dev->ipi_channel_num > 1 && inst > dev->ipi_base)
-		src_ctx = dev->insts[dev->ipi_base].ctx.src_ctx;
-	else if (sif->ctx.src_ctx)
-		src_ctx = sif->ctx.src_ctx;
-	cam_check_datapath(src_ctx, &online);
-	if (online) {
-		reg_val = sif_read(dev, SIF_ISP_CTRL);
-		sif_write(dev, SIF_ISP_CTRL, reg_val & (~BIT(inst)));
-	}
-
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 	dev_dbg(dev->dev, "%s irq_val=0x%x\n", __func__, sif_read(dev, SIF_IPI_IRQ_EN(inst)));
 }
@@ -373,7 +374,7 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
 	unsigned long flags;
-	u32 irq_val, reg_val;
+	u32 irq_val;
 
 	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
@@ -386,43 +387,6 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 		irq_val &= ~SIF_IRQ_EBD_DMA_DONE;
 
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
-
-	/* for v4l2 code there isn't sif_pre_stop_ipi, so configure register here.
-	 * for hbn code this register should have been writen, so do nothing here.
-	 */
-	reg_val = sif_read(dev, SIF_ISP_CTRL);
-	if (!(reg_val & BIT(inst)))
-		sif_write(dev, SIF_ISP_CTRL, reg_val | BIT(inst));
-	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
-
-	dev_dbg(dev->dev, "%s-\n", __func__);
-}
-
-void sif_pre_stop_ipi(struct sif_device *dev, u32 inst)
-{
-	struct sif_instance *sif;
-	struct cam_ctx *src_ctx = NULL;
-	unsigned long flags;
-	u32 reg_val;
-	bool online = false;
-
-	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
-
-	sif = &dev->insts[inst];
-	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
-	// for hdr mode, it should be the same as base ipi.
-	if (dev->ipi_channel_num > 1 && inst > dev->ipi_base)
-		src_ctx = dev->insts[dev->ipi_base].ctx.src_ctx;
-	else if (sif->ctx.src_ctx)
-		src_ctx = sif->ctx.src_ctx;
-	if (src_ctx) {
-		cam_check_datapath(src_ctx, &online);
-		if (online) {
-			reg_val = sif_read(dev, SIF_ISP_CTRL);
-			reg_val |= BIT(inst);
-			sif_write(dev, SIF_ISP_CTRL, reg_val);
-		}
-	}
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 
 	dev_dbg(dev->dev, "%s-\n", __func__);
@@ -494,6 +458,57 @@ int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post)
 	return 0;
 }
 
+void sif_set_isp_ctrl(struct sif_device *dev, u32 inst, int enable, bool wait)
+{
+	struct sif_instance *sif = &dev->insts[inst];
+	struct cam_ctx *src_ctx = NULL;
+	bool online = false;
+	u32 reg_val;
+	unsigned long flags;
+	s32 rc;
+
+	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
+
+	spin_lock_irqsave(&sif->lock, flags);
+	// for hdr mode, it should be the same as base ipi.
+	if (dev->ipi_channel_num > 1 && inst > dev->ipi_base)
+		src_ctx = dev->insts[dev->ipi_base].ctx.src_ctx;
+	else if (sif->ctx.src_ctx)
+		src_ctx = sif->ctx.src_ctx;
+
+	if (src_ctx) {
+		cam_check_datapath(src_ctx, &online);
+		spin_unlock_irqrestore(&sif->lock, flags);
+		if (online) {
+			if (!enable && wait)
+				sif->wait_fe = true;
+			spin_lock_irqsave(&dev->cfg_reg_lock, flags);
+			reg_val = sif_read(dev, SIF_ISP_CTRL);
+			if (enable)
+				reg_val &= (~BIT(inst));
+			else
+				reg_val |= BIT(inst);
+			sif_write(dev, SIF_ISP_CTRL, reg_val);
+			spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+			if (!enable && wait) {
+				rc = wait_event_interruptible_timeout(sif->fe_wq, (sif->wait_fe == true),
+								      msecs_to_jiffies(100));
+				if (rc > 0)
+					dev_dbg(dev->dev, "sif wait frame end done!\n");
+				else if (rc == 0)
+					dev_err(dev->dev, "sif wait frame end timeout!\n");
+				else
+					dev_err(dev->dev, "sif wait frame end failed!\n");
+				sif->wait_fe = false;
+			}
+		}
+	} else {
+		spin_unlock_irqrestore(&sif->lock, flags);
+	}
+
+	dev_dbg(dev->dev, "%s-\n", __func__);
+}
+
 int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx, int enable)
 {
 	struct sif_instance *ins;
@@ -506,10 +521,29 @@ int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx, int e
 	ins = &sif->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
 	ins->ctx = *ctx;
+	if (!ins->ctx.buf_ctx) {
+		ins->ctx.buf = NULL;
+		ins->ctx.next_buf = NULL;
+	}
 	spin_unlock_irqrestore(&ins->lock, flags);
 
-	if (ins->ctx.buf_ctx || inst != sif->ipi_base)
-		rc = sif_set_dma(sif, inst, enable);
+	return rc;
+}
+
+int sif_get_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx)
+{
+	struct sif_instance *ins;
+	unsigned long flags;
+	int rc = 0;
+
+	if (!sif || !ctx || inst >= sif->num_insts)
+		return -EINVAL;
+
+	ins = &sif->insts[inst];
+	spin_lock_irqsave(&ins->lock, flags);
+	*ctx = ins->ctx;
+	spin_unlock_irqrestore(&ins->lock, flags);
+
 	return rc;
 }
 
@@ -729,8 +763,11 @@ int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 		return rc;
 	}
 
-	for (i = 0; i < sif_dt.num_insts; i++)
+	for (i = 0; i < sif_dt.num_insts; i++) {
 		spin_lock_init(&sif->insts[i].lock);
+		sif->insts[i].wait_fe = false;
+		init_waitqueue_head(&sif->insts[i].fe_wq);
+	}
 
 	dev_dbg(dev, "VS SIF driver #%d (base) probed done\n", sif->id);
 	return 0;

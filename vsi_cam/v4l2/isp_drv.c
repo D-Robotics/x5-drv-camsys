@@ -425,6 +425,22 @@ static int isp_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
 	return 0;
 }
 
+static int isp_check_datapath(struct v4l2_buf_ctx *ctx, bool *online)
+{
+	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_instance *isp;
+
+	isp = &inst->dev->insts[inst->id];
+	if (inst->dev->mode == ISP_STRM_MODE)
+		*online = true;
+	else if (inst->dev->mode == ISP_MCM_MODE)
+		*online = isp->online_mcm ? true : false;
+	else
+		*online = false;
+
+	return 0;
+}
+
 static int isp_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
@@ -840,6 +856,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->bctx.set_stream = isp_set_stream;
 		n->bctx.set_cap = isp_set_cap;
 		n->bctx.map_info = isp_map_info;
+		n->bctx.check_datapath = isp_check_datapath;
 
 		n->dev = dev;
 		if (i < ISP_SINK_ONLINE_PATH_MAX)

@@ -43,7 +43,7 @@ static int sif_link_setup(struct media_entity *entity,
 	struct v4l2_subdev *sd;
 	struct sif_v4l_instance *sif;
 	struct media_pad *pad;
-	struct cam_ctx *buf_ctx;
+	struct cam_ctx *buf_ctx, *src_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
 	int rc = 0;
 
@@ -66,6 +66,12 @@ static int sif_link_setup(struct media_entity *entity,
 			update_en_post_status(sif, sd,
 					      flags & MEDIA_LNK_FL_ENABLED);
 			lctx->is_src_online_mode = rctx->is_sink_online_mode;
+			src_ctx = &sif->src_ctx;
+			if (src_ctx->pad)
+				return -EBUSY;
+			rc = cam_ctx_init(src_ctx, sd->dev, (void *)local, false);
+			if (rc < 0)
+				return rc;
 			if (rctx->is_sink_online_mode)
 				return 0;
 		}
@@ -331,17 +337,53 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 {
 	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
 	struct sif_irq_ctx irq_ctx;
+	int rc = 0;
+	u32 set_dma = 0, set_isp = 0;
 
 	if (pad >= sif->node.num_pads)
 		return -EINVAL;
 
-	if (!sif->buf_ctx.pad || sif->buf_ctx.pad->index != pad)
-		return 0;
-
 	memset(&irq_ctx, 0, sizeof(irq_ctx));
-	if (enable)
-		irq_ctx.buf_ctx = &sif->buf_ctx;
-	return sif_set_ctx(sif->dev, sif->id, &irq_ctx, enable);
+	rc = sif_get_ctx(sif->dev, sif->id, &irq_ctx);
+	if (rc)
+		return -EINVAL;
+
+	if (enable) {
+		if (!sif->buf_ctx.pad || sif->buf_ctx.pad->index != pad) {
+			irq_ctx.src_ctx = &sif->src_ctx;
+			set_isp = 1;
+		} else {
+			irq_ctx.buf_ctx = &sif->buf_ctx;
+			set_dma = 1;
+		}
+
+		rc = sif_set_ctx(sif->dev, sif->id, &irq_ctx, 1);
+		if (rc)
+			return -EINVAL;
+
+		if (refcount_read(&sif->start_refcnt) > REFCNT_INIT_VAL) {
+			if (set_dma)
+				sif_set_dma(sif->dev, sif->id, 1);
+			if (set_isp)
+				sif_set_isp_ctrl(sif->dev, sif->id, 1, true);
+		}
+	} else {
+		if (!sif->buf_ctx.pad || sif->buf_ctx.pad->index != pad) {
+			if (refcount_read(&sif->start_refcnt) > REFCNT_INIT_VAL && irq_ctx.src_ctx)
+				sif_set_isp_ctrl(sif->dev, sif->id, 0, true);
+			irq_ctx.src_ctx = NULL;
+		} else {
+			if (refcount_read(&sif->start_refcnt) > REFCNT_INIT_VAL && irq_ctx.buf_ctx)
+				sif_set_dma(sif->dev, sif->id, 0);
+			irq_ctx.buf_ctx = NULL;
+		}
+
+		rc = sif_set_ctx(sif->dev, sif->id, &irq_ctx, 0);
+		if (rc)
+			return -EINVAL;
+	}
+
+	return rc;
 }
 
 static int sif_s_stream(struct v4l2_subdev *sd, int enable)
@@ -356,6 +398,8 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 			refcount_dec(&inst->start_refcnt);
 
 		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
+			sif_set_isp_ctrl(inst->dev, inst->id, 0, true);
+			sif_set_dma(inst->dev, inst->id, 0);
 			rc = subdev_set_stream(sd, enable);
 			if (rc < 0)
 				return rc;
@@ -375,11 +419,13 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 		if (rc < 0)
 			return rc;
-
+		sif_set_dma(inst->dev, inst->id, 1);
+		sif_set_isp_ctrl(inst->dev, inst->id, 1, true);
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
 	}
+
 	return 0;
 }
 
@@ -507,6 +553,7 @@ static int sif_async_bound(struct subdev_node *sn)
 
 	while (i < sif->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
+		cam_ctx_release(&ins->src_ctx);
 		cam_ctx_release(&ins->buf_ctx);
 
 		if (ins != sif) {
@@ -631,6 +678,7 @@ static int sif_v4l_remove(struct platform_device *pdev)
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
 
 	for (i = 0; i < v4l_dev->sif_dev.num_insts; i++) {
+		cam_ctx_release(&v4l_dev->insts[i].src_ctx);
 		cam_ctx_release(&v4l_dev->insts[i].buf_ctx);
 		subdev_deinit(&v4l_dev->insts[i].node);
 	}

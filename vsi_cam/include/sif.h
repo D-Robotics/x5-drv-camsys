@@ -100,6 +100,8 @@ struct sif_instance {
 	u32 overlap;
 	int frame_start_cnt;
 	int prev_irq_stat;
+	bool wait_fe;
+	wait_queue_head_t fe_wq;
 };
 
 struct sif_device {
@@ -142,8 +144,10 @@ void sif_post(struct sif_device *sif, void *msg, u32 len);
 int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 		   bool post, enum sif_channel_type channel_type);
 int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post);
-void sif_pre_stop_ipi(struct sif_device *dev, u32 inst);
+void sif_set_isp_ctrl(struct sif_device *dev, u32 inst, int enable, bool wait);
 int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx, int enable);
+int sif_set_dma(struct sif_device *dev, u32 inst, int enable);
+int sif_get_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx);
 int sif_open(struct sif_device *sif, u32 inst);
 int sif_close(struct sif_device *sif, u32 inst);
 int sif_probe(struct platform_device *pdev, struct sif_device *sif);

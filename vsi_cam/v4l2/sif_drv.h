@@ -12,6 +12,7 @@
 struct sif_v4l_instance {
 	struct subdev_node node;
 	struct sif_device *dev;
+	struct cam_ctx src_ctx;
 	struct cam_ctx buf_ctx;
 	struct mutex open_lock;
 	struct mutex fmt_lock;

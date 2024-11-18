@@ -354,6 +354,8 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 		if (status & SIF_IPI_FRAME_END_EN) {
 			cam_set_stat_info(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
 			sif_set_frame_event(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
+			if (sif->insts[i].wait_fe)
+				wake_up(&sif->insts[i].fe_wq);
 		}
 
 		if (status & SIF_IRQ_DONE)
