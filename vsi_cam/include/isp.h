@@ -144,7 +144,7 @@ void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr)
 void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam_format *fmt);
 int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync);
 int isp_post_ex(struct isp_device *isp, struct isp_msg *msg,
-		struct mem_buf *extra, bool sync);
+		struct mem_buf *extra, bool sync, int *result);
 int isp_set_input(struct isp_device *isp, u32 inst, struct cam_input *in);
 int isp_set_input_select(struct isp_device *isp, u32 inst, u32 in_id, u32 in_chnl);
 int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 size);

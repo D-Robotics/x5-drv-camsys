@@ -35,7 +35,8 @@ static bool check_format(struct isp_instance *ins, struct cam_format *fmt)
 }
 #endif
 
-int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync)
+static int _isp_post(struct isp_device *isp, struct isp_msg *msg,
+		     bool sync, int *result)
 {
 	struct isc_post_param param = {
 		.msg = msg,
@@ -47,11 +48,18 @@ int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync)
 
 	if (isp->isc)
 		rc = isc_post(isp->isc, &param);
+	if (result)
+		*result = param.rc;
 	return rc;
 }
 
+int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync)
+{
+	return _isp_post(isp, msg, sync, NULL);
+}
+
 int isp_post_ex(struct isp_device *isp, struct isp_msg *msg,
-		struct mem_buf *extra, bool sync)
+		struct mem_buf *extra, bool sync, int *result)
 {
 	struct isc_post_param param = {
 		.msg = msg,
@@ -64,6 +72,8 @@ int isp_post_ex(struct isp_device *isp, struct isp_msg *msg,
 
 	if (isp->isc)
 		rc = isc_post(isp->isc, &param);
+	if (result)
+		*result = param.rc;
 	return rc;
 }
 
@@ -106,7 +116,7 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 {
 	struct isp_msg msg;
 	void *buf_va;
-	int ret;
+	int ret, result;
 
 	if (!isp)
 		return -EINVAL;
@@ -130,7 +140,11 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			pr_info("%s: ctrl_data copy_from_user failed!\n", __func__);
 			return ret;
 		}
-		ret = isp_post(isp, &msg, true);
+		ret = _isp_post(isp, &msg, true, &result);
+		if (ret < 0 || result) {
+			ret |= result;
+			pr_info("%s: msg isp_post failed (err=%d)!\n", __func__, ret);
+		}
 	} else {
 		msg.id = CAM_MSG_CTRL_EXT_CHANGED;
 		msg.ctrl_ext.ctrl_id = cmd;
@@ -150,7 +164,11 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 			return ret;
 		}
-		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, true);
+		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, true, &result);
+		if (ret < 0 || result) {
+			ret |= result;
+			pr_info("%s: msg isp_post_ex failed (err=%d)!\n", __func__, ret);
+		}
 
 		isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 	}
@@ -162,7 +180,7 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 {
 	struct isp_msg msg;
 	void *buf_va;
-	int ret;
+	int ret, result;
 
 	if (!isp)
 		return -EINVAL;
@@ -185,9 +203,10 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			pr_info("%s: ctrl_data copy_from_user failed!\n", __func__);
 			return ret;
 		}
-		ret = isp_post(isp, &msg, true);
-		if (ret < 0) {
-			pr_info("%s: msg isp_post failed!\n", __func__);
+		ret = _isp_post(isp, &msg, true, &result);
+		if (ret < 0 || result) {
+			ret |= result;
+			pr_info("%s: msg isp_post failed (err=%d)!\n", __func__, ret);
 			return ret;
 		}
 
@@ -215,9 +234,10 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 			return ret;
 		}
-		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, true);
-		if (ret < 0) {
-			pr_info("%s: msg isp_post_ex failed!\n", __func__);
+		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, true, &result);
+		if (ret < 0 || result) {
+			ret |= result;
+			pr_info("%s: msg isp_post_ex failed (err=%d)!\n", __func__, ret);
 			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 			return ret;
 		}

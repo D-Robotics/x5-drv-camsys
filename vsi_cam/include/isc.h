@@ -21,6 +21,7 @@ struct isc_post_param {
 	struct mem_buf *extra;
 	spinlock_t *lock; /* lock for post */
 	bool sync;
+	int rc;
 };
 
 int isc_register(u32 uid, struct isc_notifier_ops *ops, void *arg);

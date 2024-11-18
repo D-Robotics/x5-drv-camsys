@@ -485,7 +485,9 @@ int isc_post(struct isc_handle *isc, struct isc_post_param *param)
 			if (param->msg && param->msg_len) {
 				spin_lock_irqsave(param->lock, flags);
 				m = container_of(wp, struct isc_imsg, entry);
-				memcpy(param->msg, m->msg->d, param->msg_len);
+				param->rc = m->msg->rc;
+				if (!m->msg->rc)
+					memcpy(param->msg, m->msg->d, param->msg_len);
 				spin_unlock_irqrestore(param->lock, flags);
 			}
 		}
@@ -494,6 +496,8 @@ int isc_post(struct isc_handle *isc, struct isc_post_param *param)
 		index -= i * sizeof(*isc->sync.stat);
 		isc->sync.stat[i] &= ~(1 << index);
 		mutex_unlock(&isc->sync.lock);
+	} else {
+		param->rc = 0;
 	}
 	return IS_ERR(wp) ? PTR_ERR(wp) : 0;
 }
