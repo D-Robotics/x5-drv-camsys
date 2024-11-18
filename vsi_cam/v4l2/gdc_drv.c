@@ -96,7 +96,7 @@ static void gdc_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 	if (gdc && on) {
 		rc = gdc_wake_up(gdc->dev, gdc->id);
 		if (rc < 0)
-			pr_err("%s failed to handle buf ready (err=%d)\n", __func__ , rc);
+			pr_err("%s failed to handle buf ready (err=%d)\n", __func__, rc);
 	}
 }
 
@@ -154,147 +154,124 @@ static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx)
 	return cam_acqbuf(&gdc->sink_ctx);
 }
 
-static u32 gdc_get_out_format(struct v4l2_buf_ctx *ctx)
+static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx)
 {
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
-
-	return gdc->out_pixelformat;
+	return 0;
 }
 
-static int gdc_set_remote_format(struct v4l2_subdev *sd, u32 pixelformat, bool is_try)
+static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
+							  struct v4l2_format *format, bool is_try)
 {
-	struct media_entity *ent;
-	struct media_pad *pad;
-	struct v4l2_buf_ctx *ctx;
-	u16 i = 0;
+	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_format f;
+	struct v4l2_format s_f = *format;
+	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
 	int rc;
 
-	if (unlikely(!sd || !sd->entity.pads))
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
 		return -EINVAL;
 
-	ent = &sd->entity;
-
-	while (i < ent->num_pads) {
-		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
-				i++;
-				continue;
-			}
-			sd = media_entity_to_v4l2_subdev(pad->entity);
-			ctx = v4l2_get_subdevdata(sd);
-			if (ctx && ctx->set_format) {
-				rc = ctx->set_format(ctx, pixelformat, is_try);
-				if (rc < 0)
-					return rc;
-			}
-		}
-		i++;
+	rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
+	if (rc < 0) {
+		pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
+		return rc;
 	}
-	return 0;
+
+	memset(&f, 0, sizeof(f));
+	f.ifmt.format = pixelformat_to_cam_format(inst->input_fmt);
+	f.ifmt.width  = format->fmt.pix.width;
+	f.ifmt.height = format->fmt.pix.height;
+	f.ifmt.stride = ALIGN(f.ifmt.width, STRIDE_ALIGN);
+	f.ofmt.width  = format->fmt.pix.width;
+	f.ofmt.height = format->fmt.pix.height;
+	f.ofmt.stride = ALIGN(f.ofmt.width, STRIDE_ALIGN);
+	f.ofmt.format = pixelformat_to_cam_format(format->fmt.pix.pixelformat);
+
+	return gdc_set_format(inst->dev, inst->id, &f);
+
 }
 
-static int gdc_set_out_format(struct v4l2_buf_ctx *ctx, u32 format, bool is_try)
-{
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
-
-	gdc_set_remote_format(&gdc->node.sd, format, is_try);
-
-	if (!is_try)
-		gdc->out_pixelformat = format;
-	return 0;
-}
-
-static int gdc_enum_out_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	struct gdc_instance *gdc;
 
-	if (!format)
+	if (index >= inst->fmt_cap_num)
 		return -EINVAL;
 
-	gdc = &inst->dev->insts[inst->id];
+	*format = inst->fmt_cap[index];
 
-	if (index >= ARRAY_SIZE(gdc->fmt_cap))
-		return -EINVAL;
-
-	*format = cam_format_to_pixelformat
-			(gdc->fmt_cap[index].format, 0);
-	if (!*format)
-		return -EINVAL;
 	return 0;
 }
 
-static int gdc_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
-				  struct v4l2_frmsizeenum *fsize)
+static int gdc_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
+								  struct v4l2_frmsizeenum *fsize)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	struct gdc_instance *gdc;
-	struct gdc_format_cap *cap = NULL;
-	struct cam_res_cap *res;
-	u32 i, format;
+	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
+	struct v4l2_frmsizeenum fse;
+	int rc;
 
-	gdc = &inst->dev->insts[inst->id];
-
-	for (i = 0; i < ARRAY_SIZE(gdc->fmt_cap); i++) {
-		format = cam_format_to_pixelformat
-				(gdc->fmt_cap[i].format, 0);
-		if (format == fsize->pixel_format) {
-			cap = &gdc->fmt_cap[i];
-			break;
-		}
-	}
-
-	if (!cap)
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
 		return -EINVAL;
 
-	if (fsize->index >= ARRAY_SIZE(cap->res))
-		return -EINVAL;
+	memcpy(&fse, fsize, sizeof(fse));
+	fse.pixel_format = inst->input_fmt;
+	rc = v4l2_subdev_ctx_call(rsd, enum_framesize, rpad->index, &fse);
+	if (rc < 0)
+		return rc;
 
-	res = &cap->res[fsize->index];
-	if (res->type == CAP_DC) {
-		fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-		fsize->discrete.width = res->dc.width;
-		fsize->discrete.height = res->dc.height;
-	} else if (res->type == CAP_SW) {
-		fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
-		fsize->stepwise.min_width = res->sw.min_width;
-		fsize->stepwise.max_width = res->sw.max_width;
-		fsize->stepwise.min_height = res->sw.min_height;
-		fsize->stepwise.max_height = res->sw.max_height;
-		fsize->stepwise.step_width = res->sw.step_width;
-		fsize->stepwise.step_height = res->sw.step_height;
-	} else {
-		return -EINVAL;
-	}
-	return 0;
+	fsize->type = fse.type;
+	fsize->discrete = fse.discrete;
+	fsize->stepwise = fse.stepwise;
+	return rc;
 }
 
-static int gdc_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
+static int gdc_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	return -EINVAL;
+	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
+	struct v4l2_frmivalenum fiv;
+	int rc;
+
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	memcpy(&fiv, fival, sizeof(fiv));
+	fiv.pixel_format = inst->input_fmt;
+	rc = v4l2_subdev_ctx_call(rsd, enum_frameinterval, rpad->index, &fiv);
+	if (rc < 0)
+		return rc;
+
+	fival->type = fiv.type;
+	fival->discrete = fiv.discrete;
+	fival->stepwise = fiv.stepwise;
+	return rc;
 }
 
 static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	struct gdc_instance *ins;
-	struct gdc_format_cap *cap;
-	uint32_t support_fmt = CAM_FMT_NV12;
+	struct v4l2_subdev *sd, *rsd;
 
-	ins = &inst->dev->insts[inst->id];
+	inst->fmt_cap[0] = V4L2_PIX_FMT_NV12;
+	inst->fmt_cap_num = 1;
+	inst->input_fmt = V4L2_PIX_FMT_NV12;
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, NULL);
+	if (!rsd)
+		return;
 
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
-	cap = &ins->fmt_cap[0];
-	cap->format             = support_fmt;
-	cap->res[0].type           = CAP_SW;
-	cap->res[0].sw.step_width  = 2;
-	cap->res[0].sw.step_height = 2;
-	cap->res[0].sw.min_width   = 64;
-	cap->res[0].sw.min_height  = 64;
-	cap->res[0].sw.max_width   = 8192;
-	cap->res[0].sw.max_height  = 8192;
+	v4l2_subdev_ctx_call_no_return(rsd, set_cap);
 }
 
 static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
@@ -374,89 +351,45 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 static int gdc_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	return 0;
+	struct v4l2_subdev *rsd;
+	struct media_pad *rpad;
+
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	fiv->pad = rpad->index;
+
+	return v4l2_subdev_call(rsd, video, g_frame_interval, fiv);
 }
 
 static int gdc_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	return 0;
-}
+	struct v4l2_subdev *rsd;
+	struct media_pad *rpad;
 
-static int gdc_set_fmt(struct v4l2_subdev *sd,
-		       struct v4l2_subdev_state *state,
-		       struct v4l2_subdev_format *fmt)
-{
-	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
-	struct gdc_format f;
-	int rc;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
+		return -EINVAL;
 
-	rc = subdev_set_fmt(sd, state, fmt);
-	if (rc < 0)
-		return rc;
+	fiv->pad = rpad->index;
 
-	memset(&f, 0, sizeof(f));
-	f.ifmt.format = CAM_FMT_NV12;
-	f.ifmt.width  = fmt->format.width;
-	f.ifmt.height = fmt->format.height;
-	f.ifmt.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
-	f.ofmt.width  = fmt->format.width;
-	f.ofmt.height = fmt->format.height;
-	f.ofmt.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
-	if (inst->out_pixelformat)
-		f.ofmt.format = pixelformat_to_cam_format(inst->out_pixelformat);
-	else
-		f.ofmt.format = mbus_code_to_cam_format(fmt->format.code);
-
-	return gdc_set_format(inst->dev, inst->id, &f);
-}
-
-static int gdc_get_fmt(struct v4l2_subdev *sd,
-		       struct v4l2_subdev_state *state,
-		       struct v4l2_subdev_format *fmt)
-{
-	return 0;
-}
-
-static int gdc_enum_mbus_code(struct v4l2_subdev *sd,
-			      struct v4l2_subdev_state *state,
-			      struct v4l2_subdev_mbus_code_enum *code)
-{
-	return 0;
-}
-
-static int gdc_enum_frame_size(struct v4l2_subdev *sd,
-			       struct v4l2_subdev_state *state,
-			       struct v4l2_subdev_frame_size_enum *fse)
-{
-	return 0;
-}
-
-static int gdc_enum_frame_interval(struct v4l2_subdev *sd,
-				   struct v4l2_subdev_state *state,
-				   struct v4l2_subdev_frame_interval_enum *fie)
-{
-	return 0;
+	return v4l2_subdev_call(rsd, video, s_frame_interval, fiv);
 }
 
 static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	int rc = 0;
 
-	switch(cmd) {
-		case CAM_SET_CTRL:
-		case CAM_GET_CTRL:
-		case CAM_QUERY_CTRL:
-		case CAM_SET_EXT_CTRL:
-		case CAM_GET_EXT_CTRL:
-		case CAM_QUERY_EXT_CTRL:
-		case CAM_REQ_BUF:
-		case CAM_QUERY_BUF:
-		case CAM_DQ_BUF:
-		case CAM_Q_BUF:
-		case CAM_MMAP:
-		default:
-			break;
+	switch (cmd) {
+	case CAM_SET_CTRL:
+	case CAM_GET_CTRL:
+		rc = subdev_call_command(sd, cmd, arg);
+		break;
+	default:
+		rc = -EINVAL;
+		break;
 	}
 
 	return rc;
@@ -472,18 +405,9 @@ static const struct v4l2_subdev_video_ops gdc_video_ops = {
 	.s_frame_interval = gdc_s_frame_interval,
 };
 
-static const struct v4l2_subdev_pad_ops gdc_pad_ops = {
-	.set_fmt = gdc_set_fmt,
-	.get_fmt = gdc_get_fmt,
-	.enum_mbus_code = gdc_enum_mbus_code,
-	.enum_frame_size = gdc_enum_frame_size,
-	.enum_frame_interval = gdc_enum_frame_interval,
-};
-
 static const struct v4l2_subdev_ops gdc_subdev_ops = {
 	.core = &gdc_core_ops,
 	.video = &gdc_video_ops,
-	.pad = &gdc_pad_ops,
 };
 
 static int gdc_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
@@ -507,7 +431,6 @@ static int gdc_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (rc < 0)
 		return rc;
 
-	inst->out_pixelformat = 0;
 	return gdc_close(inst->dev, inst->id);
 }
 
@@ -601,11 +524,11 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		n->bctx.dqbuf = gdc_dqbuf;
 		n->bctx.acqbuf = gdc_acqbuf;
 		n->bctx.drop = gdc_drop;
-		n->bctx.get_format = gdc_get_out_format;
-		n->bctx.set_format = gdc_set_out_format;
-		n->bctx.enum_format = gdc_enum_out_format;
-		n->bctx.enum_framesize = gdc_enum_out_framesize;
-		n->bctx.enum_frameinterval = gdc_enum_out_frameinterval;
+		n->bctx.get_format = gdc_get_ctx_format;
+		n->bctx.set_format = gdc_set_ctx_format;
+		n->bctx.enum_format = gdc_enum_ctx_format;
+		n->bctx.enum_framesize = gdc_enum_ctx_framesize;
+		n->bctx.enum_frameinterval = gdc_enum_ctx_frameinterval;
 		n->bctx.set_cap = gdc_set_cap;
 
 		n->dev = dev;
@@ -642,7 +565,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, &v4l_dev->gdc_dev);
 
 	rc = gdc_runtime_resume(dev);
-		if (rc) {
+	if (rc) {
 		dev_err(dev, "failed to call gdc_runtime_resume (err=%d)\n", rc);
 		return rc;
 	}
@@ -684,7 +607,7 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 	}
 
 	rc = gdc_runtime_suspend(dev);
-		if (rc) {
+	if (rc) {
 		dev_err(dev, "failed to call gdc_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}

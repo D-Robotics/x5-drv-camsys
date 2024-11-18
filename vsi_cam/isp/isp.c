@@ -1406,7 +1406,6 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 	ins = &isp->insts[inst];
 	memset(&ins->fmt, 0, sizeof(ins->fmt));
 	memset(&ins->in, 0, sizeof(ins->in));
-	ins->input_bayer_format = 0;
 	ins->hdr_en = false;
 	INIT_LIST_HEAD(&ins->src_buf_list1);
 	INIT_LIST_HEAD(&ins->src_buf_list2);

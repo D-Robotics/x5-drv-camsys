@@ -21,9 +21,6 @@
 #define HDR_BUF_NUM (2)
 #define TILE_COUNT (2)
 
-#define ISP_FMT_MAX (3)
-#define ISP_RES_MAX (3)
-
 #define INVALID_INST (0xff)
 
 #define isp_write(isp, offset, value) \
@@ -59,11 +56,6 @@ struct isp_irq_ctx {
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
 };
 
-struct isp_format_cap {
-	u32 format;
-	struct cam_res_cap res[ISP_RES_MAX];
-};
-
 struct cam_list_node {
 	void *data;
 	struct list_head entry;
@@ -76,10 +68,8 @@ struct isp_instance {
 	struct cam_list_node src_bufs[SRC_BUF_NUM];
 	struct ibuf *mcm_ib, *mcm_ib1, *prev_mcm_ib;
 	struct cam_list_node *shd_src_node, *src_node;
-	struct isp_format_cap fmt_cap[ISP_FMT_MAX];
 	struct isp_format fmt;
 	struct cam_input in;
-	u32 input_bayer_format;
 	enum cam_state state;
 	enum cam_error error;
 	int stream_idx;

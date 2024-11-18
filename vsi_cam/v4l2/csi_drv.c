@@ -61,13 +61,39 @@ static int csi_s_stream(struct v4l2_subdev *sd, int enable)
 static int csi_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	return 0;
+	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *lsd, *rsd;
+	struct media_pad *rpad;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	lsd = &v4l_dev->insts[0].node.sd;
+
+	rsd = get_remote_src_subdev(lsd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	fiv->pad = rpad->index;
+	return v4l2_subdev_call(rsd, video, g_frame_interval, fiv);
 }
 
 static int csi_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	return 0;
+	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *lsd, *rsd;
+	struct media_pad *rpad;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	lsd = &v4l_dev->insts[0].node.sd;
+
+	rsd = get_remote_src_subdev(lsd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	fiv->pad = rpad->index;
+	return v4l2_subdev_call(rsd, video, s_frame_interval, fiv);
 }
 
 static void csi_subirq_callback(struct csi_device *csi_dev, u32 sub_val, const struct csi_irq_reg *err_reg, u32 reset_flag)
@@ -169,7 +195,20 @@ static int csi_enum_mbus_code(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state,
 			      struct v4l2_subdev_mbus_code_enum *code)
 {
-	return 0;
+	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *lsd, *rsd;
+	struct media_pad *rpad;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	lsd = &v4l_dev->insts[0].node.sd;
+
+	rsd = get_remote_src_subdev(lsd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	code->pad = rpad->index;
+	return v4l2_subdev_call(rsd, pad, enum_mbus_code, state, code);
 }
 
 static int csi_enum_frame_size(struct v4l2_subdev *sd,
@@ -178,43 +217,58 @@ static int csi_enum_frame_size(struct v4l2_subdev *sd,
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
 	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *rsd;
-	int rc = 0;
+	struct v4l2_subdev *lsd, *rsd;
+	struct media_pad *rpad;
 
 	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	rsd = &v4l_dev->insts[0].node.sd;
+	lsd = &v4l_dev->insts[0].node.sd;
 
-	rc = subdev_enum_frame_size(rsd, state, fse);
-	if (rc < 0)
-		return rc;
-	return 0;
+	rsd = get_remote_src_subdev(lsd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	fse->pad = rpad->index;
+	return v4l2_subdev_call(rsd, pad, enum_frame_size, state, fse);
 }
 
 static int csi_enum_frame_interval(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_state *state,
 				   struct v4l2_subdev_frame_interval_enum *fie)
 {
-	return 0;
+	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *lsd, *rsd;
+	struct media_pad *rpad;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	lsd = &v4l_dev->insts[0].node.sd;
+
+	rsd = get_remote_src_subdev(lsd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	fie->pad = rpad->index;
+	return v4l2_subdev_call(rsd, pad, enum_frame_interval, state, fie);
 }
 
 static int v4l2_ctrl_sensor_need_off_auto(uint32_t ctrl_id, uint32_t *auto_id, uint32_t *auto_off)
 {
 	switch (ctrl_id) {
-		case V4L2_CID_EXPOSURE:
-			*auto_id = V4L2_CID_EXPOSURE_AUTO;
-			*auto_off = (uint32_t)V4L2_EXPOSURE_MANUAL;
-			return 1;
-		case V4L2_CID_ANALOGUE_GAIN:
-			*auto_id = V4L2_CID_AUTOGAIN;
-			*auto_off = 0;
-			return 1;
-		case V4L2_CID_RED_BALANCE:
-		case V4L2_CID_BLUE_BALANCE:
-			*auto_id = V4L2_CID_AUTO_WHITE_BALANCE;
-			*auto_off = 0;
-			return 1;
-		default:
-			return 0;
+	case V4L2_CID_EXPOSURE:
+		*auto_id = V4L2_CID_EXPOSURE_AUTO;
+		*auto_off = (uint32_t)V4L2_EXPOSURE_MANUAL;
+		return 1;
+	case V4L2_CID_ANALOGUE_GAIN:
+		*auto_id = V4L2_CID_AUTOGAIN;
+		*auto_off = 0;
+		return 1;
+	case V4L2_CID_RED_BALANCE:
+	case V4L2_CID_BLUE_BALANCE:
+		*auto_id = V4L2_CID_AUTO_WHITE_BALANCE;
+		*auto_off = 0;
+		return 1;
+	default:
+		return 0;
 	}
 }
 
@@ -249,23 +303,38 @@ static int csi_g_sensor_ext_ctrl(struct v4l2_subdev *sd, void *arg)
 			}
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 
-			switch(ext_ctrl->id) {
-				case V4L2_CID_PIXEL_RATE:
-					vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ext_ctrl->id);
-					if (!vctrl) {
-						pr_debug("%s ctrl 0x%x not found\n", __func__, ext_ctrl->id);
-						return -EINVAL;
-					}
-					ext_ctrl->value64 = v4l2_ctrl_g_ctrl_int64(vctrl);
-					break;
-				default:
-					break;
+			switch (ext_ctrl->id) {
+			case V4L2_CID_PIXEL_RATE:
+				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ext_ctrl->id);
+				if (!vctrl) {
+					pr_debug("%s ctrl 0x%x not found\n", __func__, ext_ctrl->id);
+					return -EINVAL;
+				}
+				ext_ctrl->value64 = v4l2_ctrl_g_ctrl_int64(vctrl);
+				break;
+			default:
+				break;
 			}
 			return rc;
 		}
 		i++;
 	}
 	return rc;
+}
+
+static int csi_get_sensor_bayer(struct v4l2_subdev *sd, uint32_t *bayerPattern)
+{
+	int rc = 0;
+	struct v4l2_subdev_format format = {0};
+
+	format.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	rc = v4l2_subdev_call(sd, pad, get_fmt, NULL, &format);
+	if (rc < 0)
+		return -EINVAL;
+
+	*bayerPattern = mbus_code_to_bayer_pattern(format.format.code, true);
+
+	return *bayerPattern < 0 ? -EINVAL : rc;
 }
 
 static int csi_s_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
@@ -347,51 +416,62 @@ static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 			}
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			ctrl = (struct sen_ctrl *)arg;
-			switch(ctrl->ctrl_id) {
-				case V4L2_CID_FPS:
-					uint32_t fps = 30;
-					memcpy(ctrl->ctrl_data, &fps, sizeof(fps));
-					break;
-				case V4L2_CID_EXP_RANGE:
-					uint32_t exp_range[3];
-					exp_range[0] = 1;
-					exp_range[1] = 1104;
-					exp_range[2] = 1;
-					memcpy(ctrl->ctrl_data, &exp_range, sizeof(exp_range));
-					break;
-				case V4L2_CID_AGAIN_RANGE:
-					uint32_t again_range[3];
-					again_range[0] = 0;
-					again_range[1] = 1023;
-					again_range[2] = 16;
-					memcpy(ctrl->ctrl_data, &again_range, sizeof(again_range));
-					break;
-				case V4L2_CID_DGAIN_RANGE:
-					uint32_t dgain_range[3];
-					dgain_range[0] = 1;
-					dgain_range[1] = 1;
-					dgain_range[2] = 1;
-					memcpy(ctrl->ctrl_data, &dgain_range, sizeof(dgain_range));
-					break;
-				case V4L2_CID_BAYER_PATTERN:
-					uint32_t bayerPattern = 3;
-					memcpy(ctrl->ctrl_data, &bayerPattern, sizeof(bayerPattern));
-					break;
-				case V4L2_CID_SENSOR_NAME:
-					char* space_pos = strchr(rsd->name, ' ');
-					ctrl->size = space_pos - rsd->name;
-					memcpy(ctrl->ctrl_data, rsd->name, ctrl->size);
-					break;
-				default:
-					int32_t ctrl_value = 0;
-					vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ctrl->ctrl_id);
-					if (!vctrl) {
-						pr_debug("%s ctrl 0x%x not found\n", __func__, ctrl->ctrl_id);
-						return -EINVAL;
-					}
-					ctrl_value = v4l2_ctrl_g_ctrl(vctrl);
-					memcpy(ctrl->ctrl_data, &ctrl_value, sizeof(ctrl_value));
-					break;
+			switch (ctrl->ctrl_id) {
+			case V4L2_CID_FPS:
+				struct v4l2_subdev_frame_interval fi = {0};
+
+				v4l2_subdev_call(rsd, video, g_frame_interval, &fi);
+				memcpy(ctrl->ctrl_data, &fi.interval.denominator, sizeof(fi.interval.denominator));
+				break;
+			case V4L2_CID_EXP_RANGE:
+				uint32_t exp_range[3];
+
+				exp_range[0] = 1;
+				exp_range[1] = 1104;
+				exp_range[2] = 1;
+				memcpy(ctrl->ctrl_data, &exp_range, sizeof(exp_range));
+				break;
+			case V4L2_CID_AGAIN_RANGE:
+				uint32_t again_range[3];
+
+				again_range[0] = 0;
+				again_range[1] = 1023;
+				again_range[2] = 16;
+				memcpy(ctrl->ctrl_data, &again_range, sizeof(again_range));
+				break;
+			case V4L2_CID_DGAIN_RANGE:
+				uint32_t dgain_range[3];
+
+				dgain_range[0] = 1;
+				dgain_range[1] = 1;
+				dgain_range[2] = 1;
+				memcpy(ctrl->ctrl_data, &dgain_range, sizeof(dgain_range));
+				break;
+			case V4L2_CID_BAYER_PATTERN:
+				uint32_t bayerPattern;
+
+				rc = csi_get_sensor_bayer(rsd, &bayerPattern);
+				if (rc < 0)
+					return -EINVAL;
+				memcpy(ctrl->ctrl_data, &bayerPattern, sizeof(bayerPattern));
+				break;
+			case V4L2_CID_SENSOR_NAME:
+				char *space_pos = strchr(rsd->name, ' ');
+
+				ctrl->size = space_pos - rsd->name;
+				memcpy(ctrl->ctrl_data, rsd->name, ctrl->size);
+				break;
+			default:
+				int32_t ctrl_value = 0;
+
+				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ctrl->ctrl_id);
+				if (!vctrl) {
+					pr_debug("%s ctrl 0x%x not found\n", __func__, ctrl->ctrl_id);
+					return -EINVAL;
+				}
+				ctrl_value = v4l2_ctrl_g_ctrl(vctrl);
+				memcpy(ctrl->ctrl_data, &ctrl_value, sizeof(ctrl_value));
+				break;
 			}
 			return rc;
 		}
@@ -452,24 +532,25 @@ static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
 	rsd = &v4l_dev->insts[0].node.sd;
 
-	switch(cmd) {
-		case CAM_SET_CTRL:
-			rc = csi_s_sensor_ctrl(rsd, arg);
-			break;
-		case CAM_SET_EXT_CTRL:
-			rc = csi_s_sensor_ext_ctrl(rsd, arg);
-			break;
-		case CAM_GET_CTRL:
-			rc = csi_g_sensor_ctrl(rsd, arg);
-			break;
-		case CAM_GET_EXT_CTRL:
-			rc = csi_g_sensor_ext_ctrl(rsd, arg);
-			break;
-		case CAM_QUERY_CTRL:
-			rc = csi_query_sensor_ctrl(rsd, arg);
-			break;
-		default:
-			break;
+	switch (cmd) {
+	case CAM_SET_CTRL:
+		rc = csi_s_sensor_ctrl(rsd, arg);
+		break;
+	case CAM_SET_EXT_CTRL:
+		rc = csi_s_sensor_ext_ctrl(rsd, arg);
+		break;
+	case CAM_GET_CTRL:
+		rc = csi_g_sensor_ctrl(rsd, arg);
+		break;
+	case CAM_GET_EXT_CTRL:
+		rc = csi_g_sensor_ext_ctrl(rsd, arg);
+		break;
+	case CAM_QUERY_CTRL:
+		rc = csi_query_sensor_ctrl(rsd, arg);
+		break;
+	default:
+		rc = -EINVAL;
+		break;
 	}
 
 	return rc;

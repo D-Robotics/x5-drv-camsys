@@ -96,167 +96,222 @@ static void sif_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
 }
 
-static u32 sif_get_out_format(struct v4l2_buf_ctx *ctx)
+static bool is_support_fmt(u32 fmt)
 {
-	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
-
-	return sif->out_pixelformat;
+	switch (fmt) {
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SRGGB10:
+	case V4L2_PIX_FMT_SBGGR12:
+	case V4L2_PIX_FMT_SGBRG12:
+	case V4L2_PIX_FMT_SGRBG12:
+	case V4L2_PIX_FMT_SRGGB12:
+	case V4L2_PIX_FMT_NV12:
+		return true;
+	default:
+		return false;
+	}
 }
 
-static int sif_set_out_format(struct v4l2_buf_ctx *ctx, u32 format, bool is_try)
+static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx)
 {
-	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
-
-	if (!is_try)
-		sif->out_pixelformat = format;
 	return 0;
 }
 
-static int sif_enum_out_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
+						      struct v4l2_format *format, bool is_try)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct v4l2_subdev *sd;
+	struct v4l2_subdev_state state = {0};
+	struct v4l2_subdev_pad_config pads = {0};
 	struct sif_instance *sif;
+	struct cam_format f = {0};
+	struct v4l2_subdev_format senfmt = {0};
+	int rc = 0;
 
-	if (!format)
-		return -EINVAL;
+	sd = &inst->node.sd;
+	if (is_try)
+		senfmt.which = V4L2_SUBDEV_FORMAT_TRY;
+	else
+		senfmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 
+	senfmt.format.width = format->fmt.pix.width;
+	senfmt.format.height = format->fmt.pix.height;
+	f.width = format->fmt.pix.width;
+	f.height = format->fmt.pix.height;
+	f.stride = ALIGN(f.width, STRIDE_ALIGN);
+	if (format->fmt.pix.pixelformat == V4L2_PIX_FMT_NV12 && inst->conv_nv12) {
+		senfmt.format.code = MEDIA_BUS_FMT_YUYV8_1X16;
+		f.format = pixelformat_to_cam_format(V4L2_PIX_FMT_NV16);
+	} else {
+		senfmt.format.code = pixelformat_to_mbus_code(format->fmt.pix.pixelformat);
+		f.format = pixelformat_to_cam_format(format->fmt.pix.pixelformat);
+	}
+
+	mutex_lock(&inst->fmt_lock);
+	if (inst->fmt_changed && !memcmp(&f, &inst->fmt, sizeof(f)))
+		goto _exit;
+
+	state.pads = &pads;
+	rc = subdev_set_fmt(sd, &state, &senfmt);
+	if (rc < 0) {
+		pr_err("%s subdev_set_fmt failed\n", __func__);
+		goto _exit;
+	}
+
+	if (is_try)
+		goto _exit;
+
+	inst->dev->ipi_base = inst->id;
+	inst->dev->ipi_channel_num = 1;
 	sif = &inst->dev->insts[inst->id];
+	memset(&sif->sif_cfg, 0, sizeof(sif->sif_cfg));
+	if (format->fmt.pix.pixelformat == V4L2_PIX_FMT_NV12 && inst->conv_nv12)
+		sif->sif_cfg.yuv_conv = 1;
 
-	if (index >= ARRAY_SIZE(sif->fmt_cap))
-		return -EINVAL;
+	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post, BOTH_CHANNEL);
+	if (rc < 0) {
+		pr_err("%s sif_set_format failed\n", __func__);
+		goto _exit;
+	}
 
-	*format = cam_format_to_pixelformat(sif->fmt_cap[index].format,
-					    sif->input_bayer_format);
-	return *format ? 0 : -EINVAL;
+	inst->fmt = f;
+	inst->fmt_changed = true;
+
+_exit:
+	mutex_unlock(&inst->fmt_lock);
+	return rc;
 }
 
-static int sif_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
+static int sif_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+{
+	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+
+	if (index >= inst->fmt_cap_num)
+		return -EINVAL;
+
+	*format = inst->fmt_cap[index];
+
+	return 0;
+}
+
+static int sif_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
-	struct sif_instance *sif;
-	struct sif_format_cap *cap = NULL;
-	struct cam_res_cap *res;
-	u32 i, format;
+	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
+	struct v4l2_subdev_frame_size_enum fse = {
+		.index = fsize->index,
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
+	int rc = 0;
 
-	sif = &inst->dev->insts[inst->id];
-
-	for (i = 0; i < ARRAY_SIZE(sif->fmt_cap); i++) {
-		format = cam_format_to_pixelformat(sif->fmt_cap[i].format,
-						   sif->input_bayer_format);
-		if (format == fsize->pixel_format) {
-			cap = &sif->fmt_cap[i];
-			break;
-		}
-	}
-
-	if (!cap)
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
 		return -EINVAL;
 
-	if (fsize->index >= ARRAY_SIZE(cap->res))
+	fse.pad = rpad->index;
+	if (fsize->pixel_format == V4L2_PIX_FMT_NV12 && inst->conv_nv12)
+		fse.code = pixelformat_to_mbus_code(V4L2_PIX_FMT_YUYV);
+	else
+		fse.code = pixelformat_to_mbus_code(fsize->pixel_format);
+
+	rc = v4l2_subdev_call(rsd, pad, enum_frame_size, NULL, &fse);
+	if (rc < 0)
 		return -EINVAL;
 
-	res = &cap->res[fsize->index];
-	if (res->type == CAP_DC) {
-		fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-		fsize->discrete.width = res->dc.width;
-		fsize->discrete.height = res->dc.height;
-	} else if (res->type == CAP_SW) {
-		fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
-		fsize->stepwise.min_width = res->sw.min_width;
-		fsize->stepwise.max_width = res->sw.max_width;
-		fsize->stepwise.min_height = res->sw.min_height;
-		fsize->stepwise.max_height = res->sw.max_height;
-		fsize->stepwise.step_width = res->sw.step_width;
-		fsize->stepwise.step_height = res->sw.step_height;
-	} else {
-		return -EINVAL;
-	}
-	return 0;
+	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fsize->discrete.width = fse.min_width;
+	fsize->discrete.height = fse.min_height;
+
+	return rc;
 }
 
-static int sif_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
+static int sif_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	struct sif_v4l_instance *ins = buf_ctx_to_sif_v4l_instance(ctx);
-	struct sif_instance *sif;
-	struct sif_format_cap *cap = NULL;
-	struct cam_res_cap *res;
-	bool found = false;
-	u32 i, format;
+	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
+	struct v4l2_subdev_frame_interval_enum fie = {
+		.index = fival->index,
+		.width = fival->width,
+		.height = fival->height,
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
+	int rc = 0;
 
-	if (fival->index > 0)
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
 		return -EINVAL;
 
-	sif = &ins->dev->insts[ins->id];
+	fie.pad = rpad->index;
+	if (fival->pixel_format == V4L2_PIX_FMT_NV12 && inst->conv_nv12)
+		fie.code = pixelformat_to_mbus_code(V4L2_PIX_FMT_YUYV);
+	else
+		fie.code = pixelformat_to_mbus_code(fival->pixel_format);
 
-	for (i = 0; i < ARRAY_SIZE(sif->fmt_cap); i++) {
-		format = cam_format_to_pixelformat
-				(sif->fmt_cap[i].format, sif->input_bayer_format);
-		if (format == fival->pixel_format) {
-			cap = &sif->fmt_cap[i];
-			break;
-		}
-	}
-
-	if (!cap)
+	rc = v4l2_subdev_call(rsd, pad, enum_frame_interval, NULL, &fie);
+	if (rc < 0)
 		return -EINVAL;
 
-	for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
-		res = &cap->res[i];
-		if (res->type == CAP_DC) {
-			if (res->dc.width == fival->width &&
-			    res->dc.height == fival->height) {
-				found = true;
-				break;
-			}
-		}
-	}
+	fival->type = V4L2_FRMIVAL_TYPE_DISCRETE;
+	fival->discrete = fie.interval;
 
-	if (!found)
-		return -EINVAL;
-
-	fival->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	fival->discrete.numerator = ins->out_fps.numerator;
-	fival->discrete.denominator = ins->out_fps.denominator;
-	return 0;
+	return rc;
 }
 
 static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
-	struct sif_instance *ins;
-	struct sif_format_cap *cap;
-	struct cam_res_cap *res;
-	struct v4l2_subdev *sd;
-	struct v4l2_subdev_frame_size_enum fse;
-	struct v4l2_subdev_state state;
-	uint32_t support_fmt[2] = {CAM_FMT_RAW8, CAM_FMT_NV12};
-	int i, j, rc;
+	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev_mbus_code_enum mbus_code;
+	struct media_pad *rpad;
+	int i, j = 0, rc;
+	u32 pixelformat;
+	bool sensor_support_nv12 = false;
+	bool sensor_support_yuv422 = false;
 
-	ins = &inst->dev->insts[inst->id];
 	sd = &inst->node.sd;
-	ins->input_bayer_format = BAYER_FMT_BGGR;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
+		return;
 
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+	memset(inst->fmt_cap, 0, sizeof(inst->fmt_cap));
 
-	for(j = 0; j < ARRAY_SIZE(support_fmt); j++){
-		cap = &ins->fmt_cap[j];
-		cap->format = support_fmt[j];
-		for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
-			res = &cap->res[i];
-			memset(&state, 0, sizeof(state));
-			memset(&fse, 0, sizeof(fse));
-			fse.index = i;
-			fse.code = cam_format_to_mbus_code(CAM_FMT_RAW8, ins->input_bayer_format);
-			rc = sd->ops->pad->enum_frame_size(sd, &state, &fse);
-			if (rc < 0)
-				break;
-			res->type = CAP_DC;
-			res->dc.width = fse.min_width;
-			res->dc.height = fse.min_height;
-		}
+	for (i = 0; i < ARRAY_SIZE(inst->fmt_cap); i++) {
+		memset(&mbus_code, 0, sizeof(mbus_code));
+		mbus_code.index = i;
+		mbus_code.pad = rpad->index;
+		mbus_code.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+		rc = v4l2_subdev_call(rsd, pad, enum_mbus_code, NULL, &mbus_code);
+		if (rc < 0)
+			break;
+		pixelformat = mbus_code_to_pixelformat(mbus_code.code);
+		if (pixelformat == V4L2_PIX_FMT_YUYV)
+			sensor_support_yuv422 = true;
+		if (!is_support_fmt(pixelformat))
+			continue;
+		inst->fmt_cap[j] = pixelformat;
+		if (pixelformat == V4L2_PIX_FMT_NV12)
+			sensor_support_nv12 = true;
+		j++;
 	}
+	if (!sensor_support_nv12 && sensor_support_yuv422) {
+		inst->fmt_cap[j] = V4L2_PIX_FMT_NV12;
+		inst->conv_nv12 = 1;
+		j++;
+	}
+	inst->fmt_cap_num = j;
 }
 
 static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
@@ -318,107 +373,31 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 static int sif_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct sif_v4l_instance *ins = sd_to_sif_v4l_instance(sd);
+	struct v4l2_subdev *rsd;
+	struct media_pad *rpad;
 
-	fiv->interval = ins->out_fps;
-	return 0;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
+		return -EINVAL;
+
+	fiv->pad = rpad->index;
+
+	return v4l2_subdev_call(rsd, video, g_frame_interval, fiv);
 }
 
 static int sif_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct sif_v4l_instance *ins = sd_to_sif_v4l_instance(sd);
+	struct v4l2_subdev *rsd;
+	struct media_pad *rpad;
 
-	fiv->interval = ins->out_fps;
-	return 0;
-}
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd)
+		return -EINVAL;
 
-static int sif_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
-		       struct v4l2_subdev_format *fmt)
-{
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
-	struct sif_instance *sif;
-	struct cam_format f;
-	struct v4l2_subdev_format senfmt;
-	int rc = 0;
+	fiv->pad = rpad->index;
 
-	memcpy(&senfmt, fmt, sizeof(senfmt));
-	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1_5X8)
-		senfmt.format.code = MEDIA_BUS_FMT_YUYV8_1X16;
-
-	memset(&f, 0, sizeof(f));
-	f.width = fmt->format.width;
-	f.height = fmt->format.height;
-	f.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
-
-	if (senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
-		f.format = pixelformat_to_cam_format(V4L2_PIX_FMT_NV16);
-	else if (inst->out_pixelformat)
-		f.format = pixelformat_to_cam_format(inst->out_pixelformat);
-	else
-		f.format = mbus_code_to_cam_format(fmt->format.code);
-
-	mutex_lock(&inst->fmt_lock);
-	if (inst->fmt_changed && !memcmp(&f, &inst->fmt, sizeof(f)))
-		goto _exit;
-
-	rc = subdev_set_fmt(sd, state, &senfmt);
-	if (rc < 0)
-		goto _exit;
-
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		goto _exit;
-
-	inst->dev->ipi_base = inst->id;
-	inst->dev->ipi_channel_num = 1;
-
-	sif = &inst->dev->insts[inst->id];
-	memset(&sif->sif_cfg, 0, sizeof(sif->sif_cfg));
-	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
-		sif->sif_cfg.yuv_conv = 1;
-
-	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post,
-			    BOTH_CHANNEL);
-	if (rc < 0)
-		goto _exit;
-
-	inst->fmt = f;
-	inst->fmt_changed = true;
-
-_exit:
-	mutex_unlock(&inst->fmt_lock);
-	return rc;
-}
-
-static int sif_get_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
-		       struct v4l2_subdev_format *fmt)
-{
-	return 0;
-}
-
-static int sif_enum_mbus_code(struct v4l2_subdev *sd,
-			      struct v4l2_subdev_state *state,
-			      struct v4l2_subdev_mbus_code_enum *code)
-{
-	return 0;
-}
-
-static int sif_enum_frame_size(struct v4l2_subdev *sd,
-			       struct v4l2_subdev_state *state,
-			       struct v4l2_subdev_frame_size_enum *fse)
-{
-	int rc;
-	rc = subdev_enum_frame_size(sd, state, fse);
-	if (rc < 0)
-		return rc;
-	return 0;
-}
-
-static int sif_enum_frame_interval(struct v4l2_subdev *sd,
-				   struct v4l2_subdev_state *state,
-				   struct v4l2_subdev_frame_interval_enum *fie)
-{
-	return 0;
+	return v4l2_subdev_call(rsd, video, s_frame_interval, fiv);
 }
 
 static long sif_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
@@ -436,18 +415,9 @@ static const struct v4l2_subdev_video_ops sif_video_ops = {
 	.s_frame_interval = sif_s_frame_interval,
 };
 
-static const struct v4l2_subdev_pad_ops sif_pad_ops = {
-	.set_fmt = sif_set_fmt,
-	.get_fmt = sif_get_fmt,
-	.enum_mbus_code = sif_enum_mbus_code,
-	.enum_frame_size = sif_enum_frame_size,
-	.enum_frame_interval = sif_enum_frame_interval,
-};
-
 static const struct v4l2_subdev_ops sif_subdev_ops = {
 	.core = &sif_core_ops,
 	.video = &sif_video_ops,
-	.pad = &sif_pad_ops,
 };
 
 static int sif_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
@@ -488,7 +458,6 @@ static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (rc < 0)
 		goto _exit;
 
-	inst->out_pixelformat = 0;
 	rc = sif_close(inst->dev, inst->id);
 
 _exit:
@@ -578,8 +547,6 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		inst->id = i;
 		inst->dev = &v4l_dev->sif_dev;
 		inst->en_post = true;
-		inst->out_fps.numerator = 30;
-		inst->out_fps.denominator = 1;
 
 		mutex_init(&inst->open_lock);
 		mutex_init(&inst->fmt_lock);
@@ -589,11 +556,11 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		n->async_bound = sif_async_bound;
 
 		n->bctx.ready = sif_buf_ready;
-		n->bctx.get_format = sif_get_out_format;
-		n->bctx.set_format = sif_set_out_format;
-		n->bctx.enum_format = sif_enum_out_format;
-		n->bctx.enum_framesize = sif_enum_out_framesize;
-		n->bctx.enum_frameinterval = sif_enum_out_frameinterval;
+		n->bctx.get_format = sif_get_ctx_format;
+		n->bctx.set_format = sif_set_ctx_format;
+		n->bctx.enum_format = sif_enum_ctx_format;
+		n->bctx.enum_framesize = sif_enum_ctx_framesize;
+		n->bctx.enum_frameinterval = sif_enum_ctx_frameinterval;
 		n->bctx.set_cap = sif_set_cap;
 		n->bctx.set_stream = sif_set_stream;
 

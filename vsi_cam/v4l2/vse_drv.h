@@ -7,6 +7,9 @@
 #include "utils.h"
 #include "vse.h"
 
+#define VSE_INPUT_RES_MAX (10)
+#define VSE_FMT_MAX (5)
+
 struct vse_v4l_instance {
 	struct subdev_node node;
 	struct vse_device *dev;
@@ -14,11 +17,16 @@ struct vse_v4l_instance {
 	struct cam_ctx src_ctx[VSE_OUT_CHNL_MAX];
 	struct media_pad *src_pads[VSE_OUT_CHNL_MAX];
 	struct cam_format ifmt;
-	struct v4l2_fract out_fps[VSE_OUT_CHNL_MAX];
 	bool fmt_changed;
-	u32 out_pixelformat;
 	unsigned long capture_queue_offset;
 	u32 id;
+	struct cam_res_cap res_cap[VSE_OUT_CHNL_MAX];
+	struct cam_res_cap input_res_cap[VSE_INPUT_RES_MAX];
+	struct cam_res_cap input_res;
+	u32 input_res_cap_num;
+	u32 fmt_cap[VSE_FMT_MAX]; /* pixelformat */
+	u32 fmt_cap_num;
+	u32 input_fmt; /* pixelformat */
 	struct mutex open_lock;
 	struct mutex fmt_lock;
 	struct mutex standalone_lock;

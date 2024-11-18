@@ -12,9 +12,6 @@
 #include "cam_uapi.h"
 #include "sif_uapi.h"
 
-#define SIF_FMT_MAX (4)
-#define SIF_RES_MAX (10)
-
 #define SIF_EBD_HSIZE_ALIGN (16)
 
 #define sif_write(sif, offset, value) \
@@ -86,16 +83,9 @@ struct sif_irq_ctx {
 	struct cam_buf *emb_buf;
 };
 
-struct sif_format_cap {
-	u32 format;
-	struct cam_res_cap res[SIF_RES_MAX];
-};
-
 struct sif_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct sif_irq_ctx ctx;
-	struct sif_format_cap fmt_cap[SIF_FMT_MAX];
-	u32 input_bayer_format;
 	enum cam_state state;
 	enum cam_error error;
 	struct sif_cfg sif_cfg;

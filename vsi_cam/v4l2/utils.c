@@ -151,42 +151,32 @@ int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
 	return 0;
 }
 
-int subdev_enum_frame_size(struct v4l2_subdev *sd,
-				struct v4l2_subdev_state *sd_state,
-				struct v4l2_subdev_frame_size_enum *fse)
+struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_pad **rpad)
 {
 	struct media_entity *ent;
 	struct media_pad *pad;
 	struct v4l2_subdev *rsd;
-	uint32_t count[2] = {0};
 	u16 i = 0;
-	int rc;
 
 	if (unlikely(!sd || !sd->entity.pads))
-		return -EINVAL;
+		return NULL;
 
 	ent = &sd->entity;
 
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			count[0] ++;
 			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
-				i++;
-				count[1] ++;
-				continue;
-			}
+			if (!pad)
+				return NULL;
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
-			fse->pad = pad->index;
-			rc = rsd->ops->pad->enum_frame_size(rsd, sd_state, fse);
-			if (rc < 0)
-				return rc;
+			if (rpad)
+				*rpad = pad;
+			return rsd;
 		}
 		i++;
 	}
-	if(count[0] == count[1])
-		return -1;
-	return 0;
+
+	return NULL;
 }
 
 int subdev_open(struct v4l2_subdev *sd)
@@ -362,65 +352,164 @@ u32 mbus_code_to_cam_format(u32 format)
 	case MEDIA_BUS_FMT_SGRBG12_1X12:
 	case MEDIA_BUS_FMT_SRGGB12_1X12:
 		return CAM_FMT_RAW12;
+	case MEDIA_BUS_FMT_YUYV8_1_5X8:
+		return CAM_FMT_NV12;
 	default:
 		return CAM_FMT_NULL;
 	}
 }
 
-u32 cam_format_to_mbus_code(u32 format, u32 bayer_format)
+int pixelformat_to_mbus_code(u32 pixelformat)
 {
-	if (format == CAM_FMT_RAW8) {
-		switch (bayer_format) {
-		case BAYER_FMT_BGGR:
-			return MEDIA_BUS_FMT_SBGGR8_1X8;
-		case BAYER_FMT_GBRG:
-			return MEDIA_BUS_FMT_SGBRG8_1X8;
-		case BAYER_FMT_GRBG:
-			return MEDIA_BUS_FMT_SGRBG8_1X8;
-		default:
-			return MEDIA_BUS_FMT_SRGGB8_1X8;
-		}
-	} else if (format == CAM_FMT_RAW10) {
-		switch (bayer_format) {
-		case BAYER_FMT_BGGR:
-			return MEDIA_BUS_FMT_SBGGR10_1X10;
-		case BAYER_FMT_GBRG:
-			return MEDIA_BUS_FMT_SGBRG10_1X10;
-		case BAYER_FMT_GRBG:
-			return MEDIA_BUS_FMT_SGRBG10_1X10;
-		default:
-			return MEDIA_BUS_FMT_SRGGB10_1X10;
-		}
-	} else {
-		switch (bayer_format) {
-		case BAYER_FMT_BGGR:
-			return MEDIA_BUS_FMT_SBGGR12_1X12;
-		case BAYER_FMT_GBRG:
-			return MEDIA_BUS_FMT_SGBRG12_1X12;
-		case BAYER_FMT_GRBG:
-			return MEDIA_BUS_FMT_SGRBG12_1X12;
-		default:
-			return MEDIA_BUS_FMT_SRGGB12_1X12;
-		}
+	switch (pixelformat) {
+	case V4L2_PIX_FMT_SBGGR8:
+		return MEDIA_BUS_FMT_SBGGR8_1X8;
+	case V4L2_PIX_FMT_SGBRG8:
+		return MEDIA_BUS_FMT_SGBRG8_1X8;
+	case V4L2_PIX_FMT_SGRBG8:
+		return MEDIA_BUS_FMT_SGRBG8_1X8;
+	case V4L2_PIX_FMT_SRGGB8:
+		return MEDIA_BUS_FMT_SRGGB8_1X8;
+	case V4L2_PIX_FMT_SBGGR10:
+		return MEDIA_BUS_FMT_SBGGR10_1X10;
+	case V4L2_PIX_FMT_SGBRG10:
+		return MEDIA_BUS_FMT_SGBRG10_1X10;
+	case V4L2_PIX_FMT_SGRBG10:
+		return MEDIA_BUS_FMT_SGRBG10_1X10;
+	case V4L2_PIX_FMT_SRGGB10:
+		return MEDIA_BUS_FMT_SRGGB10_1X10;
+	case V4L2_PIX_FMT_SBGGR12:
+		return MEDIA_BUS_FMT_SBGGR12_1X12;
+	case V4L2_PIX_FMT_SGBRG12:
+		return MEDIA_BUS_FMT_SGBRG12_1X12;
+	case V4L2_PIX_FMT_SGRBG12:
+		return MEDIA_BUS_FMT_SGRBG12_1X12;
+	case V4L2_PIX_FMT_SRGGB12:
+		return MEDIA_BUS_FMT_SRGGB12_1X12;
+	case V4L2_PIX_FMT_NV12:
+		return MEDIA_BUS_FMT_YUYV8_1_5X8;
+	case V4L2_PIX_FMT_YUYV:
+		return MEDIA_BUS_FMT_YUYV8_1X16;
+	default:
+		return -EINVAL;
+	}
+}
+
+u32 mbus_code_to_bayer_pattern(u32 code, bool isISI)
+{
+	switch (code) {
+	case MEDIA_BUS_FMT_SBGGR8_1X8:
+	case MEDIA_BUS_FMT_SBGGR10_1X10:
+	case MEDIA_BUS_FMT_SBGGR12_1X12:
+		if (isISI)
+			return ISI_BPAT_BGGR;
+		else
+			return BAYER_FMT_BGGR;
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
+	case MEDIA_BUS_FMT_SGBRG10_1X10:
+	case MEDIA_BUS_FMT_SGBRG12_1X12:
+		if (isISI)
+			return ISI_BPAT_GBRG;
+		else
+			return BAYER_FMT_GBRG;
+	case MEDIA_BUS_FMT_SGRBG8_1X8:
+	case MEDIA_BUS_FMT_SGRBG10_1X10:
+	case MEDIA_BUS_FMT_SGRBG12_1X12:
+		if (isISI)
+			return ISI_BPAT_GRBG;
+		else
+			return BAYER_FMT_GRBG;
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
+	case MEDIA_BUS_FMT_SRGGB10_1X10:
+	case MEDIA_BUS_FMT_SRGGB12_1X12:
+		if (isISI)
+			return ISI_BPAT_RGGB;
+		else
+			return BAYER_FMT_RGGB;
+	default:
+		return -EINVAL;
+	}
+}
+
+u32 mbus_code_to_pixelformat(u32 code)
+{
+	switch (code) {
+	case MEDIA_BUS_FMT_SBGGR8_1X8:
+		return V4L2_PIX_FMT_SBGGR8;
+	case MEDIA_BUS_FMT_SGBRG8_1X8:
+		return V4L2_PIX_FMT_SGBRG8;
+	case MEDIA_BUS_FMT_SGRBG8_1X8:
+		return V4L2_PIX_FMT_SGRBG8;
+	case MEDIA_BUS_FMT_SRGGB8_1X8:
+		return V4L2_PIX_FMT_SRGGB8;
+	case MEDIA_BUS_FMT_SBGGR10_1X10:
+		return V4L2_PIX_FMT_SBGGR10;
+	case MEDIA_BUS_FMT_SGBRG10_1X10:
+		return V4L2_PIX_FMT_SGBRG10;
+	case MEDIA_BUS_FMT_SGRBG10_1X10:
+		return V4L2_PIX_FMT_SGRBG10;
+	case MEDIA_BUS_FMT_SRGGB10_1X10:
+		return V4L2_PIX_FMT_SRGGB10;
+	case MEDIA_BUS_FMT_SBGGR12_1X12:
+		return V4L2_PIX_FMT_SBGGR12;
+	case MEDIA_BUS_FMT_SGBRG12_1X12:
+		return V4L2_PIX_FMT_SGBRG12;
+	case MEDIA_BUS_FMT_SGRBG12_1X12:
+		return V4L2_PIX_FMT_SGRBG12;
+	case MEDIA_BUS_FMT_SRGGB12_1X12:
+		return V4L2_PIX_FMT_SRGGB12;
+	case MEDIA_BUS_FMT_YUYV8_1_5X8:
+		return V4L2_PIX_FMT_NV12;
+	case MEDIA_BUS_FMT_YUYV8_1X16:
+		return V4L2_PIX_FMT_YUYV;
+	default:
+		return -EINVAL;
 	}
 }
 
 struct v4l2_subdev *isp_device_to_v4l2_subdev(void *data, uint32_t inst)
 {
-    struct isp_device *isp_dev = (struct isp_device *)data;
-    struct v4l2_subdev *sd;
-    struct isp_v4l_device *isp_v4l_dev = container_of(isp_dev, struct isp_v4l_device, isp_dev);
-    struct isp_v4l_instance *ins = &isp_v4l_dev->insts[inst];
-    sd = &ins->node.sd;
-    return sd;
+	struct isp_device *isp_dev = (struct isp_device *)data;
+	struct v4l2_subdev *sd;
+	struct isp_v4l_device *isp_v4l_dev = container_of(isp_dev, struct isp_v4l_device, isp_dev);
+	struct isp_v4l_instance *ins = &isp_v4l_dev->insts[inst];
+
+	sd = &ins->node.sd;
+	return sd;
 }
 
 struct v4l2_subdev *sif_device_to_v4l2_subdev(void *data, uint32_t inst)
 {
-    struct sif_device *sif_dev = (struct sif_device *)data;
-    struct v4l2_subdev *sd;
-    struct sif_v4l_device *sif_v4l_dev = container_of(sif_dev, struct sif_v4l_device, sif_dev);
-    struct sif_v4l_instance *ins = &sif_v4l_dev->insts[inst];
-    sd = &ins->node.sd;
-    return sd;
+	struct sif_device *sif_dev = (struct sif_device *)data;
+	struct v4l2_subdev *sd;
+	struct sif_v4l_device *sif_v4l_dev = container_of(sif_dev, struct sif_v4l_device, sif_dev);
+	struct sif_v4l_instance *ins = &sif_v4l_dev->insts[inst];
+
+	sd = &ins->node.sd;
+	return sd;
+}
+
+bool is_standalone_datapath(struct v4l2_subdev *sd)
+{
+	struct media_entity *ent;
+	struct media_pad *pad;
+	u16 i = 0;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return false;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad)
+				return true;
+			else
+				return false;
+		}
+		i++;
+	}
+
+	return false;
 }

@@ -7,19 +7,22 @@
 #include "sif.h"
 #include "utils.h"
 
+#define SIF_FMT_MAX (15)
+
 struct sif_v4l_instance {
 	struct subdev_node node;
 	struct sif_device *dev;
 	struct cam_ctx buf_ctx;
-	struct v4l2_fract out_fps;
 	struct mutex open_lock;
 	struct mutex fmt_lock;
-	u32 out_pixelformat;
 	u32 id;
 	int enabled;
 	bool en_post;
 	bool fmt_changed;
 	struct cam_format fmt;
+	u32 fmt_cap[SIF_FMT_MAX]; /* pixelformat */
+	u32 fmt_cap_num;
+	u32 conv_nv12;
 	refcount_t start_refcnt;
 	refcount_t open_count;
 };

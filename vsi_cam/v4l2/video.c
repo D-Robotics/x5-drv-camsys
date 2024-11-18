@@ -14,6 +14,8 @@
 static int scene;
 module_param(scene, int, 0644);
 
+#define VID_FMT_MAX_NUM (20)
+
 struct vid_video_device {
 	struct video_device video;
 	struct vb2_queue queue;
@@ -121,28 +123,45 @@ static void init_fmt(struct v4l2_format *f, struct video_fmt *v_f)
 		_sd;                                                      \
 	})
 
+
+static bool vid_check_pixelformat(struct vid_video_device *vdev, u32 pixelformat)
+{
+	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	int i, rc;
+	u32 fmt;
+
+	if (!sd)
+		return false;
+
+	for (i = 0; i < VID_FMT_MAX_NUM; i++) {
+		rc = v4l2_subdev_ctx_call(sd, enum_format, i, &fmt);
+		if (rc < 0)
+			return false;
+
+		if (fmt == pixelformat)
+			return true;
+	}
+	return false;
+}
+
 static int get_def_fmt(struct vid_video_device *vdev, struct v4l2_format *f)
 {
 	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct v4l2_buf_ctx *ctx = v4l2_get_subdevdata(sd);
 	struct video_fmt *v_f;
 	struct v4l2_frmsizeenum fsize;
 	u32 pixelformat = f->fmt.pix.pixelformat, width, height;
 	int rc;
 
-	if (!ctx || !ctx->enum_format || !ctx->enum_framesize)
-		return -EINVAL;
-
-	if (!pixelformat) {
-		rc = ctx->enum_format(ctx, 0, &pixelformat);
+	if (!vid_check_pixelformat(vdev, pixelformat)) {
+		rc = v4l2_subdev_ctx_call(sd, enum_format, 0, &pixelformat);
 		if (rc < 0)
 			return rc;
 	}
 
 	memset(&fsize, 0, sizeof(fsize));
 	fsize.pixel_format = pixelformat;
-	rc = ctx->enum_framesize(ctx, pad->index, &fsize);
+	rc = v4l2_subdev_ctx_call(sd, enum_framesize, pad->index, &fsize);
 	if (rc < 0)
 		return rc;
 
@@ -202,14 +221,10 @@ static inline void notify_buf_ready(struct vid_video_device *dev, int on)
 {
 	struct media_pad *pad = media_pad_remote_pad_first(&dev->pad);
 	struct v4l2_subdev *sd;
-	struct v4l2_buf_ctx *ctx;
 
 	if (pad) {
 		sd = media_entity_to_v4l2_subdev(pad->entity);
-		ctx = v4l2_get_subdevdata(sd);
-
-		if (ctx && ctx->ready)
-			ctx->ready(ctx, pad->index, on);
+		v4l2_subdev_ctx_call_no_return(sd, ready, pad->index, on);
 	}
 }
 
@@ -249,13 +264,10 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
 	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
-	struct v4l2_buf_ctx *ctx;
 	int rc;
 
 	vdev->buf_sequence = 0;
-	ctx = v4l2_get_subdevdata(sd);
-	if (ctx && ctx->set_stream)
-		ctx->set_stream(ctx, pad->index, 1);
+	v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 1);
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
 	if (rc < 0)
@@ -272,16 +284,13 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
 	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
-	struct v4l2_buf_ctx *ctx;
 	int rc;
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 0);
 	if (rc < 0)
 		return;
 
-	ctx = v4l2_get_subdevdata(sd);
-	if (ctx && ctx->set_stream)
-		ctx->set_stream(ctx, pad->index, 0);
+	v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 0);
 
 	notify_buf_ready(vdev, 0);
 
@@ -316,14 +325,11 @@ static int vid_enum_fmt(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct v4l2_buf_ctx *ctx = v4l2_get_subdevdata(sd);
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	if (ctx && ctx->enum_format)
-		return ctx->enum_format(ctx, f->index, &f->pixelformat);
-	return -EINVAL;
+	return v4l2_subdev_ctx_call(sd, enum_format, f->index, &f->pixelformat);
 }
 
 static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
@@ -349,10 +355,6 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 {
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
-	struct v4l2_buf_ctx *ctx;
-	struct v4l2_subdev_state state;
-	struct v4l2_subdev_pad_config pads;
-	struct v4l2_subdev_format s_f;
 	struct video_fmt *v_f;
 	int rc;
 
@@ -364,39 +366,26 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 		return -EINVAL;
 
 	v_f = get_fmt_by_pixelformat(f->fmt.pix.pixelformat);
-	if (!v_f)
+	if (!v_f) {
+		pr_err("%s get_fmt_by_pixelformat failed\n", __func__);
 		return -EINVAL;
+	}
 
 	if (f->fmt.pix.width < MIN_W || f->fmt.pix.height < MIN_H ||
 	    f->fmt.pix.width > MAX_W || f->fmt.pix.height > MAX_H) {
 		rc = get_def_fmt(vdev, f);
-		if (rc < 0)
+		if (rc < 0) {
+			pr_err("%s get_def_fmt failed\n", __func__);
 			return -EINVAL;
+		}
 	}
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
-	ctx = v4l2_get_subdevdata(sd);
-	if (ctx && ctx->set_format) {
-		rc = ctx->set_format(ctx, f->fmt.pix.pixelformat, is_try);
-		if (rc < 0)
-			return rc;
-	}
-
-	memset(&state, 0, sizeof(state));
-	memset(&pads, 0, sizeof(pads));
-	memset(&s_f, 0, sizeof(s_f));
-	if (is_try)
-		s_f.which = V4L2_SUBDEV_FORMAT_TRY;
-	else
-		s_f.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-	s_f.pad = pad->index;
-	s_f.format.width = f->fmt.pix.width;
-	s_f.format.height = f->fmt.pix.height;
-	s_f.format.code = v_f->mbus_code;
-	state.pads = &pads;
-	rc = v4l2_subdev_call(sd, pad, set_fmt, &state, &s_f);
-	if (rc < 0)
+	rc = v4l2_subdev_ctx_call(sd, set_format, pad->index, f, is_try);
+	if (rc < 0) {
+		pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
 		return rc;
+	}
 
 	init_fmt(f, v_f);
 	return 0;
@@ -405,6 +394,13 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 static int vid_try_fmt(struct file *file, void *fh, struct v4l2_format *f)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
+	int rc;
+
+	if (!vid_check_pixelformat(vdev, f->fmt.pix.pixelformat)) {
+		rc = get_def_fmt(vdev, f);
+		if (rc < 0)
+			return -EINVAL;
+	}
 
 	return try_s_fmt(vdev, f, true);
 }
@@ -413,6 +409,12 @@ static int vid_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	int rc;
+
+	if (!vid_check_pixelformat(vdev, f->fmt.pix.pixelformat)) {
+		rc = get_def_fmt(vdev, f);
+		if (rc < 0)
+			return -EINVAL;
+	}
 
 	rc = try_s_fmt(vdev, f, false);
 	if (rc < 0)
@@ -428,11 +430,11 @@ static int vid_enum_framesizes(struct file *file, void *fh,
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
 	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
-	struct v4l2_buf_ctx *ctx = v4l2_get_subdevdata(sd);
 
-	if (ctx && ctx->enum_framesize)
-		return ctx->enum_framesize(ctx, pad->index, fsize);
-	return -EINVAL;
+	if (!vid_check_pixelformat(vdev, fsize->pixel_format))
+		return -EINVAL;
+
+	return v4l2_subdev_ctx_call(sd, enum_framesize, pad->index, fsize);
 }
 
 static int vid_enum_frameintervals(struct file *file, void *fh,
@@ -441,11 +443,11 @@ static int vid_enum_frameintervals(struct file *file, void *fh,
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
 	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
-	struct v4l2_buf_ctx *ctx = v4l2_get_subdevdata(sd);
 
-	if (ctx && ctx->enum_frameinterval)
-		return ctx->enum_frameinterval(ctx, pad->index, fival);
-	return -EINVAL;
+	if (!vid_check_pixelformat(vdev, fival->pixel_format))
+		return -EINVAL;
+
+	return v4l2_subdev_ctx_call(sd, enum_frameinterval, pad->index, fival);
 }
 
 static int vid_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
@@ -591,7 +593,7 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &cam_ext_ctrl);
 		} else
 			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &a->controls[i]);
-		if(rc < 0)
+		if (rc < 0)
 			return rc;
 	}
 
@@ -622,7 +624,7 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &a->controls[i]);
 		}
 
-		if(rc < 0)
+		if (rc < 0)
 			return rc;
 	}
 
@@ -672,13 +674,19 @@ static int vid_ioc_reqbufs(struct file *file, void *fh, struct v4l2_requestbuffe
 
 	rc = vb2_ioctl_reqbufs(file, fh, b);
 	if (rc < 0)
-		return -EINVAL;
+		return rc;
+
 	if (!b->count)
 		return rc;
+
 	vdev->capture_queue_offset =
 		vdev->queue.num_buffers * vdev->queue.bufs[1]->planes[0].m.offset;
 
-	return v4l2_subdev_call(sd, core, command, CAM_REQ_BUF, (void *)&vdev->capture_queue_offset);
+	if (is_standalone_datapath(sd))
+		rc = v4l2_subdev_call(sd, core, command, CAM_REQ_BUF,
+			(void *)&vdev->capture_queue_offset);
+
+	return rc;
 }
 
 static int vid_ioc_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
@@ -737,7 +745,7 @@ static int vid_ioc_dqbuf(struct file *file, void *fh, struct v4l2_buffer *b)
 
 static int vid_g_fmt_vid_out(struct file *file, void *fh, struct v4l2_format *f)
 {
-	return 0;
+	return -EINVAL;
 }
 
 static const struct v4l2_ioctl_ops vid_ioctl_ops = {
@@ -861,7 +869,7 @@ static const struct media_entity_operations vid_media_ops = {
 	.link_validate = vid_link_validate,
 };
 
-static int vid_mmap(struct file * file, struct vm_area_struct * vma)
+static int vid_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
 	struct vid_video_device *vdev = file_to_video_device(file);
@@ -876,10 +884,9 @@ static int vid_mmap(struct file * file, struct vm_area_struct * vma)
 
 	if (offset < vdev->capture_queue_offset)
 		return vb2_fop_mmap(file, vma);
-	else {
-		vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
-		return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
-	}
+
+	vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
+	return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
 }
 
 static const struct v4l2_file_operations video_ops = {
@@ -1009,87 +1016,87 @@ static struct media_entity *find_entity_by_name(struct v4l2_device *dev,
 
 struct media_entity *get_sensor_media_entity(struct media_entity *csi_entity)
 {
-    struct v4l2_subdev *csi_subdev, *sensor_subdev;
-    struct device *dev;
-    struct fwnode_handle *csi_fwnode, *endpoint = NULL, *remote_endpoint = NULL;
-    struct fwnode_handle *remote_port = NULL, *remote_node = NULL;
-    struct media_entity *sensor_entity = NULL;
-    struct i2c_client *i2c_dev;
-    struct device_node *node;
+	struct v4l2_subdev *csi_subdev, *sensor_subdev;
+	struct device *dev;
+	struct fwnode_handle *csi_fwnode, *endpoint = NULL, *remote_endpoint = NULL;
+	struct fwnode_handle *remote_port = NULL, *remote_node = NULL;
+	struct media_entity *sensor_entity = NULL;
+	struct i2c_client *i2c_dev;
+	struct device_node *node;
 
-    csi_subdev = media_entity_to_v4l2_subdev(csi_entity);
-    if (!csi_subdev) {
-        pr_err("Failed to get CSI subdev\n");
-        return NULL;
-    }
+	csi_subdev = media_entity_to_v4l2_subdev(csi_entity);
+	if (!csi_subdev) {
+		pr_err("Failed to get CSI subdev\n");
+		return NULL;
+	}
 
-    dev = csi_subdev->dev;
-    if (!dev) {
-        pr_err("No device found for CSI subdev\n");
-        return NULL;
-    }
+	dev = csi_subdev->dev;
+	if (!dev) {
+		pr_err("No device found for CSI subdev\n");
+		return NULL;
+	}
 
-    csi_fwnode = dev_fwnode(dev);
-    if (!csi_fwnode) {
-        dev_err(dev, "No fwnode found for CSI device\n");
-        return NULL;
-    }
+	csi_fwnode = dev_fwnode(dev);
+	if (!csi_fwnode) {
+		dev_err(dev, "No fwnode found for CSI device\n");
+		return NULL;
+	}
 
-    endpoint = fwnode_graph_get_next_endpoint(csi_fwnode, NULL);
-    if (!endpoint) {
-        dev_err(dev, "No endpoint found for CSI\n");
-        return NULL;
-    }
+	endpoint = fwnode_graph_get_next_endpoint(csi_fwnode, NULL);
+	if (!endpoint) {
+		dev_err(dev, "No endpoint found for CSI\n");
+		return NULL;
+	}
 
-    remote_endpoint = fwnode_graph_get_remote_endpoint(endpoint);
-    if (!remote_endpoint) {
-        dev_err(dev, "No remote endpoint found\n");
-        goto out_put_endpoint;
-    }
+	remote_endpoint = fwnode_graph_get_remote_endpoint(endpoint);
+	if (!remote_endpoint) {
+		dev_err(dev, "No remote endpoint found\n");
+		goto out_put_endpoint;
+	}
 
-    remote_port = fwnode_get_parent(remote_endpoint);
-    if (!remote_port) {
-        dev_err(dev, "No remote port found\n");
-        goto out_put_remote_endpoint;
-    }
+	remote_port = fwnode_get_parent(remote_endpoint);
+	if (!remote_port) {
+		dev_err(dev, "No remote port found\n");
+		goto out_put_remote_endpoint;
+	}
 
-    remote_node = fwnode_get_parent(remote_port);
-    if (!remote_node) {
-        dev_err(dev, "No remote node found\n");
-        goto out_put_remote_port;
-    }
+	remote_node = fwnode_get_parent(remote_port);
+	if (!remote_node) {
+		dev_err(dev, "No remote node found\n");
+		goto out_put_remote_port;
+	}
 
-    node = to_of_node(remote_node);
-    if (!node) {
-        dev_err(dev, "Failed to convert remote node to device node\n");
-        goto out_put_remote_node;
-    }
+	node = to_of_node(remote_node);
+	if (!node) {
+		dev_err(dev, "Failed to convert remote node to device node\n");
+		goto out_put_remote_node;
+	}
 
-    i2c_dev = of_find_i2c_device_by_node(node);
-    if (!i2c_dev) {
-        dev_err(dev, "No I2C device found for sensor\n");
-        goto out_put_remote_node;
-    }
+	i2c_dev = of_find_i2c_device_by_node(node);
+	if (!i2c_dev) {
+		dev_err(dev, "No I2C device found for sensor\n");
+		goto out_put_remote_node;
+	}
 
-    sensor_subdev = i2c_get_clientdata(i2c_dev);
-    if (!sensor_subdev) {
-        dev_err(dev, "No sensor subdev found\n");
-        goto out_put_remote_node;
-    }
+	sensor_subdev = i2c_get_clientdata(i2c_dev);
+	if (!sensor_subdev) {
+		dev_err(dev, "No sensor subdev found\n");
+		goto out_put_remote_node;
+	}
 
-    sensor_entity = &sensor_subdev->entity;
-    dev_info(dev, "Successfully found sensor entity\n");
+	sensor_entity = &sensor_subdev->entity;
+	dev_info(dev, "Successfully found sensor entity\n");
 
 out_put_remote_node:
-    fwnode_handle_put(remote_node);
+	fwnode_handle_put(remote_node);
 out_put_remote_port:
-    fwnode_handle_put(remote_port);
+	fwnode_handle_put(remote_port);
 out_put_remote_endpoint:
-    fwnode_handle_put(remote_endpoint);
+	fwnode_handle_put(remote_endpoint);
 out_put_endpoint:
-    fwnode_handle_put(endpoint);
+	fwnode_handle_put(endpoint);
 
-    return sensor_entity;
+	return sensor_entity;
 }
 
 static struct media_pad *get_pad(struct media_entity *ent, u16 pad,
@@ -1264,16 +1271,13 @@ int vid_subdev_set_cap(struct vid_device *vdev)
 	struct vid_video_device *v;
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
-	struct v4l2_buf_ctx *ctx;
 
 	list_for_each_entry(v, &vdev->video_device_list, entry) {
 		pad = media_pad_remote_pad_first(&v->pad);
 		if (!pad)
 			return -ENOLINK;
 		sd = media_entity_to_v4l2_subdev(pad->entity);
-		ctx = v4l2_get_subdevdata(sd);
-		if (ctx && ctx->set_cap)
-			ctx->set_cap(ctx);
+		v4l2_subdev_ctx_call_no_return(sd, set_cap);
 	}
 
 	return 0;
@@ -1297,11 +1301,9 @@ int vid_subdev_init_output_ctx(struct vid_device *vdev)
 			v->video.vfl_dir = VFL_DIR_M2M;
 		else
 			continue;
-		if (ctx && ctx->init_output_ctx) {
-			rc = ctx->init_output_ctx(ctx);
-			if (rc < 0)
-				break;
-		}
+		rc = v4l2_subdev_ctx_call(sd, init_output_ctx);
+		if (rc < 0)
+			return rc;
 	}
 	return rc;
 }

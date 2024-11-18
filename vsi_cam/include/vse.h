@@ -12,9 +12,6 @@
 #include "job_queue.h"
 #include "vse_uapi.h"
 
-#define VSE_FMT_MAX (2)
-#define VSE_RES_MAX (2)
-
 #define vse_write(vse, offset, value) \
 	__raw_writel(value, (vse)->base + (offset))
 
@@ -42,11 +39,6 @@ struct vse_irq_ctx {
 	struct vse_fps_rate cur_fps[VSE_OUT_CHNL_MAX], *fps;
 };
 
-struct vse_format_cap {
-	u32 format;
-	struct cam_res_cap res[VSE_OUT_CHNL_MAX][VSE_RES_MAX];
-};
-
 struct vse_hist_num {
     __u16  range_num[VSE_HIST_MAX][BIN_LEVEL_NUM + 1];
 };
@@ -54,7 +46,6 @@ struct vse_hist_num {
 struct vse_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct vse_irq_ctx ctx;
-	struct vse_format_cap fmt_cap[VSE_FMT_MAX];
 	struct cam_format ifmt, ofmt[VSE_OUT_CHNL_MAX];
 	struct cam_rect crop[VSE_OUT_CHNL_MAX];
 	struct vse_hist_num hist_num[VSE_OUT_CHNL_MAX];

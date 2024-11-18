@@ -12,8 +12,6 @@
 #include "mem_helper.h"
 
 #define GDC_CFG_PATH_MAX  (6)
-#define GDC_FMT_MAX (2)
-#define GDC_RES_MAX (2)
 
 #define gdc_write(gdc, offset, value) \
 	__raw_writel(value, (gdc)->base + (offset))
@@ -25,15 +23,9 @@ struct gdc_irq_ctx {
 	struct cam_ctx *sink_ctx, *src_ctx;
 };
 
-struct gdc_format_cap {
-	u32 format;
-	struct cam_res_cap res[GDC_RES_MAX];
-};
-
 struct gdc_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct gdc_irq_ctx ctx;
-	struct gdc_format_cap fmt_cap[GDC_FMT_MAX];
 	struct gdc_format fmt;
 	enum cam_state state;
 	enum cam_error error;
