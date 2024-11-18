@@ -270,8 +270,10 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 	v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 1);
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
-	if (rc < 0)
+	if (rc < 0) {
+		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
 		return rc;
+	}
 
 //	rc = media_pipeline_start(&vdev->pad, &vdev->pipe);
 //	if (rc < 0)
