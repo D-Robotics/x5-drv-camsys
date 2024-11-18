@@ -29,6 +29,9 @@
 static char input_fmt_str[16];
 module_param_string(input_fmt, input_fmt_str, 16, 0644);
 
+static char work_mode_str[16];
+module_param_string(work_mode, work_mode_str, 16, 0644);
+
 static int get_src_pad_index(struct isp_v4l_instance *isp, u32 pad)
 {
 	int i;
@@ -203,6 +206,30 @@ static int check_input_fmt_param(enum cam_format_type *fmt)
 	return rc;
 }
 
+static int check_work_mode_param(enum isp_work_mode *mode)
+{
+	size_t len = strlen(work_mode_str);
+	int rc = 0;
+
+	*mode = ISP_MODE_INVALID;
+	if (!len)
+		return -EINVAL;
+
+	if (work_mode_str[len - 1] == '\n')
+		work_mode_str[len - 1] = '\0';
+
+	if (!strcmp(work_mode_str, "stream"))
+		*mode = ISP_STRM_MODE;
+	// else if (!strcmp(work_mode_str, "rdma"))
+	// 	*mode = ISP_RDMA_MODE;
+	else if (!strcmp(work_mode_str, "mcm"))
+		*mode = ISP_MCM_MODE;
+	else
+		rc = -EINVAL;
+
+	return rc;
+}
+
 static u32 isp_get_ctx_format(struct v4l2_buf_ctx *ctx)
 {
 	return 0;
@@ -261,10 +288,18 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	}
 
 	isp = &inst->dev->insts[inst->id];
-	inst->dev->mode = ISP_MCM_MODE; //FIXME: now fixed in MCM_MODE
-	if (inst->node.bctx.is_sink_online_mode) {
-		isp->online_mcm = true;
-		isp_set_stream_idx(inst->dev, inst->id, inst->id);
+	rc = check_work_mode_param(&inst->dev->mode);
+	if (inst->dev->mode == ISP_MODE_INVALID) {
+		pr_err("isp input mode has never been set! set default mode as MCM mode!");
+		inst->dev->mode = ISP_MCM_MODE;
+	}
+	if (inst->dev->mode != ISP_STRM_MODE) {
+		if (inst->node.bctx.is_sink_online_mode) {
+			isp->online_mcm = true;
+			isp_set_stream_idx(inst->dev, inst->id, inst->id);
+		} else {
+			isp->online_mcm = false;
+		}
 	} else {
 		isp->online_mcm = false;
 	}

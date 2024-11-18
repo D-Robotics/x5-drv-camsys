@@ -76,9 +76,11 @@ struct isp_gamma_febe_ctrl {
 };
 
 enum isp_work_mode {
+	ISP_MODE_INVALID = 0,
 	ISP_STRM_MODE,
 	ISP_MCM_MODE,
 	ISP_RDMA_MODE,
+	ISP_MODE_MAX,
 };
 
 struct isp_func {
