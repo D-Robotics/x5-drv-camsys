@@ -591,19 +591,15 @@ static void fill_irq_ctx(struct vse_v4l_instance *vse, u32 i, int enable,
 	ctx->is_sink_online_mode = vse->node.bctx.is_sink_online_mode;
 	if (vse->sink_ctx.pad)
 		ctx->sink_ctx = &vse->sink_ctx;
-	if (vse->src_ctx[i].pad) {
-		if (enable)
-			ctx->src_ctx[i] = &vse->src_ctx[i];
-		else
-			ctx->src_ctx[i] = NULL;
-	}
+	if (vse->src_ctx[i].pad)
+		ctx->src_ctx[i] = enable ? &vse->src_ctx[i] : NULL;
 }
 
 static int vse_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 {
 	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
 	struct vse_irq_ctx irq_ctx;
-	int index;
+	int index, rc = 0;
 
 	if (pad >= vse->node.num_pads)
 		return -EINVAL;
@@ -612,10 +608,18 @@ static int vse_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 	if (index < 0)
 		return -EINVAL;
 
-	vse_get_ctx(vse->dev, vse->id, &irq_ctx);
+	mutex_lock(&vse->ctx_lock);
+	rc = vse_get_ctx(vse->dev, vse->id, &irq_ctx);
+	if (rc < 0)
+		goto _exit;
 	fill_irq_ctx(vse, index, enable, &irq_ctx);
-	vse_set_ctx(vse->dev, vse->id, &irq_ctx);
-	return 0;
+	rc = vse_set_ctx(vse->dev, vse->id, &irq_ctx);
+	if (rc < 0)
+		goto _exit;
+
+_exit:
+	mutex_unlock(&vse->ctx_lock);
+	return rc;
 }
 
 static int vse_s_stream(struct v4l2_subdev *sd, int enable)
@@ -1022,6 +1026,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		inst->dev = &v4l_dev->vse_dev;
 		mutex_init(&inst->open_lock);
 		mutex_init(&inst->fmt_lock);
+		mutex_init(&inst->ctx_lock);
 		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
 		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 
@@ -1111,6 +1116,7 @@ static int vse_v4l_remove(struct platform_device *pdev)
 		devm_kfree(dev, v4l_dev->insts[i].node.pads);
 		mutex_destroy(&v4l_dev->insts[i].open_lock);
 		mutex_destroy(&v4l_dev->insts[i].fmt_lock);
+		mutex_destroy(&v4l_dev->insts[i].ctx_lock);
 	}
 	devm_kfree(dev, v4l_dev->insts);
 
