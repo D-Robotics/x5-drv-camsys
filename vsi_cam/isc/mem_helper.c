@@ -200,5 +200,20 @@ int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf
 }
 EXPORT_SYMBOL(mem_cache_invalid);
 
+int mem_iommu_map(struct device *dev, phys_addr_t addr, size_t size,
+		  phys_addr_t *iova)
+{
+	if (iova)
+		*iova = addr;
+	return 0;
+}
+EXPORT_SYMBOL(mem_iommu_map);
+
+int mem_iommu_unmap(struct device *dev, phys_addr_t iova, size_t size)
+{
+	return 0;
+}
+EXPORT_SYMBOL(mem_iommu_unmap);
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VeriSilicon Camera SW Team");

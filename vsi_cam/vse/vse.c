@@ -318,13 +318,13 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	ctx = &ins->ctx;
 
 	if (ctx->sink_buf) {
-		phys_addr = get_phys_addr(ctx->sink_buf, 0);
+		phys_addr = get_phys_addr(vse->dev, ctx->sink_buf, 0);
 		ins->sch.rdma_buf.addr = phys_addr;
 	}
 	ins->sch.ochn_en_mask = 0;
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
-			phys_addr = get_phys_addr(ctx->src_buf[i], 0);
+			phys_addr = get_phys_addr(vse->dev, ctx->src_buf[i], 0);
 			pr_debug("vse chn%d mp addr:%x\n", i, (u32)phys_addr);
 			ins->sch.mp_buf[i].addr = phys_addr;
 			ins->sch.ochn_en_mask |= BIT(i);

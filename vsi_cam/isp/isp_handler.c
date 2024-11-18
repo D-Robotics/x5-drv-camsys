@@ -169,9 +169,10 @@ static s32 handle_get_metadata(struct isp_device *isp, struct isp_msg *msg)
 	if (!buf)
 		return -ENOMEM;
 	ctx->sink_buf = buf;
-	msg->meta.buf.addr = get_phys_addr(buf, 0);
+	msg->meta.buf.addr = get_phys_addr(NULL, buf, 0);
 	msg->meta.buf.size = get_buf_size(buf, 0);
-	pr_debug("%s buf_addr: 0x%x, buff_size:%d\n", __func__, (u32)msg->meta.buf.addr, (u32)msg->meta.buf.size);
+	pr_debug("%s buf_addr: 0x%x, buff_size:%d\n", __func__,
+		 (u32)msg->meta.buf.addr, (u32)msg->meta.buf.size);
 	return 0;
 }
 
@@ -193,6 +194,18 @@ static s32 handle_isp_reset_schedule(struct isp_device *isp, struct isp_msg *msg
 	isp_reset_schedule(isp, INVALID_INST, true);
 	// isp_reset_schedule(isp, msg->inst, false);
 	return 0;
+}
+
+static s32 handle_iommu_map(struct isp_device *isp, struct isp_msg *msg)
+{
+	return mem_iommu_map(isp->dev, msg->map_buf.phys,
+			     msg->map_buf.size, &msg->map_buf.iova);
+}
+
+static s32 handle_iommu_unmap(struct isp_device *isp, struct isp_msg *msg)
+{
+	return mem_iommu_unmap(isp->dev, msg->map_buf.iova,
+			       msg->map_buf.size);
 }
 
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
@@ -255,6 +268,12 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case ISP_MSG_RESET_SCH:
 		rc = handle_isp_reset_schedule(isp, m);
+		break;
+	case CAM_MSG_IOMMU_MAP:
+		rc = handle_iommu_map(isp, m);
+		break;
+	case CAM_MSG_IOMMU_UNMAP:
+		rc = handle_iommu_unmap(isp, m);
 		break;
 	default:
 		return -EINVAL;

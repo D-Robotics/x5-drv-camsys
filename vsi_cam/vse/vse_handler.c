@@ -8,6 +8,7 @@
 #include "dw230_vse_regs.h"
 #include "dw_crc.h"
 #include "isc.h"
+#include "mem_helper.h"
 #include "vse_uapi.h"
 
 #include "vse.h"
@@ -57,6 +58,18 @@ static s32 handle_set_osd_buf(struct vse_device *vse, struct vse_msg *msg)
 	return 0;
 }
 
+static s32 handle_iommu_map(struct vse_device *vse, struct vse_msg *msg)
+{
+	return mem_iommu_map(vse->dev, msg->map_buf.phys,
+			     msg->map_buf.size, &msg->map_buf.iova);
+}
+
+static s32 handle_iommu_unmap(struct vse_device *vse, struct vse_msg *msg)
+{
+	return mem_iommu_unmap(vse->dev, msg->map_buf.iova,
+			       msg->map_buf.size);
+}
+
 s32 vse_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct vse_device *vse = (struct vse_device *)arg;
@@ -84,6 +97,12 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case VSE_MSG_SET_OSD_BUF:
 		rc = handle_set_osd_buf(vse, m);
+		break;
+	case CAM_MSG_IOMMU_MAP:
+		rc = handle_iommu_map(vse, m);
+		break;
+	case CAM_MSG_IOMMU_UNMAP:
+		rc = handle_iommu_unmap(vse, m);
 		break;
 	default:
 		return -EINVAL;
@@ -302,7 +321,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 			vse_ctrl &= ~0x3f;
 			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 				if (ctx->src_buf[i]) {
-					phys_addr_t phys_addr = get_phys_addr(ctx->src_buf[i], 0);
+					phys_addr_t phys_addr = get_phys_addr(vse->dev, ctx->src_buf[i], 0);
 
 					vse_set_mi_buffer(vse, i, phys_addr, &inst->ofmt[i]);
 					vse_ctrl |= BIT(i);

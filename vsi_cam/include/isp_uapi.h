@@ -123,8 +123,8 @@ struct isp_metadata {
 };
 
 enum group_type {
-    V4L_GROUP = 0,
-    CUSTOM_GROUP,
+	V4L_GROUP = 0,
+	CUSTOM_GROUP,
 };
 
 struct isp_msg {
@@ -155,6 +155,7 @@ struct isp_msg {
 		__u32 tune_enabled;
 		struct isp_gamma_febe_ctrl febe_ctrl;
 		struct sen_ctrl sen_ctrl;
+		struct iommu_map_buf map_buf;
 	};
 };
 

@@ -519,7 +519,8 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 						rc = -EINVAL;
 						goto _exit;
 					}
-					isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+					isp_set_mp_buffer(isp, get_phys_addr(isp->dev, node->data, 0),
+							  &ins->fmt.ofmt);
 					/* force update */
 					value = isp_read(isp, MI_MP_CTRL);
 					value |= 0x38;
@@ -694,7 +695,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 		} else {
 			if (has_offline(ctx->is_src_online_mode)) {
 				if (ins->src_node)
-					isp_set_mp_buffer(isp, get_phys_addr(ins->src_node->data, 0),
+					isp_set_mp_buffer(isp, get_phys_addr(isp->dev, ins->src_node->data, 0),
 							  &ins->fmt.ofmt);
 			} else {
 				isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
@@ -927,7 +928,7 @@ static int isp_set_schedule_online_stream(struct isp_device *isp, bool isp_irq_c
 			pr_debug("isp fail to get valid node!\n");
 			return 0;
 		}
-		isp_set_mp_buffer(isp, get_phys_addr(node->data, 0), &ins->fmt.ofmt);
+		isp_set_mp_buffer(isp, get_phys_addr(isp->dev, node->data, 0), &ins->fmt.ofmt);
 	} else {
 		isp_set_mp_buffer(isp, 0, &ins->fmt.ofmt);
 	}
@@ -967,7 +968,7 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 				return -EFAULT;
 			}
 
-			sch->mp_buf.mem.addr = get_phys_addr(node->data, 0);
+			sch->mp_buf.mem.addr = get_phys_addr(isp->dev, node->data, 0);
 			sch->mp_buf.mem.size = 0;
 		} else {
 			sch->mp_buf.mem.addr = 0;
@@ -1038,7 +1039,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 	}
 	if (ctx->sink_buf) {
 		if (node) {
-			sch->mp_buf.mem.addr = get_phys_addr(node->data, 0);
+			sch->mp_buf.mem.addr = get_phys_addr(isp->dev, node->data, 0);
 			pr_debug("%s: isp list_add_tail src_buf_list3\n", __func__);
 			list_del(&node->entry);
 			list_add_tail(&node->entry, ctx->src_buf_list3);
@@ -1051,7 +1052,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 		sch->mp_buf.mem.size = 0;
 		memcpy(&sch->mp_buf.fmt, &ins->fmt.ofmt, sizeof(struct cam_format));
 		sch->mp_buf.valid = 1;
-		sch->rdma_buf.mem.addr = get_phys_addr(ctx->sink_buf, 0);
+		sch->rdma_buf.mem.addr = get_phys_addr(isp->dev, ctx->sink_buf, 0);
 		sch->rdma_buf.mem.size = 0;
 		memcpy(&sch->rdma_buf.fmt, &ins->fmt.ifmt, sizeof(struct cam_format));
 		sch->rdma_buf.valid = 1;

@@ -476,7 +476,7 @@ static long vid_ioctl(struct file *file, void *fh, bool valid_prio, unsigned int
 		vb = list_last_entry(&vdev->queue.queued_list, struct vb2_buffer, queued_entry);
 		buf = vb2_buf_to_cam_buf(vb);
 		if (buf)
-			*phys = (unsigned int)get_phys_addr(buf, 0);
+			*phys = (unsigned int)get_phys_addr(NULL, buf, 0);
 		spin_unlock_irqrestore(&vdev->irqlock, flags);
 	}
 		break;

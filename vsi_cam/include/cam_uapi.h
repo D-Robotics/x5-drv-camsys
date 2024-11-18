@@ -167,6 +167,12 @@ struct sen_ctrl {
 	__u8 dir;
 };
 
+struct iommu_map_buf {
+	__u64 phys;
+	__u64 size;
+	__u64 iova;
+};
+
 /* send */
 #define CAM_MSG_READ_REG      (0x1 << 16)
 #define CAM_MSG_WRITE_REG     (0x2 << 16)
@@ -179,6 +185,8 @@ struct sen_ctrl {
 #define CAM_MSG_RESET_CONTROL (0x9 << 16)
 #define CAM_MSG_SET_SEN_CTRL  (0xa << 16)
 #define CAM_MSG_GET_SEN_CTRL  (0xb << 16)
+#define CAM_MSG_IOMMU_MAP     (0xc << 16)
+#define CAM_MSG_IOMMU_UNMAP   (0xd << 16)
 /* recv */
 #define CAM_MSG_FORMAT_CHANGED      (0x1 << 24)
 #define CAM_MSG_STATE_CHANGED       (0x2 << 24)

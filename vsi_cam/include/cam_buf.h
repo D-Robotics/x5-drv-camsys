@@ -34,7 +34,7 @@ int cam_buf_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
 
 void cam_buf_ctx_release(struct cam_ctx *ctx);
 
-phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane);
+phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf, unsigned int plane);
 
 unsigned long get_buf_size(struct cam_buf *buf, unsigned int plane);
 

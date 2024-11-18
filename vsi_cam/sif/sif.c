@@ -321,7 +321,7 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	if (ctx->buf_ctx)
 		ctx->buf = cam_dqbuf_irq(ctx->buf_ctx, true);
 	if (ctx->buf) {
-		p_addr = get_phys_addr(ctx->buf, 0);
+		p_addr = get_phys_addr(dev->dev, ctx->buf, 0);
 		if (sif->fmt.format == CAM_FMT_NV12 || sif->fmt.format == CAM_FMT_NV16
 			|| (dev->ipi_channel_num != 1  && inst == sif->ipi_base))
 			p_uv_addr = p_addr + (sif->fmt.stride * sif->fmt.height);

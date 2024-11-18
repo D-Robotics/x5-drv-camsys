@@ -206,5 +206,94 @@ int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf
 }
 EXPORT_SYMBOL(mem_cache_invalid);
 
+/* referring to ion_iommu_map_ion_phys in hobot_ion_iommu.c */
+int mem_iommu_map(struct device *dev, phys_addr_t phys_addr, size_t size,
+		  phys_addr_t *iova)
+{
+	dma_addr_t start;
+	phys_addr_t phys, mapped_phys;
+	size_t len;
+	struct lite_mmu_iommu *iommu = dev_iommu_priv_get(dev);
+	struct iommu_domain *domain;
+	const int prot = IOMMU_READ | IOMMU_WRITE;
+	int rc;
+
+	if (IS_ERR_OR_NULL(iommu)) {
+		dev_warn_once(dev,
+			"not attached to any iommu, using physical address!\n");
+		*iova = phys_addr;
+		return 0;
+	}
+
+	if (!iommu->domain)
+		return -EINVAL;
+
+	domain = iommu->domain;
+
+	phys = phys_addr;
+	start = phys & dma_get_mask(dev);
+	len = PAGE_ALIGN(size);
+	dev_dbg(dev, "mapping phys:%#llx(%#lx)\n", phys, len);
+	if (iommu->iommu.ops &&
+	    iommu->iommu.ops->default_domain_ops &&
+	    iommu->iommu.ops->default_domain_ops->map)
+		rc = iommu->iommu.ops->default_domain_ops->map
+				(domain, start, phys, len, prot, GFP_KERNEL);
+	else
+		rc = -EINVAL;
+	if (rc < 0) {
+		dev_err(dev, "iommu map failed (err=%d)\n", rc);
+		return rc;
+	}
+
+	mapped_phys = iommu_iova_to_phys(domain, start);
+	if (mapped_phys != phys) {
+		(void)mem_iommu_unmap(dev, start, len);
+		dev_err(dev,
+			"iommu map failed (size: %#zx, mapped: 0x%llx, phys: 0x%llx)\n",
+			len, mapped_phys, phys);
+		return -EINVAL;
+	}
+	*iova = (dma_addr_t)start;
+	return 0;
+}
+EXPORT_SYMBOL(mem_iommu_map);
+
+int mem_iommu_unmap(struct device *dev, phys_addr_t iova, size_t size)
+{
+	size_t len;
+	struct lite_mmu_iommu *iommu = dev_iommu_priv_get(dev);
+	struct iommu_domain *domain;
+	struct iommu_iotlb_gather iotlb_gather;
+	dma_addr_t start;
+	int rc;
+
+	if (IS_ERR_OR_NULL(iommu)) {
+		dev_warn_once(dev,
+			"not attached to any iommu, no need to unmap anything!\n");
+		return 0;
+	}
+
+	if (!iommu->domain)
+		return -EINVAL;
+
+	domain = iommu->domain;
+	start = (dma_addr_t)iova;
+	len = PAGE_ALIGN(size);
+	iommu_iotlb_gather_init(&iotlb_gather);
+	if (iommu->iommu.ops &&
+	    iommu->iommu.ops->default_domain_ops &&
+	    iommu->iommu.ops->default_domain_ops->unmap)
+		rc = iommu->iommu.ops->default_domain_ops->unmap
+				(domain, start, len, &iotlb_gather);
+	else
+		rc = -EINVAL;
+	if (rc < 0)
+		dev_err(dev, "iommu unmap failed (err=%d)\n", rc);
+	iommu_iotlb_sync(domain, &iotlb_gather);
+	return rc;
+}
+EXPORT_SYMBOL(mem_iommu_unmap);
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VeriSilicon Camera SW Team");

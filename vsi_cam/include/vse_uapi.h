@@ -9,7 +9,9 @@
 #include "mem_helper_uapi.h"
 
 #define LUT_NUM 64
+#ifndef BIN_LEVEL_NUM
 #define BIN_LEVEL_NUM (3)
+#endif
 #define VSE_OSD_MAX   (4)
 #define VSE_HIST_MAX  (8)
 
@@ -60,12 +62,12 @@ struct vse_format {
 };
 
 struct vse_hist_info {
-    __u8  histId;
-    __u8  histEnable;
-    __u32 histHsize;
-    __u32 histVsize;
-    __u32 histStartX;
-    __u32 histStartY;
+	__u8 histId;
+	__u8 histEnable;
+	__u32 histHsize;
+	__u32 histVsize;
+	__u32 histStartX;
+	__u32 histStartY;
 };
 
 struct vse_osd_info {
@@ -151,6 +153,7 @@ struct vse_msg {
 		struct vse_cascade cascade;
 		struct cam_clk clk;
 		struct cam_log log;
+		struct iommu_map_buf map_buf;
 	};
 };
 

@@ -210,7 +210,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 			if (ctx->next_buf) {
 				if (cam_get_frame_status(ctx->buf_ctx) == DQ_FAIL)
 					cam_set_frame_status(ctx->buf_ctx, NO_ERR);
-				p_addr = get_phys_addr(ctx->next_buf, 0);
+				p_addr = get_phys_addr(sif->dev, ctx->next_buf, 0);
 				if (ins->fmt.format == CAM_FMT_NV12 || ins->fmt.format == CAM_FMT_NV16
 					|| (sif->ipi_channel_num != 1 && inst == sif->ipi_base))
 					p_uv_addr = p_addr + (ins->fmt.stride * ins->fmt.height);
@@ -305,7 +305,7 @@ static void sif_handle_emb_done(struct sif_device *sif, u32 inst)
 		if (ctx->emb_buf_ctx)
 			ctx->emb_buf = cam_dqbuf_irq(ctx->emb_buf_ctx, false);
 		if (ctx->emb_buf)
-			p_addr = get_phys_addr(ctx->emb_buf, 0);
+			p_addr = get_phys_addr(sif->dev, ctx->emb_buf, 0);
 	}
 
 	spin_unlock_irqrestore(&ins->lock, flags);

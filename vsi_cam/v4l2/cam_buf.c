@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <media/videobuf2-dma-contig.h>
 
+#include "mem_helper.h"
 #include "utils.h"
 
 #include "cam_buf.h"
@@ -407,12 +408,24 @@ void cam_buf_ctx_release(struct cam_ctx *ctx)
 	ctx->pad = NULL;
 }
 
-phys_addr_t get_phys_addr(struct cam_buf *buf, unsigned int plane)
+phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf,
+			  unsigned int plane)
 {
+	dma_addr_t addr;
+	size_t size;
+	int rc;
+
 	if (unlikely(!buf))
 		return 0;
-	return (phys_addr_t)
-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, plane);
+
+	addr = vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, plane);
+	if (dev && addr) {
+		size = buf->vb.vb2_buf.planes[plane].length;
+		rc = mem_iommu_map(dev, addr, size, &addr);
+		if (rc < 0)
+			dev_warn(dev, "failed to call mem_iommu_map (err=%d)\n", rc);
+	}
+	return (phys_addr_t)addr;
 }
 
 unsigned long get_buf_size(struct cam_buf *buf, unsigned int plane)
