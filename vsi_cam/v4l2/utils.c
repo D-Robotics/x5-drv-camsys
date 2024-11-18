@@ -525,29 +525,3 @@ struct v4l2_subdev *sif_device_to_v4l2_subdev(void *data, uint32_t inst)
 
 	return &ins->node.sd;
 }
-
-bool is_standalone_datapath(struct v4l2_subdev *sd)
-{
-	struct media_entity *ent, *r_ent;
-	struct media_pad *pad;
-	u16 i = 0;
-
-	if (unlikely(!sd || !sd->entity.pads))
-		return false;
-
-	ent = &sd->entity;
-	while (i < ent->num_pads) {
-		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
-				return false;
-			} else {
-				r_ent = pad->entity;
-				return (r_ent &&
-					r_ent->obj_type == MEDIA_ENTITY_TYPE_VIDEO_DEVICE);
-			}
-		}
-		i++;
-	}
-	return false;
-}

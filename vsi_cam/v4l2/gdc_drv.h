@@ -16,6 +16,7 @@ struct gdc_v4l_instance {
 	u32 fmt_cap_num;
 	u32 input_fmt; /* pixelformat */
 	int enabled;
+	bool m2m_en;
 };
 
 struct gdc_v4l_device {

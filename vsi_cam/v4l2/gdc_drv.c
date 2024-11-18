@@ -50,6 +50,9 @@ static int gdc_link_setup(struct media_entity *entity,
 	if (pad && pad != remote)
 		return -EBUSY;
 
+	if (local->flags & MEDIA_PAD_FL_SINK)
+		gdc->m2m_en = false;
+
 	if (is_media_entity_v4l2_subdev(remote->entity)) {
 		sd = media_entity_to_v4l2_subdev(remote->entity);
 		rctx = v4l2_get_subdevdata(sd);
@@ -67,6 +70,7 @@ static int gdc_link_setup(struct media_entity *entity,
 				return -EBUSY;
 		}
 	} else if (local->flags & MEDIA_PAD_FL_SINK) {
+		gdc->m2m_en = true;
 		attr.en_reqbufs = false;
 		p_attr = &attr;
 	}
@@ -164,6 +168,32 @@ static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
 	return 0;
 }
 
+static int gdc_set_ctx_format_out(struct v4l2_buf_ctx *ctx, struct v4l2_format *format, bool is_try)
+{
+	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+
+	if (!is_try)
+		inst->input_fmt = format->fmt.pix.pixelformat;
+	return 0;
+}
+
+static int gdc_enum_ctx_format_out(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+{
+	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+
+	if (index >= inst->fmt_cap_num)
+		return -EINVAL;
+
+	*format = inst->fmt_cap[index];
+	return 0;
+}
+
+static int gdc_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx, struct v4l2_frmsizeenum *fsize)
+{
+	fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
+	return 0;
+}
+
 static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 							  struct v4l2_format *format, bool is_try)
 {
@@ -174,15 +204,20 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	struct media_pad *rpad;
 	int rc;
 
+	if (!pad)
+		return gdc_set_ctx_format_out(ctx, format, is_try);
+
 	sd = &inst->node.sd;
 	rsd = get_remote_src_subdev(sd, &rpad);
-	if (!rsd)
+	if (!rsd && !inst->m2m_en)
 		return -EINVAL;
 
-	rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
-	if (rc < 0) {
-		pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
-		return rc;
+	if (!inst->m2m_en) {
+		rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
+		if (rc < 0) {
+			pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
+			return rc;
+		}
 	}
 
 	memset(&f, 0, sizeof(f));
@@ -196,18 +231,18 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	f.ofmt.format = pixelformat_to_cam_format(format->fmt.pix.pixelformat);
 
 	return gdc_set_format(inst->dev, inst->id, &f);
-
 }
 
 static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	if (!pad)
+		return gdc_enum_ctx_format_out(ctx, index, format);
 
 	if (index >= inst->fmt_cap_num)
 		return -EINVAL;
 
 	*format = inst->fmt_cap[index];
-
 	return 0;
 }
 
@@ -219,6 +254,9 @@ static int gdc_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fse;
 	int rc;
+
+	if (!pad)
+		return gdc_enum_ctx_framesize_out(ctx, fsize);
 
 	sd = &inst->node.sd;
 	rsd = get_remote_src_subdev(sd, &rpad);
@@ -331,15 +369,17 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = gdc_set_state(gdc->dev, gdc->id, enable);
 		if (rc < 0)
 			return rc;
-
-		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
+		if (!gdc->m2m_en) {
+			rc = subdev_set_stream(sd, enable);
+			if (rc < 0)
+				return rc;
+		}
 	} else {
-		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
-
+		if (!gdc->m2m_en) {
+			rc = subdev_set_stream(sd, enable);
+			if (rc < 0)
+				return rc;
+		}
 		memset(&ctx, 0, sizeof(ctx));
 		gdc_set_ctx(gdc->dev, gdc->id, &ctx);
 
@@ -458,7 +498,8 @@ static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	case CAM_SET_CTRL:
 	case CAM_GET_CTRL:
 	case CAM_QUERY_CTRL:
-		rc = subdev_call_command(sd, cmd, arg);
+		if (!gdc->m2m_en)
+			rc = subdev_call_command(sd, cmd, arg);
 		break;
 	case CAM_SET_EXT_CTRL:
 		vectl = (struct v4l2_ext_control *)arg;
@@ -467,9 +508,11 @@ static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			rc = gdc_s_ctrl(gdc, arg);
 			break;
 		default:
-			rc = subdev_call_command(sd, cmd, arg);
-		}
+			if (!gdc->m2m_en)
+				rc = subdev_call_command(sd, cmd, arg);
 			break;
+		}
+		break;
 	case CAM_GET_EXT_CTRL:
 		vectl = (struct v4l2_ext_control *)arg;
 		switch (vectl->id) {
@@ -477,7 +520,8 @@ static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			rc = gdc_g_ctrl(gdc, arg);
 			break;
 		default:
-			rc = subdev_call_command(sd, cmd, arg);
+			if (!gdc->m2m_en)
+				rc = subdev_call_command(sd, cmd, arg);
 			break;
 		}
 		break;
@@ -519,9 +563,11 @@ static int gdc_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
 	int rc;
 
-	rc = subdev_open(sd);
-	if (rc < 0)
-		return rc;
+	if (!inst->m2m_en) {
+		rc = subdev_open(sd);
+		if (rc < 0)
+			return rc;
+	}
 
 	return gdc_open(inst->dev, inst->id);
 }
@@ -531,9 +577,11 @@ static int gdc_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
 	int rc;
 
-	rc = subdev_close(sd);
-	if (rc < 0)
-		return rc;
+	if (!inst->m2m_en) {
+		rc = subdev_close(sd);
+		if (rc < 0)
+			return rc;
+	}
 
 	return gdc_close(inst->dev, inst->id);
 }

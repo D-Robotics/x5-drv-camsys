@@ -33,9 +33,9 @@ struct vse_v4l_instance {
 	u32 input_fmt_cap_num;
 	struct mutex open_lock;
 	struct mutex fmt_lock;
-	struct mutex standalone_lock;
 	refcount_t state_count;
 	refcount_t open_count;
+	bool m2m_en;
 };
 
 struct vse_v4l_device {

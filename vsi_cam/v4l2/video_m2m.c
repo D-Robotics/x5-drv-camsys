@@ -407,6 +407,93 @@ static int vid_s_fmt_vid_out(struct file *file, void *fh,
 	return rc;
 }
 
+static int vid_s_ctrl(struct file *file, void *fh, struct v4l2_control *a)
+{
+	struct vid_m2m_dev *dev = file2dev(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct sen_ctrl ctrl = {0};
+
+	ctrl.ctrl_id = a->id;
+	memcpy(&ctrl.ctrl_data, &a->value, sizeof(a->value));
+	pad = get_remote_pad_sd(sink_pad(dev), &sd);
+	if (sd)
+		return v4l2_subdev_call(sd, core, command, CAM_SET_CTRL, &ctrl);
+	return -ENOLINK;
+}
+
+static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
+{
+	struct vid_m2m_dev *dev = file2dev(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct sen_ctrl ctrl = {0};
+	int rc = 0;
+
+	ctrl.ctrl_id = a->id;
+	pad = get_remote_pad_sd(sink_pad(dev), &sd);
+
+	rc = v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &ctrl);
+	if (rc < 0)
+		return -EINVAL;
+
+	memcpy(&a->value, &ctrl.ctrl_data, sizeof(a->value));
+	return rc;
+}
+
+static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls *a)
+{
+	struct vid_m2m_dev *dev = file2dev(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct cam_v4l2_ext_control cam_ext_ctrl;
+	bool sd_is_vse = false;
+	int rc = 0;
+
+	pad = get_remote_pad_sd(sink_pad(dev), &sd);
+
+	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
+	for (int i = 0; i < a->count; i++) {
+		if (sd_is_vse) {
+			cam_ext_ctrl.pad = pad->index;
+			cam_ext_ctrl.controls = &a->controls[i];
+			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &cam_ext_ctrl);
+		} else
+			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &a->controls[i]);
+		if (rc < 0)
+			return rc;
+	}
+
+	return rc;
+}
+
+static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls *a)
+{
+	struct vid_m2m_dev *dev = file2dev(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct cam_v4l2_ext_control cam_ext_ctrl;
+	bool sd_is_vse = false;
+	int rc = 0;
+
+	pad = get_remote_pad_sd(sink_pad(dev), &sd);
+	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
+	for (int i = 0; i < a->count; i++) {
+		if (sd_is_vse) {
+			cam_ext_ctrl.pad = pad->index;
+			cam_ext_ctrl.controls = &a->controls[i];
+			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &cam_ext_ctrl);
+		} else {
+			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &a->controls[i]);
+		}
+
+		if (rc < 0)
+			return rc;
+	}
+
+	return rc;
+}
+
 static long vid_ioctl(struct file *file, void *fh, bool valid_prio,
 		      unsigned int cmd, void *arg)
 {
@@ -458,6 +545,10 @@ static const struct v4l2_ioctl_ops vid_m2m_ioctl_ops = {
 	.vidioc_expbuf = v4l2_m2m_ioctl_expbuf,
 	.vidioc_streamon = v4l2_m2m_ioctl_streamon,
 	.vidioc_streamoff = v4l2_m2m_ioctl_streamoff,
+	.vidioc_s_ctrl = vid_s_ctrl,
+	.vidioc_g_ctrl = vid_g_ctrl,
+	.vidioc_s_ext_ctrls = vid_s_ext_ctrls,
+	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
 };
 
 static int vid_m2m_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,

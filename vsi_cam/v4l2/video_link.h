@@ -222,6 +222,11 @@ static struct entity_link links12[] = {
 	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
+/* gdc stand alone */
+static struct entity_link links13[] = {
+	{ GDC_DEV_NAME "0-0", 0, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
+};
+
 static struct entity_link *links[] = {
 	links0,
 	links1,
@@ -236,6 +241,7 @@ static struct entity_link *links[] = {
 	links10,
 	links11,
 	links12,
+	links13,
 };
 
 static u32 links_size[] = {
@@ -252,6 +258,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links10),
 	ARRAY_SIZE(links11),
 	ARRAY_SIZE(links12),
+	ARRAY_SIZE(links13),
 };
 
 #endif /* _VIDEO_LINK_H_ */

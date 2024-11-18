@@ -36,16 +36,6 @@ static int get_channel_index(struct vse_v4l_instance *vse, u32 pad)
 	return -1;
 }
 
-static bool is_standalone(struct vse_v4l_instance *inst)
-{
-	struct v4l2_subdev *sd = &inst->node.sd;
-
-	if (inst->node.bctx.is_sink_online_mode)
-		return false;
-
-	return is_standalone_datapath(sd);
-}
-
 static int vse_link_setup(struct media_entity *entity,
 			  const struct media_pad *local,
 			  const struct media_pad *remote, u32 flags)
@@ -71,6 +61,9 @@ static int vse_link_setup(struct media_entity *entity,
 	if (pad && pad != remote)
 		return -EBUSY;
 
+	if (local->flags & MEDIA_PAD_FL_SINK)
+		vse->m2m_en = false;
+
 	if (is_media_entity_v4l2_subdev(remote->entity)) {
 		sd = media_entity_to_v4l2_subdev(remote->entity);
 		rctx = v4l2_get_subdevdata(sd);
@@ -85,6 +78,7 @@ static int vse_link_setup(struct media_entity *entity,
 				p_attr = &attr;
 		}
 	} else if (local->flags & MEDIA_PAD_FL_SINK) {
+		vse->m2m_en = true;
 		attr.en_reqbufs = false;
 		p_attr = &attr;
 	}
@@ -276,7 +270,7 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 
 	sd = &inst->node.sd;
 	rsd = get_remote_src_subdev(sd, &rpad);
-	if (!rsd && !is_standalone(inst))
+	if (!rsd && !inst->m2m_en)
 		return -EINVAL;
 
 	memset(&f, 0, sizeof(f));
@@ -291,7 +285,7 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		s_f.fmt.pix.width = f.width;
 		s_f.fmt.pix.height = f.height;
 		s_f.fmt.pix.pixelformat = inst->input_fmt;
-		if (!is_standalone(inst)) {
+		if (!inst->m2m_en) {
 			rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
 			if (rc < 0) {
 				pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
@@ -327,7 +321,7 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		goto _exit;
 	}
 
-	if (!is_standalone(inst))
+	if (!inst->m2m_en)
 		fps.src = vse_get_sensor_fps(sd);
 	else
 		fps.src = 30;
@@ -526,7 +520,7 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 	inst->input_fmt_cap_num = 1;
 	vse_set_default_input(inst);
 
-	if (is_standalone(inst))
+	if (inst->m2m_en)
 		goto set_cap;
 
 	sd = &inst->node.sd;
@@ -652,7 +646,7 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 
-		if (!is_standalone(vse)) {
+		if (!vse->m2m_en) {
 			rc = subdev_set_stream(sd, enable);
 			if (rc < 0)
 				return rc;
@@ -663,7 +657,7 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL)
 			return 0;
 
-		if (!is_standalone(vse)) {
+		if (!vse->m2m_en) {
 			rc = subdev_set_stream(sd, enable);
 			if (rc < 0)
 				return rc;
@@ -826,7 +820,7 @@ static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	case CAM_SET_CTRL:
 	case CAM_GET_CTRL:
 	case CAM_QUERY_CTRL:
-		if (!is_standalone(vse))
+		if (!vse->m2m_en)
 			rc = subdev_call_command(sd, cmd, arg);
 		break;
 	case CAM_SET_EXT_CTRL:
@@ -836,7 +830,7 @@ static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			rc = vse_s_attr(vse, arg);
 			break;
 		default:
-			if (!is_standalone(vse))
+			if (!vse->m2m_en)
 				rc = subdev_call_command(sd, cmd, (void *)cam_ext_ctrl->controls);
 			break;
 		}
@@ -848,7 +842,7 @@ static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			rc = vse_g_attr(vse, arg);
 			break;
 		default:
-			if (!is_standalone(vse))
+			if (!vse->m2m_en)
 				rc = subdev_call_command(sd, cmd, (void *)cam_ext_ctrl->controls);
 			break;
 		}
@@ -897,7 +891,7 @@ static int vse_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 		goto _exit;
 	}
 	refcount_inc(&inst->open_count);
-	if (!is_standalone(inst)) {
+	if (!inst->m2m_en) {
 		rc = subdev_open(sd);
 		if (rc < 0)
 			goto _exit;
@@ -920,7 +914,7 @@ static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
 		goto _exit;
 
-	if (!is_standalone(inst)) {
+	if (!inst->m2m_en) {
 		rc = subdev_close(sd);
 		if (rc < 0) {
 			pr_err("%s failed to call subdev_close (err=%d)\n", __func__, rc);
@@ -1028,7 +1022,6 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		inst->dev = &v4l_dev->vse_dev;
 		mutex_init(&inst->open_lock);
 		mutex_init(&inst->fmt_lock);
-		mutex_init(&inst->standalone_lock);
 		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
 		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 
@@ -1118,7 +1111,6 @@ static int vse_v4l_remove(struct platform_device *pdev)
 		devm_kfree(dev, v4l_dev->insts[i].node.pads);
 		mutex_destroy(&v4l_dev->insts[i].open_lock);
 		mutex_destroy(&v4l_dev->insts[i].fmt_lock);
-		mutex_destroy(&v4l_dev->insts[i].standalone_lock);
 	}
 	devm_kfree(dev, v4l_dev->insts);
 
