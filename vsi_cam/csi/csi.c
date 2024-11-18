@@ -498,12 +498,17 @@ int csi_set_lane_rate(struct csi_device *csi, u32 rate)
 	return 0;
 }
 
-void csi_set_lanes(struct csi_device *csi, u32 lanes, u32 vcext)
+int csi_set_lane_num(struct csi_device *csi, u32 lanes)
+{
+	dev_dbg(csi->dev, "phy%d lanes %d\n", csi->id, lanes);
+
+	csi->lanes = lanes;
+	return 0;
+}
+
+void csi_set_lanes(struct csi_device *csi, u32 vcext)
 {
 	int rc;
-
-	dev_dbg(csi->dev, "phy%d lane num %d\n", csi->id, lanes);
-	csi->lanes = lanes;
 
 	csi_write(csi, CSI_N_LANES, csi->lanes - 1);
 	csi_write(csi, CSI_PHY_CFG, 0);

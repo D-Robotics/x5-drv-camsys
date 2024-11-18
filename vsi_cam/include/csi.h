@@ -118,7 +118,9 @@ void csi_set_tpg_mode(struct csi_device *csi, u32 tpg_en, u32 pkt2pkt_time, u8 h
 int csi_ipi_set_vc_cfg(struct csi_device *csi, u32 ipi_id,
 		       struct csi_vc_cfg *vc_cfg);
 void csi_dphy_reset(struct csi_device *csi);
-void csi_set_lanes(struct csi_device *csi, u32 lanes, u32 vcext);
+void csi_set_lanes(struct csi_device *csi, u32 vcext);
+
+int csi_set_lane_num(struct csi_device *csi, u32 lanes);
 int csi_set_lane_rate(struct csi_device *csi, u32 rate);
 int csi_wait_stop_state(struct csi_device *csi, u32 nowait, u32 wait_ms, u32 lanes, u32 *errstate);
 

@@ -166,8 +166,9 @@ int csi_nat_init_common(struct mipi_hdev_s *hdev, const mipi_host_cfg_t *cfg)
 	csi_dphy_init(csi);
 #else
 	csi_set_lane_rate(csi, cfg->mipiclk);
+	csi_set_lane_num(csi, cfg->lane);
 #endif
-	csi_set_lanes(csi, cfg->lane, param->vcext_en);
+	csi_set_lanes(csi, param->vcext_en);
 	if (param->data_ids_1)
 		csi_data_ids_set(csi, param->data_ids_1, param->data_ids_vc1, CSI_DATAIDS_1_START);
 	if (param->data_ids_2)

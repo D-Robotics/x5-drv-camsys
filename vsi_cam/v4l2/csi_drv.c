@@ -585,13 +585,19 @@ static int config_csi(struct csi_v4l_instance *csi)
 		goto _exit;
 	}
 
-	csi_set_lanes(csi_dev, num_lanes, 0);
-
 	rc = csi_set_lane_rate(csi_dev, lane_rate);
 	if (rc) {
 		dev_err(dev, "csi_set_lane_rate failed: %d\n", rc);
 		goto _exit;
 	}
+
+	rc = csi_set_lane_num(csi_dev, num_lanes);
+	if (rc) {
+		dev_err(dev, "csi_set_lane_num failed: %d\n", rc);
+		goto _exit;
+	}
+
+	csi_set_lanes(csi->dev, 0);
 
 _exit:
 	fwnode_handle_put(endpoint);
