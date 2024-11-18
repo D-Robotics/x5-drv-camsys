@@ -60,6 +60,7 @@ void gdc_hw_init(struct gdc_device *gdc);
 void gdc_hw_start_process(struct gdc_device *gdc);
 
 int gdc_set_format(struct gdc_device *dev, u32 inst, struct gdc_format *fmt);
+int gdc_get_format(struct gdc_device *dev, u32 inst, struct gdc_format *fmt);
 int gdc_set_state(struct gdc_device *dev, u32 inst, int enable);
 int gdc_set_ctx(struct gdc_device *dev, u32 inst, struct gdc_irq_ctx *ctx);
 int gdc_set_attr(struct gdc_device *gdc, u32 inst, phys_addr_t paddr, u32 size);

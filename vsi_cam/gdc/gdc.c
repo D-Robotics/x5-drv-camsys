@@ -50,7 +50,7 @@ int gdc_set_format(struct gdc_device *gdc, u32 inst, struct gdc_format *fmt)
 	return 0;
 }
 
-int32_t gdc_get_format(struct gdc_device *gdc, uint32_t inst, struct gdc_format *fmt)
+int gdc_get_format(struct gdc_device *gdc, u32 inst, struct gdc_format *fmt)
 {
 	struct gdc_instance ins = gdc->insts[inst];
 

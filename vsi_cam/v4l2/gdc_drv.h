@@ -5,6 +5,7 @@
 #include "gdc.h"
 #include "utils.h"
 
+#define GDC_INPUT_RES_MAX (5)
 #define GDC_FMT_MAX (2)
 
 struct gdc_v4l_instance {
@@ -12,6 +13,10 @@ struct gdc_v4l_instance {
 	struct gdc_device *dev;
 	struct cam_ctx sink_ctx, src_ctx;
 	u32 id;
+	struct cam_res_cap res_cap;
+	struct cam_res_cap input_res;
+	struct cam_res_cap input_res_cap[GDC_INPUT_RES_MAX];
+	u32 input_res_cap_num;
 	u32 fmt_cap[GDC_FMT_MAX]; /* pixelformat */
 	u32 fmt_cap_num;
 	u32 input_fmt; /* pixelformat */

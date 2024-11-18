@@ -131,6 +131,12 @@ typedef struct gdc_attr_s {
 	__u32 total_planes;
 	__u32 binary_ion_id;
 	__u64 binary_offset;
+	__u32 input_width;
+	__u32 input_height;
+	__u32 input_stride;
+	__u32 output_width;
+	__u32 output_height;
+	__u32 output_stride;
 } gdc_attr_t;
 
 #endif /* __V4L2_USR_API_H__ */

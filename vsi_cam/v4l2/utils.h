@@ -76,7 +76,8 @@ struct cam_ctx {
 struct v4l2_buf_ctx {
 	u32 magic;
 	bool is_sink_online_mode, is_src_online_mode;
-	u32 (*get_format)(struct v4l2_buf_ctx *ctx, u32 pad);
+	u32 (*get_format)(struct v4l2_buf_ctx *ctx, u32 pad,
+			  struct v4l2_format *format);
 	int (*set_format)(struct v4l2_buf_ctx *ctx, u32 pad,
 			  struct v4l2_format *format, bool is_try);
 	int (*enum_format)(struct v4l2_buf_ctx *ctx, u32 pad, u32 index,

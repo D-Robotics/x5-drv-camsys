@@ -215,8 +215,8 @@ static struct entity_link links12[] = {
 	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF as front
 	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP as front
 	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 1, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED }, // m2m master
+	{ VSE_DEV_NAME "0-4", 1, "video-m2m", 0, MEDIA_LNK_FL_ENABLED }, // m2m master
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },

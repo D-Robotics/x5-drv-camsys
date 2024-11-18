@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#define pr_fmt(fmt) "[sif_drv]: %s: " fmt, __func__
+
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/module.h>

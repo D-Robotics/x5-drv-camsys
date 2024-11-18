@@ -132,13 +132,14 @@ static bool is_same_cam_format(struct cam_format *f1, struct cam_format *f2)
 	return false;
 }
 
-static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
+static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
+			      struct v4l2_format *format)
 {
 	return 0;
 }
 
 static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
-						      struct v4l2_format *format, bool is_try)
+			      struct v4l2_format *format, bool is_try)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
 	struct v4l2_subdev *sd;

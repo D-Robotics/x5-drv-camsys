@@ -163,12 +163,14 @@ static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx)
 	return cam_acqbuf(&gdc->sink_ctx);
 }
 
-static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
+static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
+			      struct v4l2_format *format)
 {
 	return 0;
 }
 
-static int gdc_set_ctx_format_out(struct v4l2_buf_ctx *ctx, struct v4l2_format *format, bool is_try)
+static int gdc_set_ctx_format_out(struct v4l2_buf_ctx *ctx,
+				  struct v4l2_format *format, bool is_try)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
 
@@ -195,7 +197,7 @@ static int gdc_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx, struct v4l2_frms
 }
 
 static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
-							  struct v4l2_format *format, bool is_try)
+			      struct v4l2_format *format, bool is_try)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
 	struct gdc_format f;
@@ -213,6 +215,9 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		return -EINVAL;
 
 	if (!inst->m2m_en) {
+		s_f.fmt.pix.pixelformat = inst->input_fmt;
+		s_f.fmt.pix.width = inst->input_res.dc.width;
+		s_f.fmt.pix.height = inst->input_res.dc.height;
 		rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
 		if (rc < 0) {
 			pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
@@ -222,8 +227,8 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 
 	memset(&f, 0, sizeof(f));
 	f.ifmt.format = pixelformat_to_cam_format(inst->input_fmt);
-	f.ifmt.width  = format->fmt.pix.width;
-	f.ifmt.height = format->fmt.pix.height;
+	f.ifmt.width  = inst->input_res.dc.width;
+	f.ifmt.height = inst->input_res.dc.height;
 	f.ifmt.stride = ALIGN(f.ifmt.width, STRIDE_ALIGN);
 	f.ofmt.width  = format->fmt.pix.width;
 	f.ofmt.height = format->fmt.pix.height;
@@ -247,7 +252,7 @@ static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32
 }
 
 static int gdc_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
-								  struct v4l2_frmsizeenum *fsize)
+				  struct v4l2_frmsizeenum *fsize)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
 	struct v4l2_subdev *sd, *rsd;
@@ -301,20 +306,61 @@ static int gdc_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	return rc;
 }
 
+static void gdc_set_default_input(struct gdc_v4l_instance *inst)
+{
+	inst->input_fmt = inst->fmt_cap[inst->fmt_cap_num - 1];
+	inst->input_res.type = V4L2_FRMIVAL_TYPE_DISCRETE;
+	inst->input_res.dc.width = 1920;
+	inst->input_res.dc.height = 1080;
+}
+
 static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
 	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
+	struct v4l2_frmsizeenum fsize;
+	bool sensor_support_default_size = false;
+	int i, j = 0, rc;
 
 	inst->fmt_cap[0] = V4L2_PIX_FMT_NV12;
 	inst->fmt_cap_num = 1;
-	inst->input_fmt = V4L2_PIX_FMT_NV12;
+	gdc_set_default_input(inst);
+
+	if (inst->m2m_en)
+		return;
+
 	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, NULL);
+	rsd = get_remote_src_subdev(sd, &rpad);
 	if (!rsd)
 		return;
 
 	v4l2_subdev_ctx_call_no_return(rsd, set_cap);
+
+	memset(inst->input_res_cap, 0, sizeof(inst->input_res_cap));
+
+	for (i = 0; i < ARRAY_SIZE(inst->input_res_cap); i++) {
+		memset(&fsize, 0, sizeof(fsize));
+		fsize.index = i;
+		fsize.pixel_format = inst->input_fmt;
+		rc = v4l2_subdev_ctx_call(rsd, enum_framesize, rpad->index, &fsize);
+		if (rc < 0)
+			break;
+		inst->input_res_cap[j].type = V4L2_FRMIVAL_TYPE_DISCRETE;
+		inst->input_res_cap[j].dc.width = fsize.discrete.width;
+		inst->input_res_cap[j].dc.height = fsize.discrete.height;
+		if (fsize.discrete.width == inst->input_res.dc.width &&
+		    fsize.discrete.height == inst->input_res.dc.height)
+			sensor_support_default_size = true;
+		j++;
+	}
+
+	inst->input_res_cap_num = j;
+	if (!sensor_support_default_size && j > 0)
+		memcpy(&inst->input_res, &inst->input_res_cap[inst->input_res_cap_num - 1],
+			sizeof(struct cam_res_cap));
+
+	return;
 }
 
 static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
@@ -423,11 +469,39 @@ static int gdc_s_frame_interval(struct v4l2_subdev *sd,
 	return v4l2_subdev_call(rsd, video, s_frame_interval, fiv);
 }
 
+static int gdc_re_set_format(struct gdc_v4l_instance *inst, struct gdc_format *fmt)
+{
+	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *rpad;
+	struct v4l2_format format;
+	int rc;
+
+	sd = &inst->node.sd;
+	rsd = get_remote_src_subdev(sd, &rpad);
+	if (!rsd && !inst->m2m_en)
+		return -EINVAL;
+
+	format.fmt.pix.pixelformat = cam_format_to_pixelformat(fmt->ifmt.format, 0);
+	format.fmt.pix.width = fmt->ifmt.width;
+	format.fmt.pix.height = fmt->ifmt.height;
+
+	if (!inst->m2m_en) {
+		rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &format, true);
+		if (rc < 0) {
+			pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
+			return rc;
+		}
+	}
+
+	return gdc_set_format(inst->dev, inst->id, fmt);
+}
+
 static int gdc_s_ctrl(struct gdc_v4l_instance *inst, void *arg)
 {
 	struct gdc_instance *ins;
 	gdc_attr_t gdc_attr;
 	struct v4l2_ext_control *ext_ctrl;
+	struct gdc_format fmt;
 	int rc = 0;
 
 	ins = &inst->dev->insts[inst->id];
@@ -435,6 +509,31 @@ static int gdc_s_ctrl(struct gdc_v4l_instance *inst, void *arg)
 	rc = copy_from_user(&gdc_attr, ext_ctrl->ptr, sizeof(gdc_attr));
 	if (rc < 0)
 		return rc;
+
+	gdc_get_format(inst->dev, inst->id, &fmt);
+
+	if ((fmt.ifmt.width  != gdc_attr.input_width) ||
+	    (fmt.ifmt.height != gdc_attr.input_height) ||
+	    (fmt.ofmt.width  != gdc_attr.output_width) ||
+	    (fmt.ofmt.height != gdc_attr.output_height)) {
+		pr_debug("gdc%d format need to be changed\n", inst->id);
+		pr_debug("input: %dx%d -> %dx%d\n", fmt.ifmt.width, fmt.ifmt.height,
+			 gdc_attr.input_width, gdc_attr.input_height);
+		pr_debug("output: %dx%d -> %dx%d\n", fmt.ofmt.width, fmt.ofmt.height,
+			 gdc_attr.output_width, gdc_attr.output_height);
+		fmt.ifmt.width  = gdc_attr.input_width;
+		fmt.ifmt.height = gdc_attr.input_height;
+		fmt.ifmt.stride = gdc_attr.input_stride;
+		fmt.ofmt.width  = gdc_attr.output_width;
+		fmt.ofmt.height = gdc_attr.output_height;
+		fmt.ofmt.stride = gdc_attr.output_stride;
+
+		rc = gdc_re_set_format(inst, &fmt);
+		if (rc < 0) {
+			pr_err("gdc re-set format failed, rc=%d\n", rc);
+			return rc;
+		}
+	}
 
 	rc = gdc_set_attr(inst->dev, inst->id, gdc_attr.config_addr, gdc_attr.config_size);
 	if (rc < 0) {
@@ -449,6 +548,7 @@ static int gdc_g_ctrl(struct gdc_v4l_instance *inst, void *arg)
 {
 	struct gdc_instance *ins;
 	gdc_attr_t gdc_attr;
+	struct gdc_format fmt;
 	struct v4l2_ext_control *ext_ctrl;
 	int rc = 0;
 
@@ -464,6 +564,15 @@ static int gdc_g_ctrl(struct gdc_v4l_instance *inst, void *arg)
 		pr_err("gdc get cur attr failed, rc=%d\n", rc);
 		return rc;
 	}
+
+	gdc_get_format(inst->dev, inst->id, &fmt);
+
+	gdc_attr.input_width   = fmt.ifmt.width;
+	gdc_attr.input_height  = fmt.ifmt.height;
+	gdc_attr.input_stride  = fmt.ifmt.stride;
+	gdc_attr.output_width  = fmt.ofmt.width;
+	gdc_attr.output_height = fmt.ofmt.height;
+	gdc_attr.output_stride = fmt.ofmt.stride;
 
 	rc = copy_to_user(ext_ctrl->ptr,  &gdc_attr, sizeof(gdc_attr));
 	if (rc < 0)

@@ -234,13 +234,14 @@ static int check_work_mode_param(enum isp_work_mode *mode)
 	return rc;
 }
 
-static u32 isp_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
+static u32 isp_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
+			      struct v4l2_format *format)
 {
 	return 0;
 }
 
 static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
-							  struct v4l2_format *format, bool is_try)
+			      struct v4l2_format *format, bool is_try)
 {
 	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
 	struct isp_instance *isp;
@@ -294,7 +295,7 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	isp = &inst->dev->insts[inst->id];
 	rc = check_work_mode_param(&inst->dev->mode);
 	if (inst->dev->mode == ISP_MODE_INVALID) {
-		pr_err("isp input mode has never been set! set default mode as MCM mode!");
+		pr_debug("set isp default input mode as MCM mode\n");
 		inst->dev->mode = ISP_MCM_MODE;
 	}
 	if (inst->dev->mode != ISP_STRM_MODE) {

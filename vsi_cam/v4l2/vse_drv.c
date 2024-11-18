@@ -187,7 +187,8 @@ static bool vse_is_completed(struct v4l2_buf_ctx *ctx)
 	return rc;
 }
 
-static u32 vse_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
+static u32 vse_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
+			      struct v4l2_format *format)
 {
 	return 0;
 }
@@ -204,7 +205,8 @@ static uint32_t vse_get_sensor_fps(struct v4l2_subdev *sd)
 }
 
 static void vse_set_res_cap(struct vse_v4l_instance *inst);
-static int vse_set_ctx_format_out(struct v4l2_buf_ctx *ctx, struct v4l2_format *format, bool is_try)
+static int vse_set_ctx_format_out(struct v4l2_buf_ctx *ctx,
+				  struct v4l2_format *format, bool is_try)
 {
 	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
 
@@ -228,7 +230,8 @@ static int vse_enum_ctx_format_out(struct v4l2_buf_ctx *ctx, u32 index, u32 *for
 	return 0;
 }
 
-static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx, struct v4l2_frmsizeenum *fsize)
+static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx,
+				      struct v4l2_frmsizeenum *fsize)
 {
 	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
 	struct cam_res_cap *res;
@@ -245,7 +248,7 @@ static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx, struct v4l2_frms
 }
 
 static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
-							  struct v4l2_format *format, bool is_try)
+			      struct v4l2_format *format, bool is_try)
 {
 	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
 	struct cam_format f;
@@ -282,10 +285,10 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	if (!inst->fmt_changed || memcmp(&f, &inst->ifmt, sizeof(f))) {
 		struct vse_msg msg;
 
-		s_f.fmt.pix.width = f.width;
-		s_f.fmt.pix.height = f.height;
-		s_f.fmt.pix.pixelformat = inst->input_fmt;
 		if (!inst->m2m_en) {
+			s_f.fmt.pix.width = f.width;
+			s_f.fmt.pix.height = f.height;
+			s_f.fmt.pix.pixelformat = inst->input_fmt;
 			rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
 			if (rc < 0) {
 				pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
