@@ -45,6 +45,7 @@ struct vse_hist_num {
 
 struct vse_instance {
 	spinlock_t lock; /* lock for handling ctx */
+	spinlock_t state_lock; /* lock for handling state */
 	struct vse_irq_ctx ctx;
 	struct cam_format ifmt, ofmt[VSE_OUT_CHNL_MAX];
 	struct cam_rect crop[VSE_OUT_CHNL_MAX];

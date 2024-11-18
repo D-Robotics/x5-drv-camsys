@@ -69,6 +69,16 @@ static s32 handle_iommu_unmap(struct vse_device *vse, struct vse_msg *msg)
 	return mem_iommu_unmap(vse->dev, msg->map_buf.iova,
 			       msg->map_buf.size);
 }
+static s32 handle_set_error(struct vse_device *vse, struct vse_msg *msg)
+{
+	if (!vse)
+		return -EINVAL;
+
+	vse->is_completed = true;
+	vse->error = 1;
+
+	return 0;
+}
 
 s32 vse_msg_handler(void *msg, u32 len, void *arg)
 {
@@ -103,6 +113,9 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case CAM_MSG_IOMMU_UNMAP:
 		rc = handle_iommu_unmap(vse, m);
+		break;
+	case VSE_MSG_SET_ERROR:
+		rc = handle_set_error(vse, m);
 		break;
 	default:
 		return -EINVAL;
@@ -311,6 +324,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		msg.irq.stat = mis;
 		vse_post(vse, &msg, false);
 
+		spin_lock_irqsave(&inst->state_lock, flags);
 		ctx = get_next_irq_ctx(vse);
 		if (!ctx) {
 			vse->is_completed = true;
@@ -340,6 +354,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}
+		spin_unlock_irqrestore(&inst->state_lock, flags);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;

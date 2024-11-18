@@ -342,6 +342,7 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable)
 	struct vse_instance *ins;
 	struct vse_msg msg;
 	int rc;
+	unsigned long flags;
 
 	if (!vse || inst >= vse->num_insts)
 		return -EINVAL;
@@ -357,11 +358,18 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable)
 		msg.state = CAM_STATE_STARTED;
 	} else {
 		msg.state = CAM_STATE_STOPPED;
+		spin_lock_irqsave(&ins->state_lock, flags);
+		ins->state = msg.state;
+		spin_unlock_irqrestore(&ins->state_lock, flags);
 	}
 	rc = vse_post(vse, &msg, true);
 	if (rc < 0)
 		return rc;
-	ins->state = msg.state;
+	if (msg.state == CAM_STATE_STARTED) {
+		spin_lock_irqsave(&ins->state_lock, flags);
+		ins->state = msg.state;
+		spin_unlock_irqrestore(&ins->state_lock, flags);
+	}
 	dw_set_state(vse->crc_dev, DW_MOD_VSE, msg.state);
 	return 0;
 }
@@ -770,6 +778,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 
 	for (i = 0; i < vse_dt.num_insts; i++) {
 		spin_lock_init(&vse->insts[i].lock);
+		spin_lock_init(&vse->insts[i].state_lock);
 		spin_lock_init(&vse->insts[i].hist_lock);
 	}
 

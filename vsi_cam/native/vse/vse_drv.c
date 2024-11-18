@@ -364,14 +364,14 @@ static s32 vse_video_streamoff(struct vio_video_ctx *vctx)
 	inst = container_of(vctx->vdev, struct vse_nat_instance, vdev);
 
 	if (vctx->id == VNODE_ID_SRC) {
+		rc = vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 0);
 		memset(&ctx, 0, sizeof(ctx));
-		rc = vse_set_ctx(&inst->dev->vse_dev, vctx->ctx_id, &ctx);
+		rc |= vse_set_ctx(&inst->dev->vse_dev, vctx->ctx_id, &ctx);
 		if (rc < 0) {
 			pr_err("%s failed to call vse_set_ctx(err=%d).\n", __func__, rc);
 			return rc;
 		}
-
-		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 0);
+		return rc;
 	}
 	return 0;
 }

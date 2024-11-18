@@ -19,6 +19,7 @@
 
 #define VSE_MSG_ALLOC_CMD_BUF (0x1)
 #define VSE_MSG_SET_OSD_BUF   (0x2)
+#define VSE_MSG_SET_ERROR     (0x3)
 
 #define VSE_MSG_IRQ_STAT         (0x1 << 8)
 #define VSE_MSG_SRC_ALT          (0x2 << 8)
