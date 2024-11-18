@@ -174,7 +174,8 @@ bool vse_get_drop_status(struct cam_ctx *ctx)
 	return !cam_acqbuf_irq(ctx, true);
 }
 
-int cam_check_stream_path(struct cam_ctx *ctx, bool *stream_path)
+int cam_check_datapath(struct cam_ctx *ctx, bool *online)
 {
+	*online = true;
 	return 0;
 }

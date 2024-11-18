@@ -14,7 +14,7 @@ struct cam_ops {
 	int (*read_hist)(struct cam_ctx *ctx, u32 ochn_id);
 	int (*set_mode)(struct cam_ctx *ctx, u32 mode);
 	int (*get_frame_info)(struct cam_ctx *ctx, struct cam_frame_info *info);
-	int (*check_stream_path)(struct cam_ctx *ctx, bool *stream_path);
+	int (*check_datapath)(struct cam_ctx *ctx, bool *online);
 };
 
 int add_ops(u32 id, const struct cam_ops *ops);

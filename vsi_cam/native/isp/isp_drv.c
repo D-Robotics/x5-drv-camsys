@@ -936,19 +936,19 @@ static ssize_t isp_stat_show(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR(stat, 0444, isp_stat_show, NULL);
 
-static int isp_check_stream_path(struct cam_ctx *ctx, bool *stream_path)
+static int isp_check_datapath(struct cam_ctx *ctx, bool *online)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	struct isp_nat_instance *inst;
 
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
-	*stream_path = inst->dev->isp_dev.mode == ISP_STRM_MODE ? true : false;
+	*online = inst->attr.input_mode != DDR_MODE ? true : false;
 
 	return 0;
 }
 
 static const struct cam_ops isp_ops = {
-	.check_stream_path = isp_check_stream_path,
+	.check_datapath = isp_check_datapath,
 };
 
 static int isp_nat_probe(struct platform_device *pdev)

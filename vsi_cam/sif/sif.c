@@ -184,31 +184,26 @@ static int sif_set_ipi_fmt(struct sif_device *sif, u32 inst, struct cam_format *
 	case CAM_FMT_YUYV:
 		val |= SIF_FMT_YUYV_IPI[inst];
 		fmt->stride = fmt->width * 2;
-		reg_val = sif_read(sif, SIF_ISP_CTRL);
-		sif_write(sif, SIF_ISP_CTRL, reg_val | BIT(inst));
 		break;
 	case CAM_FMT_NV12:
 		val |= SIF_FMT_NV12_IPI[inst];
 		fmt->stride = fmt->width;
-		reg_val = sif_read(sif, SIF_ISP_CTRL);
-		sif_write(sif, SIF_ISP_CTRL, reg_val | BIT(inst));
 		break;
 	case CAM_FMT_NV16:
 		val |= SIF_FMT_YUY422SP_IPI[inst];
 		fmt->stride = fmt->width;
-		reg_val = sif_read(sif, SIF_ISP_CTRL);
-		sif_write(sif, SIF_ISP_CTRL, reg_val | BIT(inst));
 		break;
 	case CAM_FMT_RGB888X:
 		val |= SIF_FMT_RGB888_IPI[inst];
 		fmt->stride = fmt->width * 4;
-		reg_val = sif_read(sif, SIF_ISP_CTRL);
-		sif_write(sif, SIF_ISP_CTRL, reg_val | BIT(inst));
 		break;
 	default:
 		dev_err(sif->dev, "unsupported format 0x%x.\n", fmt->format);
 		return -EINVAL;
 	}
+
+	reg_val = sif_read(sif, SIF_ISP_CTRL);
+	sif_write(sif, SIF_ISP_CTRL, reg_val | BIT(inst));
 
 	sif_write(sif, SIF_DMA_CTL, val);
 	sif_write(sif, SIF_IMG_OUT_BLENTH, SIF_BURST_LENGTH);
@@ -305,11 +300,13 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
 	struct sif_irq_ctx *ctx;
+	struct cam_ctx *src_ctx = NULL;
 	phys_addr_t p_addr = 0;
 	phys_addr_t p_uv_addr = 0;
 	unsigned long flags;
 	u32 val;
 	u32 irq_val, reg_val;
+	bool online = false;
 
 	dev_dbg(dev->dev,"%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
@@ -357,18 +354,26 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	sif_write(dev, SIF_IPI_IRQ_CLR(inst), irq_val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
 
-	reg_val = sif_read(dev, SIF_ISP_CTRL);
-	sif_write(dev, SIF_ISP_CTRL, reg_val & (~BIT(inst)));
+	// for hdr mode, it should be the same as base ipi.
+	if (dev->ipi_channel_num > 1 && inst > dev->ipi_base)
+		src_ctx = dev->insts[dev->ipi_base].ctx.src_ctx;
+	else if (sif->ctx.src_ctx)
+		src_ctx = sif->ctx.src_ctx;
+	cam_check_datapath(src_ctx, &online);
+	if (online) {
+		reg_val = sif_read(dev, SIF_ISP_CTRL);
+		sif_write(dev, SIF_ISP_CTRL, reg_val & (~BIT(inst)));
+	}
 
-	dev_dbg(dev->dev, "%s irq_val=0x%x\n", __func__, sif_read(dev, SIF_IPI_IRQ_EN(inst)));
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+	dev_dbg(dev->dev, "%s irq_val=0x%x\n", __func__, sif_read(dev, SIF_IPI_IRQ_EN(inst)));
 }
 
 static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
 	unsigned long flags;
-	u32 irq_val;
+	u32 irq_val, reg_val;
 
 	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
@@ -381,6 +386,13 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 		irq_val &= ~SIF_IRQ_EBD_DMA_DONE;
 
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
+
+	/* for v4l2 code there isn't sif_pre_stop_ipi, so configure register here.
+	 * for hbn code this register should have been writen, so do nothing here.
+	 */
+	reg_val = sif_read(dev, SIF_ISP_CTRL);
+	if (!(reg_val & BIT(inst)))
+		sif_write(dev, SIF_ISP_CTRL, reg_val | BIT(inst));
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 
 	dev_dbg(dev->dev, "%s-\n", __func__);
@@ -389,19 +401,24 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 void sif_pre_stop_ipi(struct sif_device *dev, u32 inst)
 {
 	struct sif_instance *sif;
+	struct cam_ctx *src_ctx = NULL;
 	unsigned long flags;
 	u32 reg_val;
-	bool stream_path = false;
+	bool online = false;
 
 	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
-	if (sif->ctx.src_ctx) {
-		cam_check_stream_path(sif->ctx.src_ctx, &stream_path);
-		if (stream_path) {
+	// for hdr mode, it should be the same as base ipi.
+	if (dev->ipi_channel_num > 1 && inst > dev->ipi_base)
+		src_ctx = dev->insts[dev->ipi_base].ctx.src_ctx;
+	else if (sif->ctx.src_ctx)
+		src_ctx = sif->ctx.src_ctx;
+	if (src_ctx) {
+		cam_check_datapath(src_ctx, &online);
+		if (online) {
 			reg_val = sif_read(dev, SIF_ISP_CTRL);
-			//IPI to ISP datapath will be disabled if it is set to 1
 			reg_val |= BIT(inst);
 			sif_write(dev, SIF_ISP_CTRL, reg_val);
 		}

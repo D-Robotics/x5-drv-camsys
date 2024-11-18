@@ -313,30 +313,29 @@ bool vse_get_drop_status(struct cam_ctx *ctx)
 	return false;
 }
 
-int cam_check_stream_path(struct cam_ctx *ctx, bool *stream_path)
+int cam_check_datapath(struct cam_ctx *ctx, bool *online)
 {
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	const struct cam_ops *ops = NULL;
 	struct vio_node *vnode;
 
-	if (unlikely(!vdev || !stream_path))
+	if (unlikely(!vdev || !online))
 		return -EINVAL;
 
 	if (vdev->next) {
 		vdev = vdev->next;
 		if (vdev->vnode->id < MODULE_NUM)
 			ops = get_ops(vdev->vnode->id);
-		if (ops && ops->check_stream_path)
-			ops->check_stream_path((struct cam_ctx *)vdev, stream_path);
+		if (ops && ops->check_datapath)
+			ops->check_datapath((struct cam_ctx *)vdev, online);
 	} else if (vdev->vnode->next) {
 		vnode = vdev->vnode->next;
 		if (vnode->id < MODULE_NUM)
 			ops = get_ops(vnode->id);
-		if (ops && ops->check_stream_path)
-			ops->check_stream_path((struct cam_ctx *)vnode->ich_subdev[0],
-					       stream_path);
+		if (ops && ops->check_datapath)
+			ops->check_datapath((struct cam_ctx *)vnode->ich_subdev[0], online);
 	} else {
-		*stream_path = false;
+		*online = false;
 	}
 
 	return 0;
