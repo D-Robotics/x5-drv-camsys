@@ -21,7 +21,7 @@ static struct entity_link links0[] = {
 };
 
 /* [0,1,2,3] sif online isp x4 */
-/* [4,5] sif yuv offline isp */
+/* [4,5] sif raw offline isp */
 static struct entity_link links1[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
@@ -209,6 +209,19 @@ static struct entity_link links11[] = {
 	{ GDC_DEV_NAME "0-3", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
+/* SIF/ISP as front capture device connect to VSE mem2mem device */
+static struct entity_link links12[] = {
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF as front
+	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP as front
+	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 1, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED }, // m2m master
+	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
 static struct entity_link *links[] = {
 	links0,
 	links1,
@@ -222,6 +235,7 @@ static struct entity_link *links[] = {
 	links9,
 	links10,
 	links11,
+	links12,
 };
 
 static u32 links_size[] = {
@@ -237,6 +251,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links9),
 	ARRAY_SIZE(links10),
 	ARRAY_SIZE(links11),
+	ARRAY_SIZE(links12),
 };
 
 #endif /* _VIDEO_LINK_H_ */
