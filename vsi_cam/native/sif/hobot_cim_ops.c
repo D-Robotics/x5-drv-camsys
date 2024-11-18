@@ -617,7 +617,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	struct vin_cim_private_s *cim_priv_attr;
 	struct sif_irq_ctx ctx = {0};
 	struct cim_attr cim_attr;
-	int rc;
+	int rc, i;
 
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
@@ -665,11 +665,14 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	if (rc < 0)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
-	rc = sif_set_dma(&cim->sif, ipi_index, 1);
-	if (rc < 0)
-		vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
-			vctx->ctx_id, ipi_index, __func__);
-	sif_set_isp_ctrl(&cim->sif, ipi_index, 1, false);
+	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+		rc = sif_set_dma(&cim->sif, ipi_index, 1);
+		if (rc < 0)
+			vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+				vctx->ctx_id, ipi_index, __func__);
+		sif_set_isp_ctrl(&cim->sif, ipi_index, 1, false);
+		ipi_index++;
+	}
 	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
 	return ret;
@@ -702,7 +705,7 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 	struct vin_cim_private_s *cim_priv_attr;
 	struct sif_irq_ctx ctx = {0};
 	struct cim_attr cim_attr;
-	int rc;
+	int rc, i;
 
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
@@ -723,10 +726,14 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
 
-	rc = sif_set_dma(&cim->sif, ipi_index, 0);
-	if (rc < 0)
-		vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
-			vctx->ctx_id, ipi_index, __func__);
+	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+		rc = sif_set_dma(&cim->sif, ipi_index, 0);
+		ipi_index++;
+		if (rc < 0)
+			vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+				vctx->ctx_id, ipi_index, __func__);
+	}
+	ipi_index = cim_priv_attr->ipi_index;
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.src_ctx = NULL;
@@ -778,6 +785,7 @@ s32 cim_subdev_pre_stop(struct vio_video_ctx *vctx)
 	u8 ipi_index;
 	struct vin_cim_private_s *cim_priv_attr;
 	struct cim_attr cim_attr;
+	int i;
 
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
@@ -791,8 +799,10 @@ s32 cim_subdev_pre_stop(struct vio_video_ctx *vctx)
 	ipi_index = cim_priv_attr->ipi_index;
 	osal_mutex_lock(&cim->mlock);
 
-	sif_set_isp_ctrl(&cim->sif, ipi_index, 0, false);
-
+	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+		sif_set_isp_ctrl(&cim->sif, ipi_index, 0, false);
+		ipi_index++;
+	}
 	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
 
