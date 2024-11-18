@@ -227,6 +227,14 @@ static struct entity_link links13[] = {
 	{ GDC_DEV_NAME "0-0", 0, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
 };
 
+/* SIF/ISP as front capture device connect to GDC mem2mem device */
+static struct entity_link links14[] = {
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF as front
+	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP as front
+	{ GDC_DEV_NAME "0-0", 0, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
+};
+
 static struct entity_link *links[] = {
 	links0,
 	links1,
@@ -242,6 +250,7 @@ static struct entity_link *links[] = {
 	links11,
 	links12,
 	links13,
+	links14,
 };
 
 static u32 links_size[] = {
@@ -259,6 +268,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links11),
 	ARRAY_SIZE(links12),
 	ARRAY_SIZE(links13),
+	ARRAY_SIZE(links14),
 };
 
 #endif /* _VIDEO_LINK_H_ */
