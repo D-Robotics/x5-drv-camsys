@@ -204,6 +204,7 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	struct vse_fps_rate fps;
 	struct v4l2_subdev *sd, *rsd;
 	struct media_pad *rpad;
+	u32 devid, insid;
 	int channel = -1;
 	int hfactor = 1, vfactor = 1;
 	int rc = 0;
@@ -251,10 +252,11 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		inst->fmt_changed = true;
 	}
 
+	get_front_info(sd, &devid, &insid);
 	if (inst->node.bctx.is_sink_online_mode)
-		vse_set_cascade(inst->dev, inst->id, inst->id, true); //FIXME
+		vse_set_cascade(inst->dev, inst->id, insid, true);
 	else
-		vse_set_cascade(inst->dev, inst->id, inst->id, false);
+		vse_set_cascade(inst->dev, inst->id, insid, false);
 
 	f.width = ALIGN_DOWN(format->fmt.pix.width / hfactor, 16);
 	f.height = format->fmt.pix.height / vfactor;

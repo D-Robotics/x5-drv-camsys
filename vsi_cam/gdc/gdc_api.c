@@ -19,6 +19,12 @@ void gdc_hw_set_config_size(void __iomem *base_addr, uint32_t config_addr)
 	gdc_hw_write(base_addr, GDC_HW_CONFIG_SIZE, config_addr);
 }
 
+void gdc_hw_get_config(void __iomem *base_addr, uint32_t *config_addr, uint32_t *config_size)
+{
+	*config_addr = gdc_hw_read(base_addr, GDC_HW_CONFIG_ADDR);
+	*config_size = gdc_hw_read(base_addr, GDC_HW_CONFIG_SIZE) * 4;
+}
+
 void gdc_hw_set_rdma_img_width(void __iomem *base_addr, uint32_t width)
 {
 	gdc_hw_write(base_addr, GDC_HW_RDMA_IMG_WIDTH, width);
@@ -241,6 +247,11 @@ void gdc_set_cfg_buffer(struct gdc_device *gdc, phys_addr_t paddr, uint32_t size
 {
 	gdc_hw_set_config_addr(gdc->base, paddr);
 	gdc_hw_set_config_size(gdc->base, size / 4);
+}
+
+void gdc_get_cfg_buffer(struct gdc_device *gdc, phys_addr_t *paddr, uint32_t *size)
+{
+	gdc_hw_get_config(gdc->base, (uint32_t *)paddr, size);
 }
 
 /* gdc_init need called when process every frame */

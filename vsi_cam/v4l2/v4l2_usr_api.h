@@ -10,6 +10,7 @@
 #define V4L2_CID_DR_EXPOSURE    (V4L2_CID_DR_BASE + 0x0001)
 #define V4L2_CID_DR_AWB         (V4L2_CID_DR_BASE + 0x0002)
 #define V4L2_CID_DR_VSE_ATTR    (V4L2_CID_DR_BASE + 0x0003)
+#define V4L2_CID_DR_GDC_ATTR    (V4L2_CID_DR_BASE + 0x0004)
 
 #define V4L2_CID_FPS            (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xa)
 #define V4L2_CID_EXP_RANGE      (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xb)
@@ -121,5 +122,15 @@ typedef struct vse_ochn_attr_ex_s {
 	__u32 target_w;
 	__u32 target_h;
 } vse_ochn_attr_ex_t;
+
+typedef struct gdc_attr_s {
+	__u64 config_addr;
+	__u32 config_size;
+	__u8 div_width;
+	__u8 div_height;
+	__u32 total_planes;
+	__u32 binary_ion_id;
+	__u64 binary_offset;
+} gdc_attr_t;
 
 #endif /* __V4L2_USR_API_H__ */

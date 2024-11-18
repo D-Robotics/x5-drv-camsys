@@ -134,9 +134,9 @@ static struct entity_link links6[] = {
 /* + 1v sif offline isp gdc */
 static struct entity_link links7[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-1", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-4", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
@@ -149,40 +149,64 @@ static struct entity_link links8[] = {
 	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* 2v sif online isp gdc vse */
+/* 4v sif online isp gdc vse */
 static struct entity_link links9[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 0, ISP_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-1", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-2", 0, GDC_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-3", 0, GDC_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-1", 0, VSE_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-2", 0, VSE_DEV_NAME "0-6", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-3", 0, VSE_DEV_NAME "0-7", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-5", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-6", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-7", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* 2v sif online isp online vse gdc */
+/* 4v sif online isp online vse gdc */
 static struct entity_link links10[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 0, ISP_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-1", 0, VSE_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-2", 0, VSE_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-3", 0, VSE_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-1", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 0, GDC_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 0, GDC_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-2", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-3", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* 2v sif online isp offline vse gdc */
+/* 4v sif online isp offline vse gdc */
 static struct entity_link links11[] = {
-	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-4", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-5", 0, VSE_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 0, ISP_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-1", 0, VSE_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-2", 0, VSE_DEV_NAME "0-6", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-3", 0, VSE_DEV_NAME "0-7", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-5", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-6", 0, GDC_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-7", 0, GDC_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-2", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-3", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 static struct entity_link *links[] = {

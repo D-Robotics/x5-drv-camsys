@@ -73,6 +73,7 @@ int subdev_set_fmt(struct v4l2_subdev *sd,
 			}
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			fmt->pad = pad->index;
+			pr_debug("%s call %s set_fmt\n", sd->name, rsd->name);
 			rc = v4l2_subdev_call(rsd, pad, set_fmt, state, fmt);
 			if (rc < 0)
 				return rc;
@@ -106,15 +107,19 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			ctx = v4l2_get_subdevdata(rsd);
 
-			if (enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream)
+			if (enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream) {
+				pr_debug("%s call %s set_stream on\n", sd->name, rsd->name);
 				ctx->set_stream(ctx, pad->index, 1);
-
+			}
+			pr_debug("%s call %s s_stream, enable=%d\n", sd->name, rsd->name, enable);
 			rc = v4l2_subdev_call(rsd, video, s_stream, enable);
 			if (rc < 0)
 				return rc;
 
-			if (!enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream)
+			if (!enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream) {
+				pr_debug("%s call %s set_stream off\n", sd->name, rsd->name);
 				ctx->set_stream(ctx, pad->index, 0);
+			}
 		}
 		i++;
 	}
@@ -182,6 +187,7 @@ struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_p
 int subdev_open(struct v4l2_subdev *sd)
 {
 	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
 	struct media_pad *pad;
 	u16 i = 0;
 	int rc;
@@ -198,9 +204,10 @@ int subdev_open(struct v4l2_subdev *sd)
 				i++;
 				continue;
 			}
-			sd = media_entity_to_v4l2_subdev(pad->entity);
-			if (sd->internal_ops && sd->internal_ops->open) {
-				rc = sd->internal_ops->open(sd, NULL/*subdev_fh*/);
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			if (rsd->internal_ops && rsd->internal_ops->open) {
+				pr_debug("%s call %s open\n", sd->name, rsd->name);
+				rc = rsd->internal_ops->open(rsd, NULL/*subdev_fh*/);
 				if (rc < 0)
 					return rc;
 			}
@@ -213,6 +220,7 @@ int subdev_open(struct v4l2_subdev *sd)
 int subdev_close(struct v4l2_subdev *sd)
 {
 	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
 	struct media_pad *pad;
 	u16 i = 0;
 	int rc;
@@ -229,11 +237,49 @@ int subdev_close(struct v4l2_subdev *sd)
 				i++;
 				continue;
 			}
-			sd = media_entity_to_v4l2_subdev(pad->entity);
-			if (sd->internal_ops && sd->internal_ops->close) {
-				rc = sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			if (rsd->internal_ops && rsd->internal_ops->close) {
+				pr_debug("%s call %s close\n", sd->name, rsd->name);
+				rc = rsd->internal_ops->close(rsd, NULL/*subdev_fh*/);
 				if (rc < 0)
 					return rc;
+			}
+		}
+		i++;
+	}
+	return 0;
+}
+
+int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid)
+{
+	struct media_entity *ent;
+	struct media_pad *pad;
+	struct v4l2_subdev *rsd;
+	struct v4l2_buf_ctx *ctx;
+	u16 i = 0;
+	int rc;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			ctx = v4l2_get_subdevdata(rsd);
+
+			if (is_v4l2_buf_ctx(ctx) && ctx->map_info) {
+				rc = ctx->map_info(ctx, devid, insid);
+				if (rc < 0)
+					return rc;
+				pr_debug("%s get %s info, devid:%d, insid:%d\n", sd->name, rsd->name, *devid, *insid);
+
 			}
 		}
 		i++;

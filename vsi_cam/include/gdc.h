@@ -41,7 +41,6 @@ struct gdc_device {
 	struct dw_crc_device *crc_dev;
 	struct job_queue *jq; /* offline job queue */
 	struct gdc_instance *insts;
-	struct list_head cfg_buf_list;
 	struct mem_buf cfg_bufs[GDC_CFG_PATH_MAX];
 	struct mutex open_lock; /* lock for open_cnt */
 	refcount_t open_cnt;
@@ -56,12 +55,15 @@ int32_t gdc_hw_check_status(struct gdc_device *gdc);
 void gdc_set_in_buffer(struct gdc_device *gdc, struct cam_format *fmt, struct cam_buf *buf);
 void gdc_set_out_buffer(struct gdc_device *gdc, struct cam_format *fmt, struct cam_buf *buf);
 void gdc_set_cfg_buffer(struct gdc_device *gdc, phys_addr_t paddr, uint32_t size);
+void gdc_get_cfg_buffer(struct gdc_device *gdc, phys_addr_t *paddr, uint32_t *size);
 void gdc_hw_init(struct gdc_device *gdc);
 void gdc_hw_start_process(struct gdc_device *gdc);
 
 int gdc_set_format(struct gdc_device *dev, u32 inst, struct gdc_format *fmt);
 int gdc_set_state(struct gdc_device *dev, u32 inst, int enable);
 int gdc_set_ctx(struct gdc_device *dev, u32 inst, struct gdc_irq_ctx *ctx);
+int gdc_set_attr(struct gdc_device *gdc, u32 inst, phys_addr_t paddr, u32 size);
+int gdc_get_attr(struct gdc_device *gdc, u32 inst, phys_addr_t *paddr, u32 *size);
 void gdc_set_cmd(struct gdc_device *gdc, u32 inst);
 int gdc_add_job(struct gdc_device *dev, u32 inst);
 int gdc_wake_up(struct gdc_device *gdc, u32 inst);

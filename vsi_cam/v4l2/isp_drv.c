@@ -261,7 +261,7 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	}
 
 	isp = &inst->dev->insts[inst->id];
-	inst->dev->mode = ISP_MCM_MODE;
+	inst->dev->mode = ISP_MCM_MODE; //FIXME: now fixed in MCM_MODE
 	if (inst->node.bctx.is_sink_online_mode) {
 		isp->online_mcm = true;
 		isp_set_stream_idx(inst->dev, inst->id, inst->id);
@@ -410,6 +410,19 @@ static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 
 default_fmt:
 	inst->input_fmt = inst->input_fmt_cap[0];
+}
+
+static int isp_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
+{
+	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+
+	if (!devid || !insid)
+		return -EINVAL;
+
+	*devid = isp->dev->id;
+	*insid = isp->id;
+
+	return 0;
 }
 
 static int isp_queue_setup(struct cam_ctx *ctx,
@@ -589,6 +602,7 @@ static int isp_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+	u32 devid, insid;
 	int rc;
 
 	if (enable) {
@@ -599,10 +613,12 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		refcount_inc(&isp->start_count);
 
-		if (!isp->node.bctx.is_sink_online_mode)
+		if (!isp->node.bctx.is_sink_online_mode) {
 			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
-		else
-			isp_set_input_select(isp->dev, isp->id, isp->id, 0);  //FIXME
+		} else {
+			get_front_info(sd, &devid, &insid);
+			isp_set_input_select(isp->dev, isp->id, devid, insid);
+		}
 		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STARTED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
@@ -823,6 +839,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_frameinterval = isp_enum_ctx_frameinterval;
 		n->bctx.set_stream = isp_set_stream;
 		n->bctx.set_cap = isp_set_cap;
+		n->bctx.map_info = isp_map_info;
 
 		n->dev = dev;
 		if (i < ISP_SINK_ONLINE_PATH_MAX)

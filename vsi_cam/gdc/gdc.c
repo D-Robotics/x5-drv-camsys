@@ -9,9 +9,7 @@
 #include "cam_ctrl.h"
 #include "cam_dev.h"
 #include "dw_crc.h"
-// #include "isc.h"
 #include "gdc_uapi.h"
-#include "gdc_cfg_buffer.h"
 
 #include "gdc.h"
 
@@ -32,41 +30,9 @@ static bool check_format(struct gdc_instance *ins, struct cam_format *fmt)
 }
 #endif
 
-static int gdc_alloc_cfg_buffer(struct gdc_device *gdc, u32 inst)
-{
-	struct mem_buf *buf;
-	u32 size;
-	int rc;
-
-	size = ARRAY_SIZE(gdc_cfgs);
-	if (!size)
-		return -EINVAL;
-
-	buf = &gdc->cfg_bufs[inst];
-	if (buf->size > 0 && buf->size != size) {
-		rc = mem_free(gdc->dev, &gdc->cfg_buf_list, buf);
-		if (unlikely(rc)) {
-			pr_err("mem_free fail, (err=%d)\n", rc);
-			return rc;
-		}
-	}
-	if (buf->size != size) {
-		buf->size = size;
-		rc = mem_alloc(gdc->dev, &gdc->cfg_buf_list, buf);
-		if (unlikely(rc)) {
-			pr_err("mem_alloc fail, (err=%d)\n", rc);
-			return rc;
-		}
-	}
-
-	return 0;
-}
-
 int gdc_set_format(struct gdc_device *gdc, u32 inst, struct gdc_format *fmt)
 {
 	struct gdc_instance *ins;
-	void *vaddr;
-	int rc;
 
 	if (!gdc || !fmt)
 		return -EINVAL;
@@ -81,13 +47,6 @@ int gdc_set_format(struct gdc_device *gdc, u32 inst, struct gdc_format *fmt)
 #endif
 	memcpy(&ins->fmt, fmt, sizeof(ins->fmt));
 
-	rc = gdc_alloc_cfg_buffer(gdc, inst);
-	if (rc < 0)
-		return rc;
-
-	vaddr = get_virt_addr(gdc->dev, &gdc->cfg_buf_list, &gdc->cfg_bufs[inst]);
-	memcpy(vaddr, gdc_cfgs, ARRAY_SIZE(gdc_cfgs) * sizeof(gdc_cfgs[0]));
-
 	return 0;
 }
 
@@ -96,6 +55,28 @@ int32_t gdc_get_format(struct gdc_device *gdc, uint32_t inst, struct gdc_format 
 	struct gdc_instance ins = gdc->insts[inst];
 
 	memcpy(fmt, &ins.fmt, sizeof(struct gdc_format));
+
+	return 0;
+}
+
+int gdc_set_attr(struct gdc_device *gdc, u32 inst, phys_addr_t paddr, u32 size)
+{
+	if (!paddr || !size)
+		return -EINVAL;
+
+	gdc->cfg_bufs[inst].addr = paddr;
+	gdc->cfg_bufs[inst].size = size;
+
+	return 0;
+}
+
+int gdc_get_attr(struct gdc_device *gdc, u32 inst, phys_addr_t *paddr, u32 *size)
+{
+	*paddr = gdc->cfg_bufs[inst].addr;
+	*size = gdc->cfg_bufs[inst].size;
+
+	if (!*paddr || !*size)
+		return -EINVAL;
 
 	return 0;
 }
@@ -175,6 +156,7 @@ int gdc_add_job(struct gdc_device *gdc, u32 inst)
 	if (gdc->error) {
 		ctx = get_next_irq_ctx(gdc);
 		if (ctx) {
+			pr_debug("gdc%d set cmd\n", gdc->next_irq_ctx);
 			gdc_set_cmd(gdc, gdc->next_irq_ctx);
 		}
 	}
@@ -331,7 +313,6 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	for (i = 0; i < gdc_dt.num_insts; i++)
 		spin_lock_init(&gdc->insts[i].lock);
 
-	INIT_LIST_HEAD(&gdc->cfg_buf_list);
 	dev_dbg(dev, "ARM GDC driver (base) probed done\n");
 	return 0;
 }

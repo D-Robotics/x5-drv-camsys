@@ -95,6 +95,7 @@ irqreturn_t gdc_irq_handler(int irq, void *arg)
 
 	get_gdc_intr_stat_and_clear(gdc->ctrl_dev, NULL, &is_done);
 	if (is_done) {
+		pr_debug("gdc%d frame done\n", gdc->next_irq_ctx);
 		ins = &gdc->insts[gdc->next_irq_ctx];
 		spin_lock_irqsave(&ins->lock, flags);
 		frame_done(&ins->ctx);
@@ -104,6 +105,7 @@ irqreturn_t gdc_irq_handler(int irq, void *arg)
 		if (!ctx) {
 			gdc->error = 1;
 		} else {
+			pr_debug("gdc%d set cmd\n", gdc->next_irq_ctx);
 			gdc_set_cmd(gdc, gdc->next_irq_ctx);
 		}
 	}

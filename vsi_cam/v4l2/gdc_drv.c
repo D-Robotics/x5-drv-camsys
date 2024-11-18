@@ -10,7 +10,7 @@
 
 #include "cam_dev.h"
 #include "cam_uapi.h"
-
+#include "v4l2_usr_api.h"
 #include "gdc_drv.h"
 
 #define sd_to_gdc_v4l_instance(s) \
@@ -378,14 +378,113 @@ static int gdc_s_frame_interval(struct v4l2_subdev *sd,
 	return v4l2_subdev_call(rsd, video, s_frame_interval, fiv);
 }
 
+static int gdc_s_ctrl(struct gdc_v4l_instance *inst, void *arg)
+{
+	struct gdc_instance *ins;
+	gdc_attr_t gdc_attr;
+	struct v4l2_ext_control *ext_ctrl;
+	int rc = 0;
+
+	ins = &inst->dev->insts[inst->id];
+	ext_ctrl = (struct v4l2_ext_control *)arg;
+	rc = copy_from_user(&gdc_attr, ext_ctrl->ptr, sizeof(gdc_attr));
+	if (rc < 0)
+		return rc;
+
+	rc = gdc_set_attr(inst->dev, inst->id, gdc_attr.config_addr, gdc_attr.config_size);
+	if (rc < 0) {
+		pr_err("gdc set attr failed, rc=%d\n", rc);
+		return rc;
+	}
+
+	return rc;
+}
+
+static int gdc_g_ctrl(struct gdc_v4l_instance *inst, void *arg)
+{
+	struct gdc_instance *ins;
+	gdc_attr_t gdc_attr;
+	struct v4l2_ext_control *ext_ctrl;
+	int rc = 0;
+
+	ins = &inst->dev->insts[inst->id];
+	ext_ctrl = (struct v4l2_ext_control *)arg;
+
+	rc = copy_from_user(&gdc_attr, ext_ctrl->ptr, sizeof(gdc_attr));
+	if (rc < 0)
+		return rc;
+
+	rc = gdc_get_attr(inst->dev, inst->id, &gdc_attr.config_addr, &gdc_attr.config_size);
+	if (rc < 0) {
+		pr_err("gdc get cur attr failed, rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = copy_to_user(ext_ctrl->ptr,  &gdc_attr, sizeof(gdc_attr));
+	if (rc < 0)
+		return rc;
+
+	return rc;
+}
+
+static int get_name_for_ext_ctrl(uint32_t id, char *name)
+{
+	const char *source;
+
+	switch (id) {
+		case V4L2_CID_DR_GDC_ATTR:
+			source = "gdc_attr_t";
+			break;
+		default:
+			return -1;
+	}
+	memcpy(name, source, strlen(source)+1);
+	return 0;
+}
+
 static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
+	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
+	struct v4l2_query_ext_ctrl *qectrl;
+	struct v4l2_ext_control *vectl;
 	int rc = 0;
 
 	switch (cmd) {
 	case CAM_SET_CTRL:
 	case CAM_GET_CTRL:
+	case CAM_QUERY_CTRL:
 		rc = subdev_call_command(sd, cmd, arg);
+		break;
+	case CAM_SET_EXT_CTRL:
+		vectl = (struct v4l2_ext_control *)arg;
+		switch (vectl->id) {
+		case V4L2_CID_DR_GDC_ATTR:
+			rc = gdc_s_ctrl(gdc, arg);
+			break;
+		default:
+			rc = subdev_call_command(sd, cmd, arg);
+		}
+			break;
+	case CAM_GET_EXT_CTRL:
+		vectl = (struct v4l2_ext_control *)arg;
+		switch (vectl->id) {
+		case V4L2_CID_DR_GDC_ATTR:
+			rc = gdc_g_ctrl(gdc, arg);
+			break;
+		default:
+			rc = subdev_call_command(sd, cmd, arg);
+			break;
+		}
+		break;
+	case CAM_QUERY_EXT_CTRL:
+		qectrl = (struct v4l2_query_ext_ctrl *)arg;
+		switch (qectrl->id) {
+		case V4L2_CID_DR_GDC_ATTR:
+			rc = get_name_for_ext_ctrl(qectrl->id, qectrl->name);
+			break;
+		default:
+			return -EINVAL;
+		}
 		break;
 	default:
 		rc = -EINVAL;

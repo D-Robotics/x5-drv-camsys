@@ -92,6 +92,7 @@ struct v4l2_buf_ctx {
 	void (*set_cap)(struct v4l2_buf_ctx *ctx);
 	int (*init_output_ctx)(struct v4l2_buf_ctx *ctx);
 	bool (*is_standalone)(struct v4l2_buf_ctx *ctx);
+	int (*map_info)(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid);
 };
 
 struct subdev_node {
@@ -166,6 +167,7 @@ u32 mbus_code_to_bayer_pattern(u32 code, bool isISI);
 int pixelformat_to_mbus_code(u32 format);
 u32 mbus_code_to_pixelformat(u32 code);
 int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg);
+int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid);
 struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_pad **rpad);
 bool is_standalone_datapath(struct v4l2_subdev *sd);
 #endif /* _UTILS_H_ */

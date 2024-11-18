@@ -314,6 +314,19 @@ static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 	inst->fmt_cap_num = j;
 }
 
+static int sif_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
+{
+	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
+
+	if (!devid || !insid)
+		return -EINVAL;
+
+	*devid = sif->dev->id;
+	*insid = sif->id;
+
+	return 0;
+}
+
 static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 {
 	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
@@ -563,6 +576,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_frameinterval = sif_enum_ctx_frameinterval;
 		n->bctx.set_cap = sif_set_cap;
 		n->bctx.set_stream = sif_set_stream;
+		n->bctx.map_info = sif_map_info;
 
 		n->dev = dev;
 		n->num_pads = 3;
