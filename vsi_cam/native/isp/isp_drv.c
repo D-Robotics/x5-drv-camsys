@@ -378,7 +378,7 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	}
 
 	if (inst->attr.tile_mode) {
-		if(inst->attr.input_mode == ISP_STRM_MODE) {
+		if(dev->isp_dev.mode == ISP_STRM_MODE) {
 			pr_err("%s tile mode not supported in stream mode!\n", __func__);
 			return -EINVAL;
 		}
