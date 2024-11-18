@@ -172,9 +172,11 @@ static int vid_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&vid_dev->video_device_list);
+	INIT_LIST_HEAD(&vid_dev->m2m_video_device_list);
 
 	mdev = &vid_dev->mdev;
 	snprintf(mdev->model, sizeof(mdev->model), "%s", VID_MDEV_NAME);
+	snprintf(mdev->bus_info, sizeof(mdev->bus_info), "%s", VID_BUS_INFO);
 	mdev->ops = &vid_mdev_ops;
 	mdev->dev = dev;
 	media_device_init(mdev);

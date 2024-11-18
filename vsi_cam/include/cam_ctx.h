@@ -19,9 +19,15 @@ int cam_trigger(struct cam_ctx *ctx);
 
 bool cam_is_completed(struct cam_ctx *ctx);
 
-int cam_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
-		  bool has_internal_buf);
+struct init_attr {
+	bool en_reqbufs;
+	struct device *dev;
+};
 
+__weak
+int cam_ctx_init(struct cam_ctx *ctx, void *data, struct init_attr *attr);
+
+__weak
 void cam_ctx_release(struct cam_ctx *ctx);
 
 void sif_set_frame_des(struct cam_ctx *ctx, void *data);

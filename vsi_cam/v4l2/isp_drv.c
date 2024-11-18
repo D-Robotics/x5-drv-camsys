@@ -51,14 +51,18 @@ static int isp_link_setup(struct media_entity *entity,
 	struct media_pad *pad;
 	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
+	struct init_attr attr = {
+		.en_reqbufs = true,
+	}, *p_attr = NULL;
 	int index, rc = 0;
-	bool has_internal_buf = false, online;
+	bool online;
 
 	if (!entity)
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
 	isp = sd_to_isp_v4l_instance(sd);
+	attr.dev = sd->dev;
 
 	pad = media_pad_remote_pad_first(local);
 	if (pad && pad != remote)
@@ -74,7 +78,8 @@ static int isp_link_setup(struct media_entity *entity,
 				return -EBUSY;
 			if (lctx->is_sink_online_mode)
 				return 0;
-			has_internal_buf = !lctx->is_sink_online_mode;
+			if (!lctx->is_sink_online_mode)
+				p_attr = &attr;
 			online = lctx->is_sink_online_mode;
 		} else {
 			lctx->is_src_online_mode = rctx->is_sink_online_mode;
@@ -97,8 +102,7 @@ static int isp_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local,
-				      has_internal_buf);
+		rc = cam_ctx_init(buf_ctx, (void *)local, p_attr);
 		if (rc < 0)
 			return rc;
 		buf_ctx->online = online;
@@ -230,7 +234,7 @@ static int check_work_mode_param(enum isp_work_mode *mode)
 	return rc;
 }
 
-static u32 isp_get_ctx_format(struct v4l2_buf_ctx *ctx)
+static u32 isp_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	return 0;
 }
@@ -339,7 +343,7 @@ _exit:
 
 }
 
-static int isp_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+static int isp_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
 	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
 
@@ -408,11 +412,12 @@ static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
 	struct v4l2_subdev *sd, *rsd;
+	struct media_pad *pad;
 	int i, j = 0, rc;
 	u32 input_cam_fmt, pixelformat;
 
 	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, NULL);
+	rsd = get_remote_src_subdev(sd, &pad);
 	if (!rsd)
 		return;
 
@@ -420,7 +425,7 @@ static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 	memset(inst->input_fmt_cap, 0, sizeof(inst->input_fmt_cap));
 
 	for (i = 0; i < ARRAY_SIZE(inst->input_fmt_cap); i++) {
-		rc = v4l2_subdev_ctx_call(rsd, enum_format, i, &pixelformat);
+		rc = v4l2_subdev_ctx_call(rsd, enum_format, pad->index, i, &pixelformat);
 		if (rc < 0)
 			break;
 		if (!is_support_fmt(pixelformat))

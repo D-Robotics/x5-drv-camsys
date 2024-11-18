@@ -5,12 +5,6 @@
 
 #include "cam_buf.h"
 
-int cam_reqbufs(struct cam_ctx *ctx, unsigned int num,
-		struct cam_buf_ops *ops)
-{
-	return -EBUSY;
-}
-
 int cam_qbuf_irq(struct cam_ctx *ctx, struct cam_buf *buf, bool remote)
 {
 	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
@@ -69,26 +63,6 @@ struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx, bool remote)
 		vio_x_barrier_irqr(framemgr, flags);
 	}
 	return (struct cam_buf *)frame;
-}
-
-int cam_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
-{
-	return -EBUSY;
-}
-
-struct cam_buf *cam_dqbuf(struct cam_ctx *ctx)
-{
-	return NULL;
-}
-
-int cam_buf_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
-		     bool has_internal_buf)
-{
-	return 0;
-}
-
-void cam_buf_ctx_release(struct cam_ctx *ctx)
-{
 }
 
 phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf, unsigned int plane)

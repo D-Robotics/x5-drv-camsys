@@ -65,10 +65,9 @@ bool cam_is_completed(struct cam_ctx *ctx)
 	return vctx->is_completed(vctx);
 }
 
-int cam_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
-		     bool has_internal_buf)
+int cam_ctx_init(struct cam_ctx *ctx, void *data, struct init_attr *attr)
 {
-	return cam_buf_ctx_init(ctx, dev, data, has_internal_buf);
+	return cam_buf_ctx_init(ctx, data, attr);
 }
 
 void cam_ctx_release(struct cam_ctx *ctx)

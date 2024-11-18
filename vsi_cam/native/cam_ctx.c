@@ -62,17 +62,6 @@ bool cam_is_completed(struct cam_ctx *ctx)
 	return false;
 }
 
-int cam_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
-		  bool has_internal_buf)
-{
-	return cam_ctx_init(ctx, dev, data, has_internal_buf);
-}
-
-void cam_ctx_release(struct cam_ctx *ctx)
-{
-	cam_ctx_release(ctx);
-}
-
 void sif_set_frame_des(struct cam_ctx *ctx, void *data)
 {
 	struct vio_subdev *subdev = (struct vio_subdev *)ctx;

@@ -6,15 +6,14 @@
 #include "cam_buf.h"
 #include "cam_uapi.h"
 #include "utils.h"
-#include "video_fmt.h"
 #include "video.h"
+#include "video_com.h"
 #include "video_link.h"
+#include "video_m2m.h"
 #include "v4l2_usr_api.h"
 
 static int scene;
 module_param(scene, int, 0644);
-
-#define VID_FMT_MAX_NUM (20)
 
 struct vid_video_device {
 	struct video_device video;
@@ -94,98 +93,6 @@ static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx)
 	return buf;
 }
 
-static void init_fmt(struct v4l2_format *f, struct video_fmt *v_f)
-{
-	u32 bytesperline, sizeimage;
-
-	v4l_bound_align_image(&f->fmt.pix.width, MIN_W, MAX_W, ALIGN_W,
-			      &f->fmt.pix.height, MIN_H, MAX_H, ALIGN_H, 0);
-	bytesperline = ALIGN(f->fmt.pix.width * v_f->bpp, STRIDE_ALIGN);
-	if (v_f->bpp == 1)
-		sizeimage = f->fmt.pix.height * (bytesperline * v_f->bit_depth / 8);
-	else
-		sizeimage = f->fmt.pix.height * bytesperline;
-
-	if (f->fmt.pix.bytesperline < bytesperline)
-		f->fmt.pix.bytesperline = bytesperline;
-	if (f->fmt.pix.sizeimage < sizeimage)
-		f->fmt.pix.sizeimage = sizeimage;
-	f->fmt.pix.field = V4L2_FIELD_NONE;
-	f->fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
-}
-
-#define pad_to_remote_sd(pad)                                            \
-	({                                                                \
-		struct media_pad *_pad = media_pad_remote_pad_first(pad); \
-		struct v4l2_subdev *_sd = NULL;                           \
-		if (_pad)                                                 \
-			_sd = media_entity_to_v4l2_subdev(_pad->entity);  \
-		_sd;                                                      \
-	})
-
-
-static bool vid_check_pixelformat(struct vid_video_device *vdev, u32 pixelformat)
-{
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	int i, rc;
-	u32 fmt;
-
-	if (!sd)
-		return false;
-
-	for (i = 0; i < VID_FMT_MAX_NUM; i++) {
-		rc = v4l2_subdev_ctx_call(sd, enum_format, i, &fmt);
-		if (rc < 0)
-			return false;
-
-		if (fmt == pixelformat)
-			return true;
-	}
-	return false;
-}
-
-static int get_def_fmt(struct vid_video_device *vdev, struct v4l2_format *f)
-{
-	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct video_fmt *v_f;
-	struct v4l2_frmsizeenum fsize;
-	u32 pixelformat = f->fmt.pix.pixelformat, width, height;
-	int rc;
-
-	if (!vid_check_pixelformat(vdev, pixelformat)) {
-		rc = v4l2_subdev_ctx_call(sd, enum_format, 0, &pixelformat);
-		if (rc < 0)
-			return rc;
-	}
-
-	memset(&fsize, 0, sizeof(fsize));
-	fsize.pixel_format = pixelformat;
-	rc = v4l2_subdev_ctx_call(sd, enum_framesize, pad->index, &fsize);
-	if (rc < 0)
-		return rc;
-
-	if (fsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
-		width = fsize.discrete.width;
-		height = fsize.discrete.height;
-	} else if (fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
-		width = fsize.stepwise.min_width;
-		height = fsize.stepwise.max_width;
-	} else {
-		return -EINVAL;
-	}
-
-	v_f = get_fmt_by_pixelformat(pixelformat);
-	if (!v_f)
-		return -EINVAL;
-
-	f->fmt.pix.pixelformat = pixelformat;
-	f->fmt.pix.width = width;
-	f->fmt.pix.height = height;
-	init_fmt(f, v_f);
-	return 0;
-}
-
 static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 			   unsigned int *num_planes, unsigned int sizes[],
 			   struct device *alloc_devs[])
@@ -195,7 +102,7 @@ static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 	int rc;
 
 	if (!vdev->fmt.fmt.pix.sizeimage) {
-		rc = get_def_fmt(vdev, &vdev->fmt);
+		rc = get_def_fmt(&vdev->pad, &vdev->fmt);
 		if (rc < 0)
 			return rc;
 	}
@@ -219,13 +126,11 @@ static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 
 static inline void notify_buf_ready(struct vid_video_device *dev, int on)
 {
-	struct media_pad *pad = media_pad_remote_pad_first(&dev->pad);
 	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&dev->pad, &sd);
 
-	if (pad) {
-		sd = media_entity_to_v4l2_subdev(pad->entity);
+	if (sd)
 		v4l2_subdev_ctx_call_no_return(sd, ready, pad->index, on);
-	}
 }
 
 static void vid_buf_queue(struct vb2_buffer *vb)
@@ -262,11 +167,14 @@ static void vid_return_all_buffers(struct vid_video_device *dev,
 static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
 	int rc;
 
 	vdev->buf_sequence = 0;
+	if (!sd)
+		return -ENOLINK;
+
 	v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 1);
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
@@ -284,9 +192,12 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 static void vid_stop_streaming(struct vb2_queue *vq)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
 	int rc;
+
+	if (!sd)
+		return;
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 0);
 	if (rc < 0)
@@ -311,27 +222,18 @@ static const struct vb2_ops vid_vb2_ops = {
 #define file_to_video_device(file) \
 	container_of(video_drvdata(file), struct vid_video_device, bctx)
 
-static int vid_querycap(struct file *file, void *fh,
-			struct v4l2_capability *cap)
-{
-	struct vid_video_device *vdev = file_to_video_device(file);
-
-	strscpy(cap->driver, VID_DEV_NAME, sizeof(cap->driver));
-	strscpy(cap->card, VID_DEV_NAME, sizeof(cap->card));
-	snprintf((char *)cap->bus_info, sizeof(cap->bus_info),
-		 "platform:vscam%d", vdev->id);
-	return 0;
-}
-
 static int vid_enum_fmt(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	return v4l2_subdev_ctx_call(sd, enum_format, f->index, &f->pixelformat);
+	if (sd)
+		return v4l2_subdev_ctx_call(sd, enum_format, pad->index, f->index, &f->pixelformat);
+	return -ENOLINK;
 }
 
 static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
@@ -343,7 +245,7 @@ static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
 		return -EINVAL;
 
 	if (!vdev->fmt.fmt.pix.pixelformat) {
-		rc = get_def_fmt(vdev, &vdev->fmt);
+		rc = get_def_fmt(&vdev->pad, &vdev->fmt);
 		if (rc < 0)
 			return rc;
 	}
@@ -355,13 +257,12 @@ static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
 static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 		     bool is_try)
 {
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
 	struct video_fmt *v_f;
 	int rc;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
+	if (!sd)
 		return -ENOLINK;
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
@@ -375,14 +276,13 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 
 	if (f->fmt.pix.width < MIN_W || f->fmt.pix.height < MIN_H ||
 	    f->fmt.pix.width > MAX_W || f->fmt.pix.height > MAX_H) {
-		rc = get_def_fmt(vdev, f);
+		rc = get_def_fmt(&vdev->pad, f);
 		if (rc < 0) {
 			pr_err("%s get_def_fmt failed\n", __func__);
-			return -EINVAL;
+			return rc;
 		}
 	}
 
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 	rc = v4l2_subdev_ctx_call(sd, set_format, pad->index, f, is_try);
 	if (rc < 0) {
 		pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
@@ -398,10 +298,13 @@ static int vid_try_fmt(struct file *file, void *fh, struct v4l2_format *f)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	int rc;
 
-	if (!vid_check_pixelformat(vdev, f->fmt.pix.pixelformat)) {
-		rc = get_def_fmt(vdev, f);
+	rc = vid_check_pixelformat(&vdev->pad, f->fmt.pix.pixelformat);
+	if (rc < 0)
+		return rc;
+	if (rc) {
+		rc = get_def_fmt(&vdev->pad, f);
 		if (rc < 0)
-			return -EINVAL;
+			return rc;
 	}
 
 	return try_s_fmt(vdev, f, true);
@@ -418,10 +321,13 @@ static int vid_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 		return -EBUSY;
 	}
 
-	if (!vid_check_pixelformat(vdev, f->fmt.pix.pixelformat)) {
-		rc = get_def_fmt(vdev, f);
+	rc = vid_check_pixelformat(&vdev->pad, f->fmt.pix.pixelformat);
+	if (rc < 0)
+		return rc;
+	if (rc) {
+		rc = get_def_fmt(&vdev->pad, f);
 		if (rc < 0)
-			return -EINVAL;
+			return rc;
 	}
 
 	rc = try_s_fmt(vdev, f, false);
@@ -436,26 +342,40 @@ static int vid_enum_framesizes(struct file *file, void *fh,
 			       struct v4l2_frmsizeenum *fsize)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	int rc;
 
-	if (!vid_check_pixelformat(vdev, fsize->pixel_format))
+	if (fsize->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	return v4l2_subdev_ctx_call(sd, enum_framesize, pad->index, fsize);
+	rc = vid_check_pixelformat(&vdev->pad, fsize->pixel_format);
+	if (rc)
+		return -EINVAL;
+
+	if (sd)
+		return v4l2_subdev_ctx_call(sd, enum_framesize, pad->index, fsize);
+	return -ENOLINK;
 }
 
 static int vid_enum_frameintervals(struct file *file, void *fh,
 				   struct v4l2_frmivalenum *fival)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
-	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_subdev *sd;
+	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	int rc;
 
-	if (!vid_check_pixelformat(vdev, fival->pixel_format))
+	if (fival->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	return v4l2_subdev_ctx_call(sd, enum_frameinterval, pad->index, fival);
+	rc = vid_check_pixelformat(&vdev->pad, fival->pixel_format);
+	if (rc)
+		return -EINVAL;
+
+	if (sd)
+		return v4l2_subdev_ctx_call(sd, enum_frameinterval, pad->index, fival);
+	return -ENOLINK;
 }
 
 static int vid_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
@@ -497,23 +417,29 @@ static long vid_ioctl(struct file *file, void *fh, bool valid_prio, unsigned int
 static int vid_g_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct v4l2_subdev *sd;
 
 	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	return v4l2_g_parm_cap(&vdev->video, sd, a);
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (sd)
+		return v4l2_g_parm_cap(&vdev->video, sd, a);
+	return -ENOLINK;
 }
 
 static int vid_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct v4l2_subdev *sd;
 
 	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	return v4l2_s_parm_cap(&vdev->video, sd, a);
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (sd)
+		return v4l2_s_parm_cap(&vdev->video, sd, a);
+	return -ENOLINK;
 }
 
 static int vid_enum_input(struct file *file, void *priv,
@@ -547,13 +473,10 @@ static int vid_s_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 
 	ctrl.ctrl_id = a->id;
 	memcpy(&ctrl.ctrl_data, &a->value, sizeof(a->value));
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
-		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
-
-	return v4l2_subdev_call(sd, core, command, CAM_SET_CTRL, &ctrl);
+	pad = get_remote_pad_sd(&vdev->pad, &sd);
+	if (sd)
+		return v4l2_subdev_call(sd, core, command, CAM_SET_CTRL, &ctrl);
+	return -ENOLINK;
 }
 
 static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
@@ -565,11 +488,9 @@ static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 	int rc = 0;
 
 	ctrl.ctrl_id = a->id;
-	pad = media_pad_remote_pad_first(&vdev->pad);
+	pad = get_remote_pad_sd(&vdev->pad, &sd);
 	if (!pad)
 		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	rc = v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &ctrl);
 	if (rc < 0)
@@ -588,11 +509,10 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	bool sd_is_vse = false;
 	int rc = 0;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
+	pad = get_remote_pad_sd(&vdev->pad, &sd);
 	if (!pad)
 		return -ENOLINK;
 
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
 	for (int i = 0; i < a->count; i++) {
 		if (sd_is_vse) {
@@ -617,11 +537,10 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	bool sd_is_vse = false;
 	int rc = 0;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
+	pad = get_remote_pad_sd(&vdev->pad, &sd);
 	if (!pad)
 		return -ENOLINK;
 
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
 	for (int i = 0; i < a->count; i++) {
 		if (sd_is_vse) {
@@ -642,43 +561,34 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 static int vid_queryctrl(struct file *file, void *fh, struct v4l2_queryctrl *a)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
-		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
-	return v4l2_subdev_call(sd, core, command, CAM_QUERY_CTRL, a);
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (sd)
+		return v4l2_subdev_call(sd, core, command, CAM_QUERY_CTRL, a);
+	return -ENOLINK;
 }
 
 static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext_ctrl *a)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
-		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
-	return v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (sd)
+		return v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
+	return -ENOLINK;
 }
 
 static int vid_ioc_reqbufs(struct file *file, void *fh, struct v4l2_requestbuffers *b)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
-	int rc = 0;
+	int rc;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (!sd)
 		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	rc = vb2_ioctl_reqbufs(file, fh, b);
 	if (rc < 0)
@@ -693,21 +603,17 @@ static int vid_ioc_reqbufs(struct file *file, void *fh, struct v4l2_requestbuffe
 	if (is_standalone_datapath(sd))
 		rc = v4l2_subdev_call(sd, core, command, CAM_REQ_BUF,
 			(void *)&vdev->capture_queue_offset);
-
 	return rc;
 }
 
 static int vid_ioc_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (!sd)
 		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return vb2_ioctl_querybuf(file, fh, b);
@@ -718,14 +624,11 @@ static int vid_ioc_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
 static int vid_ioc_qbuf(struct file *file, void *fh, struct v4l2_buffer *b)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (!sd)
 		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return vb2_ioctl_qbuf(file, fh, b);
@@ -736,14 +639,11 @@ static int vid_ioc_qbuf(struct file *file, void *fh, struct v4l2_buffer *b)
 static int vid_ioc_dqbuf(struct file *file, void *fh, struct v4l2_buffer *b)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (!sd)
 		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return vb2_ioctl_dqbuf(file, fh, b);
@@ -791,7 +691,6 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 static int vid_open(struct file *file)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 	int rc;
 
@@ -807,13 +706,12 @@ static int vid_open(struct file *file)
 		return 0;
 	}
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad) {
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (!sd) {
 		v4l2_fh_release(file);
 		return -ENOLINK;
 	}
 
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 	if (sd->internal_ops && sd->internal_ops->open)
 		sd->internal_ops->open(sd, NULL/*subdev_fh*/);
 	return 0;
@@ -822,7 +720,6 @@ static int vid_open(struct file *file)
 static int vid_release(struct file *file)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 	int rc;
 
@@ -840,11 +737,10 @@ static int vid_release(struct file *file)
 		return rc;
 	}
 
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (!sd)
 		return -ENOLINK;
 
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 	if (sd->internal_ops && sd->internal_ops->close)
 		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
 
@@ -856,41 +752,21 @@ static int vid_release(struct file *file)
 	return 0;
 }
 
-static int vid_link_setup(struct media_entity *entity,
-			  const struct media_pad *local,
-			  const struct media_pad *remote, u32 flags)
-{
-	return 0;
-}
-
-static int vid_link_validate(struct media_link *link)
-{
-	return 0;
-}
-
-static const struct media_entity_operations vid_media_ops = {
-	.link_setup = vid_link_setup,
-	.link_validate = vid_link_validate,
-};
-
 static int vid_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
 	struct vid_video_device *vdev = file_to_video_device(file);
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
-
-	pad = media_pad_remote_pad_first(&vdev->pad);
-	if (!pad)
-		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (offset < vdev->capture_queue_offset)
 		return vb2_fop_mmap(file, vma);
 
-	vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
-	return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
+	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	if (sd) {
+		vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
+		return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
+	}
+	return -ENOLINK;
 }
 
 static const struct v4l2_file_operations video_ops = {
@@ -1227,7 +1103,23 @@ int create_default_links(struct vid_device *vdev)
 		if (!src)
 			continue;
 
-		if (!strcmp(link->sink_name, "video")) {
+		if (!strcmp(link->sink_name, "video-m2m")) {
+			struct vid_m2m_video_device *v =
+					create_m2m_video_device(vdev, j++);
+
+			if (IS_ERR(v))
+				return (int)PTR_ERR(v);
+
+			sink = &v->video.entity;
+			/* create video input (pad:0) to subdev (pad:0) link */
+			rc = create_link(vdev->v4l2_dev.dev, sink, 0, src, 0, MEDIA_LNK_FL_ENABLED);
+			if (rc < 0) {
+				dev_err(vdev->v4l2_dev.dev,
+					"failed to create link, src_pad=0, sink_pad=0\n");
+				destroy_links(vdev);
+				return rc;
+			}
+		} else if (!strcmp(link->sink_name, "video")) {
 			v = create_video_device(vdev, j++);
 			if (IS_ERR(v))
 				return (int)PTR_ERR(v);
@@ -1244,7 +1136,7 @@ int create_default_links(struct vid_device *vdev)
 				 link->sink_pad, link->flags);
 		if (rc < 0) {
 			dev_err(vdev->v4l2_dev.dev,
-				"failed to create link, src_pad=%d, sink_pad=%d",
+				"failed to create link, src_pad=%d, sink_pad=%d\n",
 				link->src_pad, link->sink_pad);
 			destroy_links(vdev);
 			return rc;
@@ -1257,6 +1149,7 @@ void destroy_links(struct vid_device *vdev)
 {
 	struct v4l2_subdev *sd;
 	struct vid_video_device *v;
+	struct vid_m2m_video_device *vm;
 
 	if (unlikely(!vdev))
 		return;
@@ -1268,38 +1161,46 @@ void destroy_links(struct vid_device *vdev)
 		media_entity_remove_links(&v->video.entity);
 		destroy_video_device(v);
 	}
+
+	list_for_each_entry(vm, &vdev->m2m_video_device_list, entry) {
+		media_entity_remove_links(&vm->video.entity);
+		destroy_m2m_video_device(vm);
+	}
 }
 
 int vid_subdev_set_cap(struct vid_device *vdev)
 {
+	struct vid_m2m_video_device *vm;
 	struct vid_video_device *v;
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	struct media_pad *pad;
 
-	list_for_each_entry(v, &vdev->video_device_list, entry) {
-		pad = media_pad_remote_pad_first(&v->pad);
-		if (!pad)
-			return -ENOLINK;
-		sd = media_entity_to_v4l2_subdev(pad->entity);
-		v4l2_subdev_ctx_call_no_return(sd, set_cap);
+	list_for_each_entry(vm, &vdev->m2m_video_device_list, entry) {
+		pad = get_pad(&vm->video.entity, 0, true);
+		(void)get_remote_pad_sd(pad, &sd);
+		if (sd)
+			v4l2_subdev_ctx_call_no_return(sd, set_cap);
 	}
 
+	list_for_each_entry(v, &vdev->video_device_list, entry) {
+		(void)get_remote_pad_sd(&v->pad, &sd);
+		if (sd)
+			v4l2_subdev_ctx_call_no_return(sd, set_cap);
+	}
 	return 0;
 }
 
 int vid_subdev_init_output_ctx(struct vid_device *vdev)
 {
 	struct vid_video_device *v;
-	struct media_pad *pad;
 	struct v4l2_subdev *sd;
 	struct v4l2_buf_ctx *ctx;
 	int rc = 0;
 
 	list_for_each_entry(v, &vdev->video_device_list, entry) {
-		pad = media_pad_remote_pad_first(&v->pad);
-		if (!pad)
+		(void)get_remote_pad_sd(&v->pad, &sd);
+		if (!sd)
 			return -ENOLINK;
-		sd = media_entity_to_v4l2_subdev(pad->entity);
 		ctx = v4l2_get_subdevdata(sd);
 		if (ctx && ctx->is_standalone && ctx->is_standalone(ctx))
 			v->video.vfl_dir = VFL_DIR_M2M;

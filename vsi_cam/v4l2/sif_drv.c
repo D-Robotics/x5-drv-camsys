@@ -69,7 +69,7 @@ static int sif_link_setup(struct media_entity *entity,
 			src_ctx = &sif->src_ctx;
 			if (src_ctx->pad)
 				return -EBUSY;
-			rc = cam_ctx_init(src_ctx, sd->dev, (void *)local, false);
+			rc = cam_ctx_init(src_ctx, (void *)local, NULL);
 			if (rc < 0)
 				return rc;
 			if (rctx->is_sink_online_mode)
@@ -85,7 +85,7 @@ static int sif_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local, false);
+		rc = cam_ctx_init(buf_ctx, (void *)local, NULL);
 		if (rc < 0)
 			return rc;
 	} else {
@@ -132,7 +132,7 @@ static bool is_same_cam_format(struct cam_format *f1, struct cam_format *f2)
 	return false;
 }
 
-static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx)
+static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	return 0;
 }
@@ -202,7 +202,7 @@ _exit:
 	return rc;
 }
 
-static int sif_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+static int sif_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
 

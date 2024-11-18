@@ -14,6 +14,7 @@ struct local_buf_ctx {
 	struct list_head done_list;
 	spinlock_t buflock; /* lock for local buf */
 	struct cam_buf_ops *ops;
+	bool en_reqbufs;
 };
 
 static enum vb2_memory memory = VB2_MEMORY_MMAP;
@@ -69,8 +70,8 @@ static const struct vb2_ops cam_vb2_ops = {
 	.stop_streaming = cam_stop_streaming,
 };
 
-static struct local_buf_ctx *create_local_buf_ctx(struct device *dev,
-						  void *priv)
+static struct local_buf_ctx *create_local_buf_ctx(struct init_attr *attr,
+						  struct cam_ctx *arg)
 {
 	struct local_buf_ctx *ctx;
 	int rc;
@@ -81,31 +82,40 @@ static struct local_buf_ctx *create_local_buf_ctx(struct device *dev,
 
 	INIT_LIST_HEAD(&ctx->queued_list);
 	INIT_LIST_HEAD(&ctx->done_list);
-	mutex_init(&ctx->lock);
 	spin_lock_init(&ctx->buflock);
+	ctx->en_reqbufs = attr->en_reqbufs;
+	if (attr->en_reqbufs) {
+		if (!attr->dev) {
+			kfree(ctx);
+			return NULL;
+		}
 
-	ctx->queue.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	ctx->queue.drv_priv = priv;
-	ctx->queue.ops = &cam_vb2_ops;
-	ctx->queue.io_modes = VB2_MMAP;
-	ctx->queue.mem_ops = &vb2_dma_contig_memops;
-	ctx->queue.buf_struct_size = sizeof(struct cam_buf);
-	ctx->queue.min_buffers_needed = 2;
-	ctx->queue.timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
-	ctx->queue.lock = &ctx->lock;
-	ctx->queue.dev = dev;
+		mutex_init(&ctx->lock);
+		ctx->queue.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		ctx->queue.drv_priv = arg;
+		ctx->queue.ops = &cam_vb2_ops;
+		ctx->queue.io_modes = VB2_MMAP;
+		ctx->queue.mem_ops = &vb2_dma_contig_memops;
+		ctx->queue.buf_struct_size = sizeof(struct cam_buf);
+		ctx->queue.min_buffers_needed = 2;
+		ctx->queue.timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
+		ctx->queue.lock = &ctx->lock;
+		ctx->queue.dev = attr->dev;
 
-	rc = vb2_core_queue_init(&ctx->queue);
-	if (rc < 0) {
-		kfree(ctx);
-		return NULL;
+		rc = vb2_core_queue_init(&ctx->queue);
+		if (rc < 0) {
+			kfree(ctx);
+			return NULL;
+		}
 	}
 	return ctx;
 }
 
 static void destroy_local_buf_ctx(struct local_buf_ctx *ctx)
 {
-	vb2_core_queue_release(&ctx->queue);
+	if (ctx->en_reqbufs)
+		vb2_core_queue_release(&ctx->queue);
+	mutex_destroy(&ctx->lock);
 	kfree(ctx);
 }
 
@@ -120,6 +130,9 @@ int cam_reqbufs(struct cam_ctx *ctx, unsigned int num,
 		return -EINVAL;
 
 	lbc = ctx->priv;
+
+	if (!lbc->en_reqbufs)
+		return -EINVAL;
 
 	lbc->ops = ops;
 
@@ -369,8 +382,7 @@ struct cam_buf *cam_acqbuf(struct cam_ctx *ctx)
 	return buf;
 }
 
-int cam_buf_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
-		     bool has_internal_buf)
+int cam_buf_ctx_init(struct cam_ctx *ctx, void *data, struct init_attr *attr)
 {
 	struct local_buf_ctx *lbc;
 
@@ -382,8 +394,8 @@ int cam_buf_ctx_init(struct cam_ctx *ctx, struct device *dev, void *data,
 
 	ctx->pad = (struct media_pad *)data;
 
-	if (has_internal_buf) {
-		lbc = create_local_buf_ctx(dev, ctx);
+	if (attr) {
+		lbc = create_local_buf_ctx(attr, ctx);
 		if (!lbc)
 			return -EFAULT;
 		ctx->priv = lbc;

@@ -9,6 +9,7 @@
 
 #define VSE_INPUT_RES_MAX (10)
 #define VSE_FMT_MAX (5)
+#define VSE_INPUT_FMT_MAX (5)
 
 struct vse_v4l_instance {
 	struct subdev_node node;
@@ -23,10 +24,13 @@ struct vse_v4l_instance {
 	struct cam_res_cap res_cap[VSE_OUT_CHNL_MAX];
 	struct cam_res_cap input_res_cap[VSE_INPUT_RES_MAX];
 	struct cam_res_cap input_res;
+	struct cam_res_cap input_res_range;
 	u32 input_res_cap_num;
 	u32 fmt_cap[VSE_FMT_MAX]; /* pixelformat */
 	u32 fmt_cap_num;
-	u32 input_fmt; /* pixelformat */
+	u32 input_fmt;
+	u32 input_fmt_cap[VSE_INPUT_FMT_MAX]; /* pixelformat */
+	u32 input_fmt_cap_num;
 	struct mutex open_lock;
 	struct mutex fmt_lock;
 	struct mutex standalone_lock;

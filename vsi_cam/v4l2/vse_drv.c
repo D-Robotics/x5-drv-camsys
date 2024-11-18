@@ -45,15 +45,17 @@ static int vse_link_setup(struct media_entity *entity,
 	struct media_pad *pad;
 	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
-	int rc = 0;
-	int index = -1;
-	bool has_internal_buf = false;
+	struct init_attr attr = {
+		.en_reqbufs = true,
+	}, *p_attr = NULL;
+	int rc = 0, index = -1;
 
 	if (!entity)
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
 	vse = sd_to_vse_v4l_instance(sd);
+	attr.dev = sd->dev;
 
 	pad = media_pad_remote_pad_first(local);
 	if (pad && pad != remote)
@@ -69,8 +71,12 @@ static int vse_link_setup(struct media_entity *entity,
 		} else {
 			if (lctx->is_sink_online_mode != rctx->is_src_online_mode)
 				return -EBUSY;
-			has_internal_buf = !lctx->is_sink_online_mode;
+			if (!lctx->is_sink_online_mode)
+				p_attr = &attr;
 		}
+	} else if (local->flags & MEDIA_PAD_FL_SINK) {
+		attr.en_reqbufs = false;
+		p_attr = &attr;
 	}
 
 	if (local->flags & MEDIA_PAD_FL_SINK) {
@@ -86,8 +92,7 @@ static int vse_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local,
-				      has_internal_buf);
+		rc = cam_ctx_init(buf_ctx, (void *)local, p_attr);
 		if (rc < 0)
 			return rc;
 	} else {
@@ -178,7 +183,7 @@ static bool vse_is_completed(struct v4l2_buf_ctx *ctx)
 	return rc;
 }
 
-static u32 vse_get_ctx_format(struct v4l2_buf_ctx *ctx)
+static u32 vse_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	return 0;
 }
@@ -192,6 +197,47 @@ static uint32_t vse_get_sensor_fps(struct v4l2_subdev *sd)
 	subdev_call_command(sd, CAM_GET_CTRL, &sctrl);
 	memcpy(&fps, &sctrl.ctrl_data, sizeof(fps));
 	return fps;
+}
+
+static void vse_set_res_cap(struct vse_v4l_instance *inst);
+static int vse_set_ctx_format_out(struct v4l2_buf_ctx *ctx, struct v4l2_format *format, bool is_try)
+{
+	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+
+	if (!is_try) {
+		inst->input_fmt = format->fmt.pix.pixelformat;
+		inst->input_res.dc.width = format->fmt.pix.width;
+		inst->input_res.dc.height = format->fmt.pix.height;
+		vse_set_res_cap(inst);
+	}
+	return 0;
+}
+
+static int vse_enum_ctx_format_out(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+{
+	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+
+	if (index >= inst->input_fmt_cap_num)
+		return -EINVAL;
+
+	*format = inst->input_fmt_cap[index];
+	return 0;
+}
+
+static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx, struct v4l2_frmsizeenum *fsize)
+{
+	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct cam_res_cap *res;
+
+	res = &inst->input_res_range;
+	fsize->type = res->type;
+	fsize->stepwise.min_width = res->sw.min_width;
+	fsize->stepwise.max_width = res->sw.max_width;
+	fsize->stepwise.min_height = res->sw.min_height;
+	fsize->stepwise.max_height = res->sw.max_height;
+	fsize->stepwise.step_width = res->sw.step_width;
+	fsize->stepwise.step_height = res->sw.step_height;
+	return 0;
 }
 
 static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -208,6 +254,9 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	int channel = -1;
 	int hfactor = 1, vfactor = 1;
 	int rc = 0;
+
+	if (!pad)
+		return vse_set_ctx_format_out(ctx, format, is_try);
 
 	if (pad < inst->node.num_pads)
 		channel = pad - 1;
@@ -281,15 +330,17 @@ _exit:
 	return rc;
 }
 
-static int vse_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+static int vse_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
 	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+
+	if (!pad)
+		return vse_enum_ctx_format_out(ctx, index, format);
 
 	if (index >= inst->fmt_cap_num)
 		return -EINVAL;
 
 	*format = inst->fmt_cap[index];
-
 	return 0;
 }
 
@@ -299,6 +350,9 @@ static int vse_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
 	struct cam_res_cap *res;
 	int channel = -1;
+
+	if (!pad)
+		return vse_enum_ctx_framesize_out(ctx, fsize);
 
 	if (pad < inst->node.num_pads)
 		channel = pad - 1;
@@ -380,7 +434,7 @@ static int vse_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 
 static void vse_set_res_cap(struct vse_v4l_instance *inst)
 {
-	struct cam_res_cap *res;
+	struct cam_res_cap *res, *input_res;
 	int i;
 	u32 iwidth, iheight;
 
@@ -424,6 +478,16 @@ static void vse_set_res_cap(struct vse_v4l_instance *inst)
 			break;
 		}
 	}
+
+	//fixme
+	input_res = &inst->input_res_range;
+	input_res->type = V4L2_FRMSIZE_TYPE_STEPWISE;
+	input_res->sw.min_width = 1;
+	input_res->sw.min_height = 1;
+	input_res->sw.max_width = 5432;
+	input_res->sw.max_height = 3076;
+	input_res->sw.step_width = 1;
+	input_res->sw.step_height = 1;
 }
 
 static void vse_set_default_input(struct vse_v4l_instance *inst)
@@ -444,6 +508,8 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 
 	inst->fmt_cap[0] = V4L2_PIX_FMT_NV12;
 	inst->fmt_cap_num = 1;
+	inst->input_fmt_cap[0] = V4L2_PIX_FMT_NV12;
+	inst->input_fmt_cap_num = 1;
 	inst->input_fmt = V4L2_PIX_FMT_NV12;
 
 	vse_set_default_input(inst);
@@ -500,10 +566,12 @@ static int vse_init_output_ctx(struct v4l2_buf_ctx *ctx)
 	buf_ctx = &inst->sink_ctx;
 	pad = &inst->node.pads[0];
 
-	if (!buf_ctx->pad)
-		return cam_ctx_init(buf_ctx, sd->dev, (void *)pad, true);
-	else
-		return 0;
+	if (!buf_ctx->pad) {
+		struct init_attr attr = {true, sd->dev};
+
+		return cam_ctx_init(buf_ctx, (void *)pad, &attr);
+	}
+	return 0;
 }
 
 static bool vse_is_standalone(struct v4l2_buf_ctx *ctx)

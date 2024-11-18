@@ -7,12 +7,14 @@
 #include <media/v4l2-device.h>
 
 #define VID_DEV_NAME        "vs-video"
+#define VID_BUS_INFO        "platform:vscam"
 
 struct vid_device {
 	struct media_device mdev;
 	struct v4l2_device v4l2_dev;
 	struct v4l2_async_notifier sd_notifier;
 	struct list_head video_device_list;
+	struct list_head m2m_video_device_list;
 };
 
 #endif /* _VID_DRV_H_ */

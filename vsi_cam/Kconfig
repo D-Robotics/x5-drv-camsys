@@ -164,6 +164,7 @@ config VIDEO_VS_GDC_ARM_V4L
 config VIDEO_VS_VID_V4L
 	tristate "VeriSilicon Software Video (V4L) Support"
 	depends on VIDEO_VS_ISP_V4L || VIDEO_VS_VSE_V4L || VIDEO_VS_SIF_V4L
+	select V4L2_MEM2MEM_DEV
 	help
 	  This is a software driver that is complying with Video for Linux 2
 	  framework to create all required video devices and construct media

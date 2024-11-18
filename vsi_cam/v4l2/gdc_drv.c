@@ -34,14 +34,17 @@ static int gdc_link_setup(struct media_entity *entity,
 	struct media_pad *pad;
 	struct cam_ctx *buf_ctx;
 	struct v4l2_buf_ctx *rctx, *lctx;
+	struct init_attr attr = {
+		.en_reqbufs = true,
+	}, *p_attr = NULL;
 	int rc = 0;
-	bool has_internal_buf = false;
 
 	if (!entity)
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
 	gdc = sd_to_gdc_v4l_instance(sd);
+	attr.dev = sd->dev;
 
 	pad = media_pad_remote_pad_first(local);
 	if (pad && pad != remote)
@@ -57,12 +60,15 @@ static int gdc_link_setup(struct media_entity *entity,
 				return -EBUSY;
 			if (lctx->is_sink_online_mode)
 				return -EBUSY;
-			has_internal_buf = true;
+			p_attr = &attr;
 		} else {
 			lctx->is_src_online_mode = rctx->is_sink_online_mode;
 			if (lctx->is_src_online_mode)
 				return -EBUSY;
 		}
+	} else if (local->flags & MEDIA_PAD_FL_SINK) {
+		attr.en_reqbufs = false;
+		p_attr = &attr;
 	}
 
 	if (local->flags & MEDIA_PAD_FL_SINK)
@@ -74,8 +80,7 @@ static int gdc_link_setup(struct media_entity *entity,
 		if (buf_ctx->pad)
 			return -EBUSY;
 
-		rc = cam_ctx_init(buf_ctx, sd->dev, (void *)local,
-				      has_internal_buf);
+		rc = cam_ctx_init(buf_ctx, (void *)local, p_attr);
 		if (rc < 0)
 			return rc;
 	} else {
@@ -154,7 +159,7 @@ static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx)
 	return cam_acqbuf(&gdc->sink_ctx);
 }
 
-static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx)
+static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	return 0;
 }
@@ -194,7 +199,7 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 
 }
 
-static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
+static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
 

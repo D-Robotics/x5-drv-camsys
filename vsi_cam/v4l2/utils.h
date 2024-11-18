@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _UTILS_H_
 #define _UTILS_H_
+#include <media/v4l2-mem2mem.h>
 #include <media/v4l2-subdev.h>
 #include <media/videobuf2-v4l2.h>
 
@@ -22,8 +23,7 @@
 
 #define vb2_buf_to_cam_buf(vb2) \
 ({ \
-	struct vb2_v4l2_buffer *vbuf = \
-			container_of(vb2, struct vb2_v4l2_buffer, vb2_buf); \
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb2); \
 	container_of(vbuf, struct cam_buf, vb); \
 })
 
@@ -59,7 +59,10 @@ do { \
 #define V4L2_MIN(x, y) ((x) > (y) ? (y) : (x))
 
 struct cam_buf {
-	struct vb2_v4l2_buffer vb;
+	union {
+		struct vb2_v4l2_buffer vb;
+		struct v4l2_m2m_buffer m2m;
+	};
 	struct list_head entry;
 };
 
@@ -73,10 +76,11 @@ struct cam_ctx {
 struct v4l2_buf_ctx {
 	u32 magic;
 	bool is_sink_online_mode, is_src_online_mode;
-	u32 (*get_format)(struct v4l2_buf_ctx *ctx);
+	u32 (*get_format)(struct v4l2_buf_ctx *ctx, u32 pad);
 	int (*set_format)(struct v4l2_buf_ctx *ctx, u32 pad,
-				  struct v4l2_format *format, bool is_try);
-	int (*enum_format)(struct v4l2_buf_ctx *ctx, u32 index, u32 *format);
+			  struct v4l2_format *format, bool is_try);
+	int (*enum_format)(struct v4l2_buf_ctx *ctx, u32 pad, u32 index,
+			   u32 *format);
 	int (*enum_framesize)(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_frmsizeenum *fsize);
 	int (*enum_frameinterval)(struct v4l2_buf_ctx *ctx, u32 pad,
