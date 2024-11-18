@@ -138,7 +138,7 @@ static s32 vse_nat_open(struct vio_video_ctx *vctx)
 
 	nat_dev = (struct vse_nat_device *)vctx->device;
 
-	if (nat_dev && vctx->id == VNODE_ID_CAP) {
+	if (nat_dev && vctx->id == VNODE_ID_SRC) {
 		rc = vse_open(&nat_dev->vse_dev, vctx->ctx_id);
 		if (rc < 0) {
 			pr_err("%s failed to call isp_open(err=%d).\n", __func__, rc);
@@ -151,20 +151,18 @@ static s32 vse_nat_open(struct vio_video_ctx *vctx)
 static s32 vse_nat_close(struct vio_video_ctx *vctx)
 {
 	struct vse_nat_instance *inst;
+	struct vse_nat_device *nat_dev;
+	u32 ochn_id;
 	int rc = 0;
 
-	if (!vctx || !vctx->vdev) {
-		pr_err("%s:vctx or vctx->vdev null\n", __func__);
+	if (!vctx) {
+		pr_err("%s:vctx null\n", __func__);
 		return -EINVAL;
 	}
 
-	inst = container_of(vctx->vdev, struct vse_nat_instance, vdev);
-	if (!inst) {
-		pr_err("%s:inst null\n", __func__);
-		return -EINVAL;
-	}
-
-	if (vctx->id == VNODE_ID_CAP) {
+	nat_dev = (struct vse_nat_device *)vctx->device;
+	if (vctx->id == VNODE_ID_SRC) {
+		inst = &nat_dev->src_instance[vctx->ctx_id];
 		pr_info("%s set vse state to CLOSED\n", __func__);
 		if (!inst->dev) {
 			pr_err("%s:inst->dev null\n", __func__);
@@ -176,6 +174,11 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 			pr_err("%s vse_close(ret=%d).\n", __func__, rc);
 			return rc;
 		}
+	} else if (vctx->id >= VNODE_ID_CAP) {
+		ochn_id = vctx->id - VNODE_ID_CAP;
+		inst = &nat_dev->cap_instance[ochn_id][vctx->ctx_id];
+	} else {
+		return -EINVAL;
 	}
 
 	memset(&inst->attr, 0, sizeof(inst->attr));
