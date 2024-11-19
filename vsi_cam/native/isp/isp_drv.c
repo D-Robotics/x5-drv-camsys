@@ -262,7 +262,21 @@ static s32 isp_video_s_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 		case ctrl_id_3dnr_attr:
 			size = sizeof(hbn_isp_3dnr_attr_t);
 			break;
+		case ctrl_id_request_msg:
+			isp_req_msg_t header;
+			ret = copy_from_user((void *)&header, (void *)arg, sizeof(isp_req_msg_t));
+			if (ret) {
+				pr_err("%s: copy_from_user failed\n", __func__);
+				return ret;
+			}
+			size = header.req_size;
+			pr_debug("%s req_id %d, req_size %d, req_status %d\n",
+				__func__, header.req_id,
+				header.req_size,
+				header.req_status);
+			break;
 		default:
+			pr_err("%s unknown cmd %d\n", __func__, cmd);
 			return -EINVAL;
 		}
 
@@ -334,7 +348,21 @@ static s32 isp_video_g_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 		case ctrl_id_sensor_param:
 			ret = isp_get_sensor_param(vctx, (void *)arg);
 			return ret;
+		case ctrl_id_request_msg:
+			isp_req_msg_t header;
+			ret = copy_from_user((void *)&header, (void *)arg, sizeof(isp_req_msg_t));
+			if (ret) {
+				pr_err("%s: copy_from_user failed\n", __func__);
+				return ret;
+			}
+			size = header.req_size;
+			pr_debug("%s req_id %d, req_size %d, req_status %d\n",
+				__func__, header.req_id,
+				header.req_size,
+				header.req_status);
+			break;
 		default:
+			pr_err("%s unknown cmd %d\n", __func__, cmd);
 			return -EINVAL;
 		}
 

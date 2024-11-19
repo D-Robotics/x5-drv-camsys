@@ -20,8 +20,16 @@ typedef enum isp_ctrl_id {
 	ctrl_id_exposure_roi,
 	ctrl_id_2dnr_attr,
 	ctrl_id_3dnr_attr,
+	ctrl_id_request_msg = 0xFF,
 } isp_ctrl_id_e;
 
+
+typedef struct isp_request_msg_s {
+	uint32_t req_id;
+	uint32_t req_size;
+	uint32_t req_status;
+	uint32_t payload_size;
+} isp_req_msg_t;
 /* common define */
 #define HBN_ISP_AUTO_LEVEL_MAX 20
 
