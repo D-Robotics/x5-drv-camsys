@@ -157,7 +157,10 @@ struct cam_clk {
 
 struct cam_log {
 	__u16 id;    /* log system id */
-	__u16 level; /* log priority */
+	union {
+		__u16 level; /* log priority */
+		__u64 module; /* log module */
+	};
 };
 
 struct sen_ctrl {

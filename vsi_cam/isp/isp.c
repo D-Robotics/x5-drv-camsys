@@ -1662,8 +1662,13 @@ static ssize_t isp_debugfs_log_write(struct file *f, const char __user *buf,
 	msg.id = CAM_MSG_LOG_STATE_CHANGED;
 	token = strsep(&str, " ");
 	while (token) {
-		msg.log.level = simple_strtoul(token, NULL, 10);
-		pr_debug("%s [%d,%d]\n", __func__, msg.log.id, msg.log.level);
+		if (msg.log.id < 3) {
+			msg.log.level = simple_strtoul(token, NULL, 10);
+			pr_debug("%s [%d,%d]\n", __func__, msg.log.id, msg.log.level);
+		} else {
+			msg.log.module = simple_strtoul(token, NULL, 10);
+			pr_debug("%s [%d,%llu]\n", __func__, msg.log.id, msg.log.module);
+		}
 		rc = isp_post(isp, &msg, true);
 		if (rc < 0) {
 			pr_err("failed to post log state changed msg (err=%d)\n", rc);
