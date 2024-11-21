@@ -305,6 +305,58 @@ typedef struct sensor_tuning_data_s {
 	uint32_t  af_mode;
 }sensor_tuning_data_t;
 
+/* sensor otp config */
+#define SENSOR_OTP_LSC_CT_NUM 1
+#define SENSOR_OTP_AWB_CT_NUM 3
+#define SENSOR_OTP_LSC_V_GRID_NUM 33
+#define SENSOR_OTP_LSC_H_GRID_NUM 33
+#define SENSOR_OTP_PDAF_FOCAL_SIZE 48
+
+typedef enum color_temperature_e {
+	COLOR_TEMPERATURE_3100K = 0,
+	COLOR_TEMPERATURE_4000K = 1,
+	COLOR_TEMPERATURE_5800K = 2,
+	COLOR_TEMPERATURE_MAX = 3
+} color_temperature_t;
+
+typedef struct sensor_otp_lsc_s {
+	color_temperature_t color_temperature;
+	uint16_t r[SENSOR_OTP_LSC_H_GRID_NUM][SENSOR_OTP_LSC_H_GRID_NUM];
+	uint16_t gr[SENSOR_OTP_LSC_H_GRID_NUM][SENSOR_OTP_LSC_H_GRID_NUM];
+	uint16_t gb[SENSOR_OTP_LSC_H_GRID_NUM][SENSOR_OTP_LSC_H_GRID_NUM];
+	uint16_t b[SENSOR_OTP_LSC_H_GRID_NUM][SENSOR_OTP_LSC_H_GRID_NUM];
+} sensor_otp_lsc_t;
+
+typedef struct sensor_otp_awb_s {
+	color_temperature_t color_temperature;
+	uint16_t r;
+	uint16_t gr;
+	uint16_t gb;
+	uint16_t b;
+	uint16_t rg_ratio;
+	uint16_t bg_ratio;
+} sensor_otp_awb_t;
+
+typedef struct sensor_otp_af_s {
+	uint8_t focus_enable;
+	uint16_t cd_min_focal;
+	uint16_t cd_max_focal;
+	int32_t pd_focal[SENSOR_OTP_PDAF_FOCAL_SIZE];
+} sensor_otp_af_t;
+
+typedef struct sensor_otp_s {
+	uint8_t otp_lsc_enable;
+	uint8_t otp_awb_enable;
+	uint8_t otp_af_enable;
+	uint8_t lsc_ct_num;
+	uint8_t awb_ct_num;
+	uint8_t awb_golden_ct_num;
+	sensor_otp_lsc_t lsc_data[SENSOR_OTP_LSC_CT_NUM];
+	sensor_otp_awb_t awb_data[SENSOR_OTP_AWB_CT_NUM];
+	sensor_otp_awb_t awb_golden_data[SENSOR_OTP_AWB_CT_NUM];
+	sensor_otp_af_t af_data;
+} sensor_otp_t;
+
 /**
  * @enumt camera_IOCTL
  * sensro ioctl for isp operaiton callback
@@ -356,6 +408,7 @@ extern struct sensor_isi_ops_s sensor_isi_ops;
 int32_t camera_subdev_init(void);
 void camera_subdev_exit(void);
 int common_init(uint8_t chn, uint8_t mode);
+int32_t common_otp_set(uint8_t chn, sensor_otp_t *pdata);
 void common_exit(uint8_t chn);
 extern void wake_up_release_work(uint32_t pipeline);
 #endif // DRIVERS_MEDIA_PLATFORM_HOBOT_SENSOR_INC_CAMERA_SUBDEV_H_

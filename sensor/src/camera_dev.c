@@ -951,6 +951,45 @@ int32_t camera_tuning_update_param(struct sensor_device_s *sen, unsigned long ar
 	return ret;
 }
 
+int32_t camera_otp_update(struct sensor_device_s *sen, unsigned long arg)
+{
+	int32_t  ret = 0;
+	struct sensor_user_s *user;
+	sensor_otp_t *otp_data;
+	struct os_dev *dev;
+
+	if (sen == NULL)
+		return -ENODEV;
+	user = &sen->user;
+	dev = &sen->osdev;
+
+	if (arg == 0UL) {
+		sen_err(dev, "%s arg NULL error\n", __func__);
+		return -EINVAL;
+	}
+
+	otp_data = osal_kmalloc(sizeof(sensor_otp_t), GFP_ATOMIC);
+	if (otp_data == NULL) {
+		sen_err(dev, "kmalloc failed!\n");
+		return -ENOMEM;
+	}
+
+	if (osal_copy_from_app((void *)otp_data, (void __user *)arg, sizeof(sensor_otp_t))) {
+		sen_err(dev, "%s arg copy error\n", __func__);
+		osal_kfree(otp_data);
+		return -ENOMEM;
+	}
+
+	osal_mutex_lock(&user->mutex);
+	common_otp_set((uint8_t)sen->port, otp_data);
+	osal_mutex_unlock(&user->mutex);
+
+	osal_kfree(otp_data);
+	sen_info(dev, "%s done\n", __func__);
+
+	return ret;
+}
+
 /**
  * @NO{S10E02C08}
  * @ASIL{B}

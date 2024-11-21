@@ -554,6 +554,7 @@ extern int32_t sensor_ctrl_mode_set(struct sensor_device_s *sen, int32_t ctrl_mo
 extern int32_t sensor_ctrl_mode_get(struct sensor_device_s *sen);
 
 extern int32_t camera_tuning_update_param(struct sensor_device_s *sen, unsigned long arg);
+extern int32_t camera_otp_update(struct sensor_device_s *sen, unsigned long arg);
 extern int32_t camera_set_ae_share(struct sensor_device_s *sen, unsigned long arg);
 extern int32_t camera_set_input_param(struct sensor_device_s *sen, unsigned long arg);
 extern int32_t camera_init_req(struct sensor_device_s *sen, unsigned long arg);

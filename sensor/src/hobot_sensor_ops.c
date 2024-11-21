@@ -321,6 +321,9 @@ int32_t sensor_device_ioctl(struct sensor_device_s *sen, uint32_t cmd, unsigned 
 	case SENSOR_GET_VERSION:
 		ret = sensor_get_version(sen, arg);
 		break;
+	case SENSOR_OTP_PARAM:
+		ret = camera_otp_update(sen, arg);
+		break;
 	default:
 		sen_err(dev, "ioctl cmd 0x%x is err\n", cmd);
 		ret = -EINVAL;

@@ -75,6 +75,11 @@ struct isi_sensor_pos_param_s {
         struct isi_sensor_pos_s isi_sensor_pos;
 };
 
+typedef struct isi_sensor_otp_param_s {
+	uint32_t chn;
+	sensor_otp_t isi_otp_data;
+} isi_sensor_otp_param_t;
+
 #define CALIB_NUM_LENGTH    100
 #define CALIBRATION_MAX_ID  4
 
@@ -129,6 +134,8 @@ typedef struct camera_calib_s {
 #define ISI_SENSOR_IOCTL_SET_AWB _IOW(ISI_SENSOR_IOC_MAGIC, 12, struct isi_sensor_awb_param_s)
 // 获取 cali name
 #define ISI_SENSOR_IOCTL_GET_LNAME _IOW(ISI_SENSOR_IOC_MAGIC, 13, camera_calib_t)
+// get sensor otp data
+#define ISI_SENSOR_IOCTL_GET_OTP _IOR(ISI_SENSOR_IOC_MAGIC, 14, isi_sensor_otp_param_t)
 
 // AF
 #define ISI_SENSOR_IOCTL_GET_POS _IOWR(ISI_SENSOR_IOC_MAGIC, 15, struct isi_sensor_pos_param_s)

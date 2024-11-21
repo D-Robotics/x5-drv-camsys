@@ -64,6 +64,7 @@
 #define SENSOR_EVENT_PUT      _IOW(SENSOR_IOC_MAGIC, 22, int32_t)
 #define SENSOR_UPDATE_AE_INFO _IOW(SENSOR_IOC_MAGIC, 23, sensor_ae_info_t)
 #define SENSOR_GET_VERSION    _IOR(SENSOR_IOC_MAGIC, 24, sensor_version_info_t)
+#define SENSOR_OTP_PARAM      _IOW(SENSOR_IOC_MAGIC, 25, sensor_otp_t)
 
 #if CAMERA_TOTAL_NUMBER > SENSOR_NUM_MAX
 #error CAMERA_TOTAL_NUMBER over SENSOR_NUM_MAX error

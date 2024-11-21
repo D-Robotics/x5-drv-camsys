@@ -29,6 +29,7 @@
 sensor_priv_t sensor_ctl[FIRMWARE_CONTEXT_NUMBER];
 sensor_data_t sensor_param[FIRMWARE_CONTEXT_NUMBER];
 sensor_tuning_data_t tuning_param[FIRMWARE_CONTEXT_NUMBER];
+sensor_otp_t otp_data[FIRMWARE_CONTEXT_NUMBER];
 
 // used for ae ctrl.
 static sensor_event_header_t sensor_event_header[CAMERA_TOTAL_NUMBER];
@@ -436,10 +437,46 @@ int32_t common_init(uint8_t chn, uint8_t mode)
 	return ret;
 }
 
+int32_t common_otp_set(uint8_t chn, sensor_otp_t *pdata)
+{
+	struct os_dev* dev = sensor_osdev_get(chn);
+
+	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
+		sen_err(dev, "%s chn %d beyond %d\n", __func__, chn, FIRMWARE_CONTEXT_NUMBER);
+		return -1;
+	}
+
+	memcpy(&otp_data[chn], pdata, sizeof(sensor_otp_t));
+
+	pr_debug("common_otp_set done, lsc enable %d, lsc num %d\n",
+		pdata->otp_lsc_enable, pdata->lsc_ct_num);
+	return 0;
+}
+
+int32_t common_alloc_otp_param(uint32_t chn, void *pdata)
+{
+	sensor_otp_t *potp = (sensor_otp_t *)pdata;
+	struct os_dev* dev = sensor_osdev_get(chn);
+
+	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
+		sen_err(dev, "%s chn %d beyond %d\n", __func__, chn, FIRMWARE_CONTEXT_NUMBER);
+		return -1;
+	}
+	if (potp == NULL) {
+		sen_err(dev, "%s Input pdata NULL\n", __func__);
+		return -1;
+	}
+
+	memcpy(potp, &otp_data[chn], sizeof(sensor_otp_t));
+
+	return 0;
+}
+
 void common_exit(uint8_t chn)
 {
 	if (chn < FIRMWARE_CONTEXT_NUMBER) {
 		memset(&sensor_param[chn], 0, sizeof(sensor_data_t));
+		memset(&otp_data[chn], 0, sizeof(sensor_otp_t));
 	}
 }
 
@@ -811,6 +848,7 @@ struct sensor_isi_ops_s sensor_isi_ops = {
 	.sensor_set_cali_name = common_set_cali_name,
 	.sensor_get_pos = common_get_pos,
 	.sensor_set_pos = common_set_pos,
+	.sensor_get_otp_param = common_alloc_otp_param,
         .end_magic = SENSOR_OPS_END_MAGIC,
 };
 

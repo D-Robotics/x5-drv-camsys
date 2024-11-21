@@ -330,7 +330,8 @@ struct sensor_isi_ops_s {
 	int32_t (* sensor_set_cali_name) (uint32_t chn, char *cali_name);
         int32_t (* sensor_get_pos) (uint32_t chn,  struct isi_sensor_pos_s *user_pos);
 	int32_t (* sensor_set_pos) (uint32_t chn, uint32_t pos);
-	void *reserved_func[7];
+	int32_t (* sensor_get_otp_param) (uint32_t chn, void *pdata);
+        void *reserved_func[7];
         uint32_t end_magic;
 };
 

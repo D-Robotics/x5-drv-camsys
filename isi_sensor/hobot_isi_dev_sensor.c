@@ -276,6 +276,38 @@ static void isi_set_sensor_line_param(struct isi_sensor_line_param_s *sensor_lin
 	}
 }
 
+static int32_t isi_get_sensor_otp_param(isi_sensor_otp_param_t* potp)
+{
+	int32_t ret = 0;
+	pr_debug("%s \n", __func__);
+
+	if (g_isi_sen == NULL)
+		return -EFAULT;
+
+	if (potp->chn >= CAMERA_TOTAL_NUMBER) {
+		pr_err("%s chn %d is error, beyond %d\n", __func__, potp->chn, CAMERA_TOTAL_NUMBER);
+		return -EINVAL;
+	}
+
+	if (g_isi_sen->isi_sensor_cops != NULL) {
+		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_get_otp_param(
+				potp->chn, (void *)&potp->isi_otp_data);
+		if (ret < 0) {
+			pr_err("isi callback sensor_get_otp_param fail\n");
+			return -EFAULT;
+		}
+	} else {
+		pr_err("isi_sensor_cops is NULL\n");
+		return -EFAULT;
+	}
+
+	pr_debug("isi_get_sensor_otp_param done, lsc enable %d, awb enable %d, af enable %d\n",
+		potp->isi_otp_data.otp_lsc_enable, potp->isi_otp_data.otp_awb_enable,
+		potp->isi_otp_data.otp_af_enable);
+
+	return 0;
+}
+
 static int16_t isi_get_sensor_awb_param(uint32_t chn)
 {
         int32_t ret = 0;
@@ -401,6 +433,11 @@ static int32_t empty_common_alloc_integration_time(uint32_t chn, uint32_t *int_t
         return 0;
 }
 
+static int32_t empty_common_alloc_otp_param(uint32_t chn, void *pdata)
+{
+	pr_debug("%s\n", __func__);
+	return 0;
+}
 
 static int32_t empty_common_update(uint32_t chn, int32_t effect)
 {
@@ -500,6 +537,7 @@ struct sensor_isi_ops_s g_isi_sensor_cops = {
 	.sensor_set_cali_name = empty_sensor_set_cali_name,
 	.sensor_get_pos = empty_sensor_get_pos,
 	.sensor_set_pos = empty_sensor_set_pos,
+	.sensor_get_otp_param = empty_common_alloc_otp_param,
         .end_magic = SENSOR_OPS_END_MAGIC,
 };
 
@@ -888,6 +926,34 @@ static long isi_sensor_fop_ioctl(struct file *pfile, uint32_t cmd, unsigned long
                                 isi_set_sensor_pos_param(&pos_param);
                         }
                         break;
+		case ISI_SENSOR_IOCTL_GET_OTP:
+		{
+			isi_sensor_otp_param_t *otp_param;
+
+			otp_param = (isi_sensor_otp_param_t *)kmalloc(sizeof(isi_sensor_otp_param_t), GFP_ATOMIC);
+			if (otp_param == NULL) {
+				pr_err("%s kmalloc fail\n", __func__);
+				return -ENOMEM;
+			}
+
+			if (copy_from_user((void *)otp_param, (void __user *)arg, sizeof(isi_sensor_otp_param_t))) {
+				pr_err("%s cmd: %d, copy from user fail\n", __func__, cmd);
+				ret = -EIO;
+			} else {
+				ret = isi_get_sensor_otp_param(otp_param);
+				if (ret < 0) {
+					pr_err("%s isi_get_sensor_otp_param fail\n", __func__);
+				} else {
+					if (copy_to_user((void __user *)arg, (void *)otp_param,
+						sizeof(isi_sensor_otp_param_t))) {
+						pr_err("%s cmd: %d, copy to user fail\n", __func__, cmd);
+						ret = -EIO;
+					}
+				}
+			}
+			kfree(otp_param);
+		}
+		break;
                 default:
                     pr_err("ISI sensor ioctl cmd 0x%x not supported\n", cmd);
                     break;
