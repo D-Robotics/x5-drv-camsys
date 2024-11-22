@@ -259,11 +259,14 @@ static void vio_check_delay_time(struct vio_subdev *vdev, struct frame_id_desc *
 	u64 cur_timestamps;
 	u32 diff_mtime;
 
-	if (vdev->threshold_time != 0) {
+	if ((vdev->threshold_time != 0) || (vio_threshold_time != 0)) {
 		cur_timestamps = osal_time_get_ns();
 		diff_mtime = (cur_timestamps - frameid->timestamps) / 1000000ULL;
-		if (diff_mtime > vdev->threshold_time)
+		if ((vdev->threshold_time != 0) && (diff_mtime > vdev->threshold_time))
 			vio_err("[%s]: %s delay time beyond threshold time\n", vdev->name, __func__);
+		if (((vio_threshold_time != 0)) && (diff_mtime > vio_threshold_time))
+			vio_dbg("[%s][%d]:delay time %u ms beyond threshold time\n",
+				vdev->name, vdev->vnode->flow_id, diff_mtime);
 	}
 }
 /**
@@ -316,10 +319,12 @@ void vio_frame_done(struct vio_subdev *vdev)
 			trans_frame(framemgr, frame, FS_COMPLETE);
 		}
 		vio_x_barrier_irqr(framemgr, flags);
-
-		metadata = vio_get_metadata(vnode->flow_id, vnode->frameid.frame_id);
-		if (metadata != NULL && frame->vbuf.metadata != NULL)
-			memcpy(frame->vbuf.metadata, metadata, METADATA_SIZE);
+		/* set metadata to output node */
+		if (vdev->id >= VNODE_ID_CAP) {
+			metadata = vio_get_metadata(vnode->flow_id, vnode->frameid.frame_id);
+			if (metadata != NULL && frame->vbuf.metadata != NULL)
+				memcpy(frame->vbuf.metadata, metadata, METADATA_SIZE);
+		}
 	} else {
 		vio_x_barrier_irqr(framemgr, flags);
 		event = VIO_FRAME_NDONE;

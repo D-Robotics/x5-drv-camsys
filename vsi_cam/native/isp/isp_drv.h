@@ -33,6 +33,7 @@ struct isp_nat_instance {
 	isp_ochn_attr_t ochn_attr;
 	u8 online_mode;
 	int stream_idx;
+	bool metadata_en;
 };
 
 struct isp_nat_device {

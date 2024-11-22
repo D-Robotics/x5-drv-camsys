@@ -121,6 +121,19 @@ static struct cam_buf *gdc_dqbuf(struct v4l2_buf_ctx *ctx)
 	return cam_dqbuf(&gdc->sink_ctx);
 }
 
+static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx)
+{
+	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+
+	if (!ctx)
+		return NULL;
+
+	if (ctx->is_sink_online_mode)
+		return NULL;
+
+	return cam_acqbuf(&gdc->sink_ctx);
+}
+
 static u32 gdc_get_out_format(struct v4l2_buf_ctx *ctx)
 {
 	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
@@ -241,6 +254,27 @@ static int gdc_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
 	return -EINVAL;
+}
+
+static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
+{
+	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_instance *ins;
+	struct gdc_format_cap *cap;
+	uint32_t support_fmt = CAM_FMT_NV12;
+
+	ins = &inst->dev->insts[inst->id];
+
+	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+	cap = &ins->fmt_cap[0];
+	cap->format             = support_fmt;
+	cap->res[0].type           = CAP_SW;
+	cap->res[0].sw.step_width  = 2;
+	cap->res[0].sw.step_height = 2;
+	cap->res[0].sw.min_width   = 64;
+	cap->res[0].sw.min_height  = 64;
+	cap->res[0].sw.max_width   = 8192;
+	cap->res[0].sw.max_height  = 8192;
 }
 
 static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
@@ -403,6 +437,35 @@ static const struct v4l2_subdev_ops gdc_subdev_ops = {
 	.pad = &gdc_pad_ops,
 };
 
+static int gdc_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_open(sd);
+	if (rc < 0)
+		return rc;
+
+	return gdc_open(inst->dev, inst->id);
+}
+
+static int gdc_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
+	int rc;
+
+	rc = subdev_close(sd);
+	if (rc < 0)
+		return rc;
+
+	return gdc_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops gdc_internal_ops = {
+	.open = gdc_v4l_open,
+	.close = gdc_v4l_close,
+};
+
 static void gdc_inst_remove(struct gdc_v4l_instance *insts, u32 num)
 {
 	u32 i;
@@ -486,11 +549,13 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		n->bctx.ready = gdc_buf_ready;
 		n->bctx.qbuf = gdc_qbuf;
 		n->bctx.dqbuf = gdc_dqbuf;
+		n->bctx.acqbuf = gdc_acqbuf;
 		n->bctx.get_format = gdc_get_out_format;
 		n->bctx.set_format = gdc_set_out_format;
 		n->bctx.enum_format = gdc_enum_out_format;
 		n->bctx.enum_framesize = gdc_enum_out_framesize;
 		n->bctx.enum_frameinterval = gdc_enum_out_frameinterval;
+		n->bctx.set_cap = gdc_set_cap;
 
 		n->dev = dev;
 		n->num_pads = 2;
@@ -511,6 +576,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 			gdc_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &gdc_internal_ops;
 	}
 
 	v4l_dev->insts = insts;
@@ -556,7 +622,9 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 		cam_ctx_release(&v4l_dev->insts[i].sink_ctx);
 		cam_ctx_release(&v4l_dev->insts[i].src_ctx);
 		subdev_deinit(&v4l_dev->insts[i].node);
+		devm_kfree(dev, v4l_dev->insts[i].node.pads);
 	}
+	devm_kfree(dev, v4l_dev->insts);
 
 	rc = gdc_remove(pdev, &v4l_dev->gdc_dev);
 	if (rc < 0) {
@@ -569,6 +637,7 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 		dev_err(dev, "failed to call gdc_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}
+	devm_kfree(dev, v4l_dev);
 
 	dev_dbg(dev, "ARM GDC driver (v4l) removed\n");
 	return 0;

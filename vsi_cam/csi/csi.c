@@ -103,6 +103,16 @@ _exit:
 	csi->base_ex = csi_base_ex;
 }
 
+int csi_open(struct csi_device *csi, u32 inst)
+{
+	return 0;
+}
+
+int csi_close(struct csi_device *csi, u32 inst)
+{
+	return 0;
+}
+
 int csi_probe(struct platform_device *pdev, struct csi_device *csi, bool is_native)
 {
 	struct device *dev = &pdev->dev;

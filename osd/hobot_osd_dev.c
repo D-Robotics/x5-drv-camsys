@@ -369,178 +369,96 @@ static ssize_t osd_handle_show(struct device *dev,
                 	struct device_attribute *attr, char* buf)
 {
 	uint32_t offset = 0;
-	int32_t len;
 	struct osd_dev *osd_dev;
 	struct osd_handle *handle, *temp;
 
 	osd_dev = dev_get_drvdata(dev);
 
-	mutex_lock(&osd_dev->osd_list_mutex);
-	len = snprintf(&buf[offset], PAGE_SIZE - offset,
-		"******************osd handle info******************\n");
-	offset += len;
+	offset += snprintf(&buf[offset], PAGE_SIZE - offset,
+		"ID\tbind_cnt\tref_cnt\tcolor\tproc_type\tsize\n");
 
+	mutex_lock(&osd_dev->osd_list_mutex);
 	list_for_each_entry_safe(handle, temp, &osd_dev->osd_list, node) {
-		len = snprintf(&buf[offset], PAGE_SIZE - offset,
-			"[H%d] info: bind_cnt:%d ref_cnt:%d fill_color:%d bg_trans:%d "
-			"proc_type:%d size:%dx%d \n",
-			handle->info.handle_id,
+		offset += snprintf(&buf[offset], PAGE_SIZE - offset,
+			"%d\t%d\t%d\t%d\t%d\t%dx%d\n", handle->info.handle_id,
 			atomic_read(&handle->bind_cnt), atomic_read(&handle->ref_cnt),
-			handle->info.fill_color,
-			handle->info.yuv_bg_transparent, handle->info.proc_type,
+			handle->info.fill_color, handle->info.proc_type,
 			handle->info.size.w, handle->info.size.h);
-		offset += len;
-		len = snprintf(&buf[offset], PAGE_SIZE - offset,
-			"[H%d] buffer: size: %dx%d \n",
-			handle->info.handle_id,
-			handle->buffer.size.w, handle->buffer.size.h);
-		offset += len;
-		if (handle->buffer.buf[0].state != OSD_BUF_NULL) {
-			len = snprintf(&buf[offset], PAGE_SIZE - offset,
-				"    buf[0]: state:%d pixel format:%d length:%ld paddr:0x%llx "
-				"vaddr:%p ref_count:%d \n",
-				handle->buffer.buf[0].state, handle->buffer.buf[0].pixel_fmt,
-				handle->buffer.buf[0].length,
-				handle->buffer.buf[0].paddr, handle->buffer.buf[0].vaddr,
-				atomic_read(&handle->buffer.buf[0].ref_count));
-			offset += len;
-		}
-		if (handle->buffer.buf[1].state != OSD_BUF_NULL) {
-			len = snprintf(&buf[offset], PAGE_SIZE - offset,
-				"    buf[1]: state:%d pixel format:%d length:%ld paddr:0x%llx "
-				"vaddr:%p ref_count:%d \n",
-				handle->buffer.buf[1].state, handle->buffer.buf[1].pixel_fmt,
-				handle->buffer.buf[1].length,
-				handle->buffer.buf[1].paddr, handle->buffer.buf[1].vaddr,
-				atomic_read(&handle->buffer.buf[1].ref_count));
-			offset += len;
-		}
-		if (handle->buffer.vga_buf[0].state != OSD_BUF_NULL) {
-			len = snprintf(&buf[offset], PAGE_SIZE - offset,
-				"    vga_buf[0]: state:%d pixel format:%d length:%ld paddr:0x%llx "
-				"vaddr:%p ref_count:%d \n",
-				handle->buffer.vga_buf[0].state, handle->buffer.vga_buf[0].pixel_fmt,
-				handle->buffer.vga_buf[0].length,
-				handle->buffer.vga_buf[0].paddr, handle->buffer.vga_buf[0].vaddr,
-				atomic_read(&handle->buffer.vga_buf[0].ref_count));
-			offset += len;
-		}
-		if (handle->buffer.vga_buf[1].state != OSD_BUF_NULL) {
-			len = snprintf(&buf[offset], PAGE_SIZE - offset,
-				"    vga_buf[1]: state:%d pixel format:%d length:%ld paddr:0x%llx "
-				"vaddr:%p ref_count:%d \n",
-				handle->buffer.vga_buf[1].state, handle->buffer.vga_buf[1].pixel_fmt,
-				handle->buffer.vga_buf[1].length,
-				handle->buffer.vga_buf[1].paddr, handle->buffer.vga_buf[1].vaddr,
-				atomic_read(&handle->buffer.vga_buf[1].ref_count));
-			offset += len;
-		}
-		len = snprintf(&buf[offset], PAGE_SIZE - offset, "****************\n");
-		offset += len;
 	}
 	mutex_unlock(&osd_dev->osd_list_mutex);
 
 	return offset;
 }
-
 static DEVICE_ATTR(handle_info, S_IRUGO, osd_handle_show, NULL);
+
+static ssize_t osd_handle_buf_show(struct device *dev,
+                	struct device_attribute *attr, char* buf)
+{
+	uint32_t offset = 0;
+	struct osd_dev *osd_dev;
+	struct osd_handle *handle, *temp;
+
+	osd_dev = dev_get_drvdata(dev);
+
+	offset += snprintf(&buf[offset], PAGE_SIZE - offset,
+		"ID\tstate0\tformat0\tref0\tstate1\tformat1\tref1\tsize\n");
+
+	mutex_lock(&osd_dev->osd_list_mutex);
+	list_for_each_entry_safe(handle, temp, &osd_dev->osd_list, node) {
+		offset += snprintf(&buf[offset], PAGE_SIZE - offset, "%d\t", handle->info.handle_id);
+		offset += snprintf(&buf[offset], PAGE_SIZE - offset, "%d/%d\t%d/%d\t%d/%d\t",
+			handle->buffer.buf[0].state, handle->buffer.buf[1].state,
+			handle->buffer.buf[0].pixel_fmt, handle->buffer.buf[1].pixel_fmt,
+			atomic_read(&handle->buffer.buf[0].ref_count),
+			atomic_read(&handle->buffer.buf[1].ref_count));
+
+		offset += snprintf(&buf[offset], PAGE_SIZE - offset, "%d/%d\t%d/%d\t%d/%d\t",
+			handle->buffer.vga_buf[0].state, handle->buffer.vga_buf[1].state,
+			handle->buffer.vga_buf[0].pixel_fmt, handle->buffer.vga_buf[1].pixel_fmt,
+			atomic_read(&handle->buffer.vga_buf[0].ref_count),
+			atomic_read(&handle->buffer.vga_buf[1].ref_count));
+
+		offset += snprintf(&buf[offset], PAGE_SIZE - offset, "%dx%d\n",
+			handle->buffer.size.w, handle->buffer.size.h);
+	}
+	mutex_unlock(&osd_dev->osd_list_mutex);
+
+	return offset;
+}
+static DEVICE_ATTR(handle_buf, S_IRUGO, osd_handle_buf_show, NULL);
 
 static ssize_t osd_bind_show(struct device *dev,
                 struct device_attribute *attr, char* buf)
 {
 	uint32_t offset = 0;
-	// int32_t i, j, m, len;
-	// struct osd_dev *osd_dev;
-	// struct osd_subdev *subdev;
-	// struct osd_bind *bind, *temp;
+	int32_t chn, ctx;
+	struct osd_dev *osd_dev;
+	struct osd_subdev *subdev;
+	struct osd_bind *bind, *temp;
 
-	// osd_dev = dev_get_drvdata(dev);
+	osd_dev = dev_get_drvdata(dev);
 
-	// len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 		"******************osd bind info******************\n");
-	// offset += len;
-	// for (i = 0; i < OSD_CHN_MAX; i++) {
-	// 	for (j = 0; j < VIO_MAX_STREAM; j++) {
-	// 		subdev = &osd_dev->subdev[i][j];
+	offset += snprintf(&buf[offset], PAGE_SIZE - offset,
+			"ID\tbind_to\tshow_en\tlevel\tstart\tbind_cnt\n");
 
-	// 		mutex_lock(&subdev->bind_mutex);
-	// 		list_for_each_entry_safe(bind, temp, &subdev->bind_list, node) {
-	// 			len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 				"[S%d][V%d][H%d]: show:%d invert:%d level:%d "
-	// 				"buf_layer:%d start: (%d, %d) bind_cnt:%d\n",
-	// 				bind->bind_info.chn_id, bind->bind_info.ctx_id,
-	// 				bind->bind_info.handle_id, bind->bind_info.show_en,
-	// 				bind->bind_info.invert_en, bind->bind_info.osd_level,
-	// 				bind->bind_info.buf_layer, bind->bind_info.start_point.x,
-	// 				bind->bind_info.start_point.y, atomic_read(&bind->ref_cnt));
-	// 			offset += len;
-	// 			if (bind->bind_info.handle_info.proc_type == OSD_PROC_RECT) {
-	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 					"rect: size:%dx%d fill_color:%d\n",
-	// 					bind->bind_info.handle_info.size.w,
-	// 					bind->bind_info.handle_info.size.h,
-	// 					bind->bind_info.handle_info.fill_color);
-	// 				offset += len;
-	// 			}
-	// 			if (bind->bind_info.handle_info.proc_type == OSD_PROC_POLYGON) {
-	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 					"polygon: side num:%d fill_color:%d point:(%d, %d) \n"
-	// 					"(%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) (%d, %d) "
-	// 					"\n(%d, %d) (%d, %d) (%d, %d) buffer:%p\n",
-	// 					bind->bind_info.side_num,
-	// 					bind->bind_info.handle_info.fill_color,
-	// 					bind->bind_info.point[0].x, bind->bind_info.point[0].y,
-	// 					bind->bind_info.point[1].x, bind->bind_info.point[1].y,
-	// 					bind->bind_info.point[2].x, bind->bind_info.point[2].y,
-	// 					bind->bind_info.point[3].x, bind->bind_info.point[3].y,
-	// 					bind->bind_info.point[4].x, bind->bind_info.point[4].y,
-	// 					bind->bind_info.point[5].x, bind->bind_info.point[5].y,
-	// 					bind->bind_info.point[6].x, bind->bind_info.point[6].y,
-	// 					bind->bind_info.point[7].x, bind->bind_info.point[7].y,
-	// 					bind->bind_info.point[8].x, bind->bind_info.point[8].y,
-	// 					bind->bind_info.point[9].x, bind->bind_info.point[9].y,
-	// 					bind->bind_info.polygon_buf);
-	// 				offset += len;
-	// 			}
-	// 			if (bind->bind_info.handle_info.proc_type == OSD_PROC_MOSAIC) {
-	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 					"mosaic: size:%dx%d\n",
-	// 					bind->bind_info.handle_info.size.w,
-	// 					bind->bind_info.handle_info.size.h);
-	// 				offset += len;
-	// 			}
-	// 			len = snprintf(&buf[offset], PAGE_SIZE - offset, "******************\n");
-	// 			offset += len;
-	// 		}
-	// 		mutex_unlock(&subdev->bind_mutex);
+	for (chn = 0; chn < OSD_CHN_MAX; chn++) {
+		for (ctx = 0; ctx < VIO_MAX_STREAM; ctx++) {
+			subdev = &osd_dev->subdev[chn][ctx];
 
-	// 		if (subdev->osd_hw_cfg != NULL) {
-	// 			spin_lock(&subdev->osd_hw_cfg->osd_cfg_slock);
-	// 			for (m = 0; m < OSD_HW_PROC_NUM; m++) {
-	// 				if (subdev->osd_hw_cfg->osd_box[m].osd_en == 0) {
-	// 					continue;
-	// 				}
-	// 				len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 					"[V%d][%d]: hw en:%d mode:%d start:(%d, %d) size:(%d, %d)\n",
-	// 					subdev->chn_id, m,
-	// 					subdev->osd_hw_cfg->osd_box[m].osd_en,
-	// 					subdev->osd_hw_cfg->osd_box[m].overlay_mode,
-	// 					subdev->osd_hw_cfg->osd_box[m].start_x,
-	// 					subdev->osd_hw_cfg->osd_box[m].start_y,
-	// 					subdev->osd_hw_cfg->osd_box[m].width,
-	// 					subdev->osd_hw_cfg->osd_box[m].height);
-	// 					offset += len;
-	// 					len = snprintf(&buf[offset], PAGE_SIZE - offset,
-	// 					"******************\n");
-	// 				offset += len;
-	// 			}
-	// 			spin_unlock(&subdev->osd_hw_cfg->osd_cfg_slock);
-	// 		}
-	// 	}
-	// }
+			mutex_lock(&subdev->bind_mutex);
+			list_for_each_entry_safe(bind, temp, &subdev->bind_list, node) {
+				offset += snprintf(&buf[offset], PAGE_SIZE - offset,
+						"%d\t%d/%d\t%d\t%d\t%d,%d\t%d\n",
+						bind->bind_info.handle_id, bind->bind_info.chn_id,
+						bind->bind_info.ctx_id, bind->bind_info.show_en,
+						bind->bind_info.osd_level,bind->bind_info.start_point.x,
+						bind->bind_info.start_point.y, atomic_read(&bind->ref_cnt));
+			}
+			mutex_unlock(&subdev->bind_mutex);
+		}
+	}
 	return offset;
 }
-
 static DEVICE_ATTR(bind_info, S_IRUGO, osd_bind_show, NULL);
 
 static ssize_t osd_fps_show(struct device *dev,
@@ -572,6 +490,10 @@ static int32_t osd_sysfs_create(struct device *dev)
 		pr_err("create handle info failed\n");
 		return -ENOMEM;
 	}
+	if (device_create_file(dev, &dev_attr_handle_buf)) {
+		pr_err("create handle buf failed\n");
+		return -ENOMEM;
+	}
 	if (device_create_file(dev, &dev_attr_bind_info)) {
 		pr_err("create bind info failed\n");
 		return -ENOMEM;
@@ -587,6 +509,7 @@ static int32_t osd_sysfs_create(struct device *dev)
 static void osd_sysfs_remove(struct device *dev)
 {
 	device_remove_file(dev, &dev_attr_handle_info);
+	device_remove_file(dev, &dev_attr_handle_buf);
 	device_remove_file(dev, &dev_attr_bind_info);
 	device_remove_file(dev, &dev_attr_fps);
 }

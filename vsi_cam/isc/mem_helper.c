@@ -102,6 +102,28 @@ int mem_mmap(struct device *dev, struct list_head *list,
 }
 EXPORT_SYMBOL(mem_mmap);
 
+void *get_virt_addr(struct device *dev, struct list_head *list,
+		    struct mem_buf *buf)
+{
+	struct _mem_buf *b, *_buf = NULL;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return ERR_PTR(-EINVAL);
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr && b->size == buf->size) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return ERR_PTR(-EINVAL);
+
+	return _buf->vaddr;
+}
+EXPORT_SYMBOL(get_virt_addr);
+
 int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf)
 {
 	struct _mem_buf *b, *_buf = NULL;

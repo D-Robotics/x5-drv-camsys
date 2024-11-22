@@ -48,7 +48,8 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 {
 	struct _mem_buf *_buf;
 	const u32 ion_heap_mask = ION_HEAP_TYPE_CMA_RESERVED_MASK;
-	const u32 ion_flags = ION_FLAG_CACHED_NEEDS_SYNC | ION_FLAG_CACHED;
+	//const u32 ion_flags = ION_FLAG_CACHED_NEEDS_SYNC | ION_FLAG_CACHED;
+	const u32 ion_flags = 0;
 	size_t size;
 
 	if (!dev || !list || !buf || !buf->size)
@@ -66,6 +67,7 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 				     ion_heap_mask, ion_flags);
 	if (IS_ERR(_buf->ion_handle)) {
 		pr_err("%s ion_alloc buf failed\n", __func__);
+		devm_kfree(dev, _buf);
 		return -EFAULT;
 	}
 	size = buf->size;
@@ -74,6 +76,7 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 
 	if (!_buf->vaddr) {
 		ion_free(g_ion_client, _buf->ion_handle);
+		devm_kfree(dev, _buf);
 		return -ENOMEM;
 	}
 
@@ -133,14 +136,72 @@ int mem_mmap(struct device *dev, struct list_head *list,
 }
 EXPORT_SYMBOL(mem_mmap);
 
+void *get_virt_addr(struct device *dev, struct list_head *list,
+		    struct mem_buf *buf)
+{
+	struct _mem_buf *b, *_buf = NULL;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return ERR_PTR(-EINVAL);
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr && b->size == buf->size) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return ERR_PTR(-EINVAL);
+
+	return _buf->vaddr;
+}
+EXPORT_SYMBOL(get_virt_addr);
+
 int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf)
 {
+	struct _mem_buf *b, *_buf = NULL;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return -EINVAL;
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr/* && b->size == buf->size*/) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return -EINVAL;
+
+	dma_sync_single_for_device(g_ion_client->dev->dev.this_device,
+						_buf->addr, _buf->size, DMA_TO_DEVICE);
+
 	return 0;
 }
 EXPORT_SYMBOL(mem_cache_flush);
 
 int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf)
 {
+	struct _mem_buf *b, *_buf = NULL;
+
+	if (!dev || !list || !buf || !buf->addr || !buf->size)
+		return -EINVAL;
+
+	list_for_each_entry(b, list, entry) {
+		if (b->addr == buf->addr/* && b->size == buf->size*/) {
+			_buf = b;
+			break;
+		}
+	}
+
+	if (unlikely(!_buf))
+		return -EINVAL;
+
+	dma_sync_single_for_cpu(g_ion_client->dev->dev.this_device, _buf->addr,
+					_buf->size, DMA_FROM_DEVICE);
+
 	return 0;
 }
 EXPORT_SYMBOL(mem_cache_invalid);

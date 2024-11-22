@@ -1186,11 +1186,11 @@ static s32 vpf_fill_frame_info(struct vio_frame *frame, struct vbuf_group_info *
 
 			if (buf_attr->wstride == 0) {
 				buf_attr->wstride = buf_attr->width;
-				vio_warn("[F%d] %s: L%d use width instead of wstride\n", frame->index, __func__, i);
+				vio_info("[F%d] %s: L%d use width instead of wstride\n", frame->index, __func__, i);
 			}
 			if (buf_attr->vstride == 0) {
 				buf_attr->vstride = buf_attr->height;
-				vio_warn("[F%d] %s: L%d use height instead of vstride\n", frame->index, __func__, i);
+				vio_info("[F%d] %s: L%d use height instead of vstride\n", frame->index, __func__, i);
 			}
 		}
 		switch (buf_attr->format) {

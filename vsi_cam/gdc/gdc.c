@@ -6,6 +6,7 @@
 #include "cam_buf.h"
 #include "cam_ctrl.h"
 #include "cam_dev.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "gdc_uapi.h"
 
@@ -205,6 +206,16 @@ static struct isc_notifier_ops gdc_notifier_ops = {
 	.got = gdc_msg_handler,
 };
 
+int gdc_open(struct gdc_device *gdc, u32 inst)
+{
+	return 0;
+}
+
+int gdc_close(struct gdc_device *gdc, u32 inst)
+{
+	return 0;
+}
+
 int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 {
 	struct device *dev = &pdev->dev;
@@ -226,7 +237,6 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 		{},
 	};
 	struct rst_res gdc_rsts[] = {
-		{ "rst", NULL },
 		{},
 	};
 	struct cam_dt gdc_dt = {
@@ -257,7 +267,6 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	gdc->hclk = gdc_dt.clks[2].clk;
 	gdc->vse_core = gdc_dt.clks[3].clk;
 	gdc->vse_ups = gdc_dt.clks[4].clk;
-	gdc->rst = gdc_dt.rsts[0].rst;
 	spin_lock_init(&gdc->isc_lock);
 
 	gdc->error = 1;
@@ -270,6 +279,10 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	gdc->ctrl_dev = get_cam_ctrl_device(pdev);
 	if (IS_ERR(gdc->ctrl_dev))
 		return PTR_ERR(gdc->ctrl_dev);
+
+	gdc->crc_dev = get_dw_crc_device(pdev);
+	if (IS_ERR(gdc->crc_dev))
+		return PTR_ERR(gdc->crc_dev);
 
 	gdc->jq = create_job_queue(32);
 	if (!gdc->jq) {
@@ -323,6 +336,17 @@ int gdc_system_resume(struct device *dev)
 int gdc_runtime_suspend(struct device *dev)
 {
 	struct gdc_device *gdc = dev_get_drvdata(dev);
+	struct gdc_instance *ins;
+	int inst;
+
+	if (!gdc)
+		return -EINVAL;
+
+	for (inst = 0; inst < gdc->num_insts; inst++) {
+		ins = &gdc->insts[inst];
+		if (ins->state == CAM_STATE_STARTED)
+			return -EBUSY;
+	}
 
 	if (gdc->core)
 		clk_disable_unprepare(gdc->core);

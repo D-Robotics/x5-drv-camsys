@@ -9,6 +9,14 @@
 #define V4L2_CID_DR_BASE        (V4L2_CID_USER_BASE + 0x11a0)
 #define V4L2_CID_DR_EXPOSURE    (V4L2_CID_DR_BASE + 0x0001)
 #define V4L2_CID_DR_AWB         (V4L2_CID_DR_BASE + 0x0002)
+#define V4L2_CID_DR_VSE_ATTR    (V4L2_CID_DR_BASE + 0x0003)
+
+#define V4L2_CID_FPS            (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xa)
+#define V4L2_CID_EXP_RANGE      (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xb)
+#define V4L2_CID_AGAIN_RANGE    (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xc)
+#define V4L2_CID_DGAIN_RANGE    (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xd)
+#define V4L2_CID_BAYER_PATTERN  (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xe)
+#define V4L2_CID_SENSOR_NAME    (V4L2_CID_IMAGE_SOURCE_CLASS_BASE + 0xf)
 
 typedef struct isp_param_range {
     float min;
@@ -97,5 +105,21 @@ typedef struct hbn_isp_awb_attr_s {
     hbn_isp_awb_auto_attr_t auto_attr;
     hbn_isp_awb_manual_attr_t manual_attr;
 } hbn_isp_awb_attr_t;
+
+typedef struct rect_s {
+	__u32 x;
+	__u32 y;
+	__u32 w;
+	__u32 h;
+} rect_t;
+
+typedef struct vse_ochn_attr_ex_s {
+	__u32 src_fps;
+	__u32 dst_fps;
+	__u32 chn_en;
+	rect_t roi;
+	__u32 target_w;
+	__u32 target_h;
+} vse_ochn_attr_ex_t;
 
 #endif /* __V4L2_USR_API_H__ */

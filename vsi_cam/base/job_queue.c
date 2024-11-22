@@ -9,6 +9,7 @@ struct job_queue {
 	spinlock_t lock; /* lock for job queue */
 	struct job *jobs;
 	void *job_data_space;
+	int nr_jobs;
 };
 
 struct job {
@@ -38,6 +39,7 @@ int push_job(struct job_queue *q, struct irq_job *ij)
 	list_del(&job->entry);
 
 	list_add_tail(&job->entry, &q->done_queue);
+	rc = ++q->nr_jobs;
 
 _exit:
 	spin_unlock_irqrestore(&q->lock, flags);
@@ -66,32 +68,58 @@ int pop_job(struct job_queue *q, struct irq_job *ij)
 	list_del(&job->entry);
 
 	list_add_tail(&job->entry, &q->idle_queue);
+	q->nr_jobs--;
 
 _exit:
 	spin_unlock_irqrestore(&q->lock, flags);
 	return rc;
 }
 
-int remove_job(struct job_queue *q, u32 index)
+int remove_job(struct job_queue *q, struct irq_job *ij)
 {
-	struct job *job = NULL, *temp_job;
-	struct irq_job ij;
+	struct job *cur_job = NULL, *temp_job;
+	struct irq_job cur_ij;
 	unsigned long flags;
 	int rc = 0;
 
-	if (!q)
+	if (!q || !ij)
 		return -EINVAL;
 
 	spin_lock_irqsave(&q->lock, flags);
 
-	list_for_each_entry_safe(job, temp_job, &q->done_queue, entry) {
-		memcpy(&ij, job->data, sizeof(ij));
-		if (ij.irq_ctx_index == index) {
-			list_del(&job->entry);
-			list_add_tail(&job->entry, &q->idle_queue);
+	list_for_each_entry_safe(cur_job, temp_job, &q->done_queue, entry) {
+		memcpy(&cur_ij, cur_job->data, sizeof(cur_ij));
+		if (cur_ij.irq_ctx_index == ij->irq_ctx_index) {
+			list_del(&cur_job->entry);
+			list_add_tail(&cur_job->entry, &q->idle_queue);
+			q->nr_jobs--;
 		}
 	}
 
+	spin_unlock_irqrestore(&q->lock, flags);
+	return rc;
+}
+
+int query_job(struct job_queue *q, struct irq_job *ij)
+{
+	struct job *job;
+	unsigned long flags;
+	int rc = 0;
+
+	if (!q || !ij)
+		return -EINVAL;
+
+	spin_lock_irqsave(&q->lock, flags);
+
+	job = list_first_entry_or_null(&q->done_queue, struct job, entry);
+	if (!job) {
+		rc = -EBUSY;
+		goto _exit;
+	}
+
+	memcpy(ij, job->data, sizeof(*ij));
+
+_exit:
 	spin_unlock_irqrestore(&q->lock, flags);
 	return rc;
 }
@@ -155,5 +183,6 @@ void reset_job_queue(struct job_queue *q)
 
 	spin_lock_irqsave(&q->lock, flags);
 	list_splice_tail_init(&q->done_queue, &q->idle_queue);
+	q->nr_jobs = 0;
 	spin_unlock_irqrestore(&q->lock, flags);
 }

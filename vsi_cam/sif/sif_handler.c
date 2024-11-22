@@ -11,39 +11,6 @@
 
 #include "sif.h"
 
-static s32 handle_set_fmt_cap(struct sif_device *sif, struct sif_msg *msg)
-{
-	struct sif_instance *ins;
-	struct sif_format_cap *cap, *c = NULL;
-	u32 i;
-
-	if (msg->inst >= sif->num_insts)
-		return -EINVAL;
-
-	ins = &sif->insts[msg->inst];
-
-	for (i = 0; i < ARRAY_SIZE(ins->fmt_cap); i++) {
-		cap = &ins->fmt_cap[i];
-		if (cap->format == msg->fcap.format) {
-			c = cap;
-			break;
-		} else if (cap->format == CAM_FMT_NULL) {
-			c = cap;
-			c->format = msg->fcap.format;
-			break;
-		}
-	}
-
-	if (!c)
-		return -EINVAL;
-
-	if (msg->fcap.index >= ARRAY_SIZE(c->res))
-		return -EINVAL;
-
-	c->res[msg->fcap.index] = msg->fcap.res;
-	return 0;
-}
-
 static s32 handle_set_state(struct sif_device *sif, struct sif_msg *msg)
 {
 	int rc;
@@ -74,20 +41,6 @@ static s32 handle_set_format(struct sif_device *sif, struct sif_msg *msg)
 	return 0;
 }
 
-static s32 handle_change_input(struct sif_device *sif, struct sif_msg *msg)
-{
-	struct sif_instance *ins;
-
-	if (msg->inst >= sif->num_insts)
-		return -EINVAL;
-
-	ins = &sif->insts[msg->inst];
-
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
-	ins->input_bayer_format = msg->in.sens.bayer_format;
-	return 0;
-}
-
 static s32 handle_set_cfg(struct sif_device *sif, struct sif_msg *msg)
 {
 	struct sif_instance *ins;
@@ -112,12 +65,6 @@ s32 sif_msg_handler(void *msg, u32 len, void *arg)
 		return -EINVAL;
 
 	switch (m->id) {
-	case CAM_MSG_CHANGE_INPUT:
-		rc = handle_change_input(sif, m);
-		break;
-	case CAM_MSG_SET_FMT_CAP:
-		rc = handle_set_fmt_cap(sif, m);
-		break;
 	case CAM_MSG_SET_FORMAT:
 		rc = handle_set_format(sif, m);
 		break;
@@ -130,6 +77,7 @@ s32 sif_msg_handler(void *msg, u32 len, void *arg)
 	case SIF_MSG_SET_CFG:
 		rc = handle_set_cfg(sif, m);
 		break;
+
 	default:
 		return -EINVAL;
 	}
@@ -236,6 +184,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	}
 	sif_frame.trigger_freq = sif->timestamp_clk;
 	sif_frame.timestamps = ktime_get_raw_ns();
+	sif_frame.sys_timestamps = ktime_get_real_ns();
 	sif_frame.trigger_ts = trigger_h;
 	sif_frame.trigger_ts = (sif_frame.trigger_ts << 32) | trigger_l;
 	sif_frame.fs_ts = fs_h;
@@ -253,7 +202,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	if (ins->state == CAM_STATE_STARTED) {
 		if (ctx->buf_ctx) {
 			if (ctx->next_buf) {
-				cam_drop(ctx->buf_ctx);
+				cam_drop_irq(ctx->buf_ctx, ctx->buf);
 				ctx->buf = ctx->next_buf;
 			}
 			ctx->next_buf = cam_dqbuf_irq(ctx->buf_ctx, true);
@@ -312,14 +261,16 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
 		frame_status = cam_get_frame_status(ctx->buf_ctx);
 		if (frame_status == DQ_FAIL) {
 			cam_set_frame_status(ctx->buf_ctx, NO_ERR);
+			cam_drop_irq_ext(ctx->buf_ctx, ctx->buf);
 			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail, skip peek PROCESS\n",
 				sif->id, inst, __func__);
 		} else if (ins->frame_start_cnt < 0) {
+			cam_drop_irq_ext(ctx->buf_ctx, ctx->buf);
 			dev_dbg(sif->dev, "sif(%d-%d), %s meet continue frame done skip it\n",
 				sif->id, inst, __func__);
 		} else {
 			if (frame_status) {
-				cam_drop(ctx->buf_ctx);
+				cam_drop_irq(ctx->buf_ctx, ctx->buf);
 				cam_dec_frame_status(ctx->buf_ctx);
 			} else {
 				cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);

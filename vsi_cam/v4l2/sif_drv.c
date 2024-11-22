@@ -3,9 +3,9 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/pm_runtime.h>
 #include <media/v4l2-device.h>
 
+#include "cam_dev.h"
 #include "cam_uapi.h"
 
 #include "sif_drv.h"
@@ -125,9 +125,7 @@ static int sif_enum_out_format(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 
 	*format = cam_format_to_pixelformat(sif->fmt_cap[index].format,
 					    sif->input_bayer_format);
-	if (!*format)
-		return -EINVAL;
-	return 0;
+	return *format ? 0 : -EINVAL;
 }
 
 static int sif_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -178,7 +176,85 @@ static int sif_enum_out_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int sif_enum_out_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	return -EINVAL;
+	struct sif_v4l_instance *ins = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_instance *sif;
+	struct sif_format_cap *cap = NULL;
+	struct cam_res_cap *res;
+	bool found = false;
+	u32 i, format;
+
+	if (fival->index > 0)
+		return -EINVAL;
+
+	sif = &ins->dev->insts[ins->id];
+
+	for (i = 0; i < ARRAY_SIZE(sif->fmt_cap); i++) {
+		format = cam_format_to_pixelformat
+				(sif->fmt_cap[i].format, sif->input_bayer_format);
+		if (format == fival->pixel_format) {
+			cap = &sif->fmt_cap[i];
+			break;
+		}
+	}
+
+	if (!cap)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
+		res = &cap->res[i];
+		if (res->type == CAP_DC) {
+			if (res->dc.width == fival->width &&
+			    res->dc.height == fival->height) {
+				found = true;
+				break;
+			}
+		}
+	}
+
+	if (!found)
+		return -EINVAL;
+
+	fival->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fival->discrete.numerator = ins->out_fps.numerator;
+	fival->discrete.denominator = ins->out_fps.denominator;
+	return 0;
+}
+
+static void sif_set_cap(struct v4l2_buf_ctx *ctx)
+{
+	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_instance *ins;
+	struct sif_format_cap *cap;
+	struct cam_res_cap *res;
+	struct v4l2_subdev *sd;
+	struct v4l2_subdev_frame_size_enum fse;
+	struct v4l2_subdev_state state;
+	uint32_t support_fmt[2] = {CAM_FMT_RAW8, CAM_FMT_NV12};
+	int i, j, rc;
+
+	ins = &inst->dev->insts[inst->id];
+	sd = &inst->node.sd;
+	ins->input_bayer_format = BAYER_FMT_BGGR;
+
+	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
+
+	for(j = 0; j < ARRAY_SIZE(support_fmt); j++){
+		cap = &ins->fmt_cap[j];
+		cap->format = support_fmt[j];
+		for (i = 0; i < ARRAY_SIZE(cap->res); i++) {
+			res = &cap->res[i];
+			memset(&state, 0, sizeof(state));
+			memset(&fse, 0, sizeof(fse));
+			fse.index = i;
+			fse.code = cam_format_to_mbus_code(CAM_FMT_RAW8, ins->input_bayer_format);
+			rc = sd->ops->pad->enum_frame_size(sd, &state, &fse);
+			if (rc < 0)
+				break;
+			res->type = CAP_DC;
+			res->dc.width = fse.min_width;
+			res->dc.height = fse.min_height;
+		}
+	}
 }
 
 static int sif_s_stream(struct v4l2_subdev *sd, int enable)
@@ -188,24 +264,45 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 	int rc;
 
 	if (!enable) {
-		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
-	} else if (inst->buf_ctx.pad) {
-		memset(&ctx, 0, sizeof(ctx));
-		ctx.buf_ctx = &inst->buf_ctx;
-		ctx.buf = NULL;
-		sif_set_ctx(inst->dev, inst->id, &ctx);
-	}
+		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL)
+			return 0;
 
-	rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
-	if (rc < 0)
-		return rc;
+		if (inst->buf_ctx.pad) {
+			memset(&ctx, 0, sizeof(ctx));
+			sif_set_ctx(inst->dev, inst->id, &ctx);
+		}
 
-	if (enable) {
-		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
+		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL)
+			refcount_dec(&inst->start_refcnt);
+
+		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
+			rc = subdev_set_stream(sd, enable);
+			if (rc < 0)
+				return rc;
+
+			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
+			if (rc < 0)
+				return rc;
+
+			inst->fmt_changed = false;
+		}
+	} else {
+		if (inst->buf_ctx.pad) {
+			memset(&ctx, 0, sizeof(ctx));
+			ctx.buf_ctx = &inst->buf_ctx;
+			sif_set_ctx(inst->dev, inst->id, &ctx);
+		}
+
+		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
+			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
+			if (rc < 0)
+				return rc;
+
+			rc = subdev_set_stream(sd, enable);
+			if (rc < 0)
+				return rc;
+		}
+		refcount_inc(&inst->start_refcnt);
 	}
 	return 0;
 }
@@ -213,12 +310,18 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 static int sif_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct sif_v4l_instance *ins = sd_to_sif_v4l_instance(sd);
+
+	fiv->interval = ins->out_fps;
 	return 0;
 }
 
 static int sif_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct sif_v4l_instance *ins = sd_to_sif_v4l_instance(sd);
+
+	fiv->interval = ins->out_fps;
 	return 0;
 }
 
@@ -226,42 +329,62 @@ static int sif_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 		       struct v4l2_subdev_format *fmt)
 {
 	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_instance *sif;
 	struct cam_format f;
-	int rc;
+	struct v4l2_subdev_format senfmt;
+	int rc = 0;
 
-	rc = subdev_set_fmt(sd, state, fmt);
-	if (rc < 0)
-		return rc;
+	memcpy(&senfmt, fmt, sizeof(senfmt));
+	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1_5X8)
+		senfmt.format.code = MEDIA_BUS_FMT_YUYV8_1X16;
 
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
-		return 0;
-
+	memset(&f, 0, sizeof(f));
 	f.width = fmt->format.width;
 	f.height = fmt->format.height;
 	f.stride = ALIGN(fmt->format.width, STRIDE_ALIGN);
-	if (inst->out_pixelformat)
+
+	if (senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
+		f.format = pixelformat_to_cam_format(V4L2_PIX_FMT_NV16);
+	else if (inst->out_pixelformat)
 		f.format = pixelformat_to_cam_format(inst->out_pixelformat);
 	else
 		f.format = mbus_code_to_cam_format(fmt->format.code);
 
+	mutex_lock(&inst->fmt_lock);
+	if (inst->fmt_changed && !memcmp(&f, &inst->fmt, sizeof(f)))
+		goto _exit;
+
+	rc = subdev_set_fmt(sd, state, &senfmt);
+	if (rc < 0)
+		goto _exit;
+
+	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
+		goto _exit;
+
 	inst->dev->ipi_base = inst->id;
 	inst->dev->ipi_channel_num = 1;
+
+	sif = &inst->dev->insts[inst->id];
+	memset(&sif->sif_cfg, 0, sizeof(sif->sif_cfg));
+	if(senfmt.format.code == MEDIA_BUS_FMT_YUYV8_1X16)
+		sif->sif_cfg.yuv_conv = 1;
 
 	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post,
 			    BOTH_CHANNEL);
 	if (rc < 0)
-		return rc;
+		goto _exit;
 
-	inst->out_fmt = *fmt;
-	return 0;
+	inst->fmt = f;
+	inst->fmt_changed = true;
+
+_exit:
+	mutex_unlock(&inst->fmt_lock);
+	return rc;
 }
 
 static int sif_get_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 		       struct v4l2_subdev_format *fmt)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
-
-	*fmt = inst->out_fmt;
 	return 0;
 }
 
@@ -276,6 +399,10 @@ static int sif_enum_frame_size(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
+	int rc;
+	rc = subdev_enum_frame_size(sd, state, fse);
+	if (rc < 0)
+		return rc;
 	return 0;
 }
 
@@ -285,6 +412,15 @@ static int sif_enum_frame_interval(struct v4l2_subdev *sd,
 {
 	return 0;
 }
+
+static long sif_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+	return subdev_call_command(sd, cmd, arg);
+}
+
+static const struct v4l2_subdev_core_ops sif_core_ops = {
+	.command = sif_command,
+};
 
 static const struct v4l2_subdev_video_ops sif_video_ops = {
 	.s_stream = sif_s_stream,
@@ -301,8 +437,60 @@ static const struct v4l2_subdev_pad_ops sif_pad_ops = {
 };
 
 static const struct v4l2_subdev_ops sif_subdev_ops = {
+	.core = &sif_core_ops,
 	.video = &sif_video_ops,
 	.pad = &sif_pad_ops,
+};
+
+static int sif_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	int rc = 0;
+
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
+		refcount_inc(&inst->open_count);
+		goto _exit;
+	}
+	refcount_inc(&inst->open_count);
+
+	rc = subdev_open(sd);
+	if (rc < 0)
+		goto _exit;
+
+	rc = sif_open(inst->dev, inst->id);
+
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
+}
+
+static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	int rc = 0;
+
+	mutex_lock(&inst->open_lock);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		refcount_dec(&inst->open_count);
+	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+		goto _exit;
+
+	rc = subdev_close(sd);
+	if (rc < 0)
+		goto _exit;
+
+	inst->out_pixelformat = 0;
+	rc = sif_close(inst->dev, inst->id);
+
+_exit:
+	mutex_unlock(&inst->open_lock);
+	return rc;
+}
+
+static const struct v4l2_subdev_internal_ops sif_internal_ops = {
+	.open = sif_v4l_open,
+	.close = sif_v4l_close,
 };
 
 static void sif_inst_remove(struct sif_v4l_instance *insts, u32 num)
@@ -382,6 +570,13 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		inst->id = i;
 		inst->dev = &v4l_dev->sif_dev;
 		inst->en_post = true;
+		inst->out_fps.numerator = 30;
+		inst->out_fps.denominator = 1;
+
+		mutex_init(&inst->open_lock);
+		mutex_init(&inst->fmt_lock);
+		refcount_set(&inst->start_refcnt, REFCNT_INIT_VAL);
+		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 
 		n->async_bound = sif_async_bound;
 
@@ -391,6 +586,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = sif_enum_out_format;
 		n->bctx.enum_framesize = sif_enum_out_framesize;
 		n->bctx.enum_frameinterval = sif_enum_out_frameinterval;
+		n->bctx.set_cap = sif_set_cap;
 
 		n->dev = dev;
 		n->num_pads = 3;
@@ -412,6 +608,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 			sif_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &sif_internal_ops;
 	}
 	v4l_dev->insts = insts;
 
@@ -423,12 +620,6 @@ static int sif_v4l_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, v4l_dev);
-
-	rc = sif_runtime_resume(dev);
-		if (rc) {
-		dev_err(dev, "failed to call sif_runtime_resume (err=%d)\n", rc);
-		return rc;
-	}
 
 	if (v4l_dev->sif_dev.axi)
 		dev_dbg(dev, "axi clock: %ld Hz\n", clk_get_rate(v4l_dev->sif_dev.axi));
@@ -457,12 +648,6 @@ static int sif_v4l_remove(struct platform_device *pdev)
 	rc = sif_remove(pdev, &v4l_dev->sif_dev);
 	if (rc < 0) {
 		dev_err(dev, "failed to call sif_remove (err=%d)\n", rc);
-		return rc;
-	}
-
-	rc = sif_runtime_suspend(dev);
-		if (rc) {
-		dev_err(dev, "failed to call sif_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}
 

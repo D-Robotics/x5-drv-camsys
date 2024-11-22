@@ -388,8 +388,14 @@ EXPORT_SYMBOL(csi_nat_probe);
 int csi_nat_remove(struct platform_device *pdev, struct mipi_hdev_s *hdev)
 {
 	struct csi_nat_device *nat_dev = (struct csi_nat_device *)hdev;
+	int rc;
 
-	return csi_remove(pdev, &nat_dev->csi_dev);
+	rc = csi_remove(pdev, &nat_dev->csi_dev);
+	if (rc < 0)
+		return rc;
+
+	devm_kfree(&pdev->dev, nat_dev);
+	return 0;
 }
 EXPORT_SYMBOL(csi_nat_remove);
 

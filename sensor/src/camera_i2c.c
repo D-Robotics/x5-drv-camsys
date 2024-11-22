@@ -28,6 +28,23 @@
 /* #include "inc/camera_subdev.h" */
 /* #include "inc/camera_i2c.h" */
 
+static struct i2c_client *find_i2c_client_by_addr(struct i2c_adapter *adapter, uint32_t addr)
+{
+	struct i2c_client *client;
+	struct device *dev;
+
+	list_for_each_entry(dev, &adapter->dev.kobj.entry, kobj.entry) {
+		if (dev->type == &i2c_client_type) {
+			client = to_i2c_client(dev);
+			if (client->addr == addr) {
+				return client;
+			}
+		}
+	}
+
+	return NULL;
+}
+
 /**
  * @NO{S10E02C08}
  * @ASIL{B}
@@ -101,12 +118,24 @@ int32_t camera_i2c_open(struct sensor_device_s *sen, uint32_t bus_num, char *sen
 		ret = -ENODEV;
 		goto i2c_open_err_unlock;
 	}
-	client = i2c_new_client_device(adap, &dev->board_info);
+
+	/* In order to be compatible with dts v4l2 sensor node,
+	 * we need to first find out whether there is an existing
+	 * i2c client, and then determine whether to create a new
+	 * i2c client.*/
+	client = find_i2c_client_by_addr(adap, sensor_addr);
 	if (IS_ERR_OR_NULL(client)) {
-		sen_err(dev, "%s open i2c%d@0x%02x new client error\n",
+		sen_debug(dev, "%s find i2c%d@0x%02x client error, maybe new client, creat it.\n",
 			sensor_name, bus, sensor_addr);
-		ret = -ENOMEM;
-		goto i2c_open_err_put;
+
+		client = i2c_new_client_device(adap, &dev->board_info);
+		if (IS_ERR_OR_NULL(client)) {
+			ret = -ENOMEM;
+			goto i2c_open_err_put;
+		}
+		dev->no_new_client = 0;
+	} else {
+		dev->no_new_client = 1;
 	}
 
 	sen_info(dev, "%s open i2c%d@0x%02x\n",
@@ -168,7 +197,8 @@ int32_t camera_i2c_release(struct sensor_device_s *sen)
 		return 0;
 	}
 
-	i2c_unregister_device(dev->client);
+	if (dev->no_new_client == 0)
+		i2c_unregister_device(dev->client);
 	sen_info(dev, "%s release i2c%d@0x%02x\n",
 		sensor_name, bus, sensor_addr);
 	dev->client = NULL;
@@ -426,8 +456,8 @@ int32_t camera_i2c_write(struct sensor_device_s *sen, uint32_t reg_addr, uint32_
 
 	osal_mutex_lock(&mdev->bus_mutex);
 	client = mdev->client;
-	if (client == NULL) {
-		sen_err(dev, "%s i2c%d@0x%02x W 0x%04x[%d]: 0x%02x 0x%02x%s client NULL error\n",
+	if (client == NULL || !virt_addr_valid(client->adapter)) {
+		sen_err(dev, "%s i2c%d@0x%02x W 0x%04x[%d]: 0x%02x 0x%02x%s client error\n",
 			sensor_name, bus, sensor_addr, reg_addr, count,
 			buf[0], (count > 1) ? buf[1] : 0, (count > 2) ? " ..." : "");
 		osal_mutex_unlock(&mdev->bus_mutex);

@@ -350,7 +350,7 @@ static s32 vse_video_streamon(struct vio_video_ctx *vctx)
 			return rc;
 		}
 
-		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 1, 1, 1);
+		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 1);
 	}
 	return 0;
 }
@@ -371,7 +371,7 @@ static s32 vse_video_streamoff(struct vio_video_ctx *vctx)
 			return rc;
 		}
 
-		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 0, 1, 1);
+		return vse_set_state(&inst->dev->vse_dev, vctx->ctx_id, 0);
 	}
 	return 0;
 }
@@ -1179,6 +1179,7 @@ static int vse_nat_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	vse_debugfs_remo(&nat_dev->vse_dev);
 #endif
+	devm_kfree(dev, nat_dev);
 
 	dev_dbg(dev, "VS VSE driver (native) removed\n");
 	return 0;

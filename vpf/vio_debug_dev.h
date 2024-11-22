@@ -19,5 +19,6 @@ s32 vio_debug_create(struct device *dev);
 void vio_debug_destroy(struct device *dev);
 s32 vpf_create_debug_file(struct hobot_vpf_dev *vpf_dev);
 void vpf_destroy_debug_file(struct hobot_vpf_dev *vpf_dev);
+ssize_t vio_print_delay_log(s32 flow_id, char *buf, size_t size);
 
 #endif

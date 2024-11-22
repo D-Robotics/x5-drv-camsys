@@ -21,11 +21,14 @@
 #define vio_warn(fmt, ...)      printf(fmt, ##__VA_ARGS__)
 #define vio_dbg(fmt, ...)       printf(fmt, ##__VA_ARGS__)
 #define vio_info(fmt, ...)      printf(fmt, ##__VA_ARGS__)
+#define vio_warn_ratelimited(fmt, ...)	printf(fmt, ##__VA_ARGS__)
 #else
 #define vio_err(fmt, ...)	(void)pr_err("[L%d]"fmt, __LINE__, ##__VA_ARGS__)
 #define vio_warn(fmt, ...)	(void)pr_warn("[L%d]"fmt, __LINE__, ##__VA_ARGS__)
 #define vio_dbg(fmt, ...)	pr_debug("[L%d]"fmt, __LINE__, ##__VA_ARGS__)
 #define vio_info(fmt, ...)	(void)pr_info("[L%d]"fmt, __LINE__, ##__VA_ARGS__)
+#define vio_warn_ratelimited(fmt, ...)	(void)pr_warn_ratelimited("[L%d]"fmt, __LINE__, ##__VA_ARGS__)
+
 #endif
 
 #define CONFIG_QEMU_TEST 0

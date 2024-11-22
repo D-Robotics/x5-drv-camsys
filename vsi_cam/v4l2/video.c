@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/i2c.h>
 
 #include "cam_buf.h"
 #include "cam_uapi.h"
@@ -20,6 +21,7 @@ struct entity_link {
 	u32 flags;
 };
 
+/* sifx4 output */
 static struct entity_link links0[] = {
 	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
@@ -27,47 +29,8 @@ static struct entity_link links0[] = {
 	{ SIF_DEV_NAME "3-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-static struct entity_link links2[] = {
-	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ GDC_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
-};
-
-static struct entity_link links6[] = {
-	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
-};
-
-static struct entity_link links9[] = {
-	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-1", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-};
-
-static struct entity_link links10[] = {
-	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "3-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-};
-
-static struct entity_link links11[] = {
+/* sifx4 online ispx4 + sif offline isp */
+static struct entity_link links1[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
@@ -78,15 +41,14 @@ static struct entity_link links11[] = {
 	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-static struct entity_link links12[] = {
-	{ SIF_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-};
-
-static struct entity_link links13[] = {
+/* sif online isp online vse */
+static struct entity_link links2[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
@@ -99,40 +61,76 @@ static struct entity_link links13[] = {
 	{ VSE_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-2", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-3", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ ISP_DEV_NAME "0-1", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ ISP_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // ISP capture data
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+	{ SIF_DEV_NAME "2-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+	{ SIF_DEV_NAME "3-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
+};
+
+/* sif offline vse */
+static struct entity_link links3[] = {
+	{ SIF_DEV_NAME "0-1", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-1", 0, VSE_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-5", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* sif offline isp offline vse 6 channel */
+static struct entity_link links4[] = {
+	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-4", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* vse stand alone 6 channel */
+static struct entity_link links5[] = {
+	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* sif online isp online vse 6 channel */
+static struct entity_link links6[] = {
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 static struct entity_link *links[] = {
 	links0,
-	NULL,
+	links1,
 	links2,
-	NULL,
-	NULL,
-	NULL,
+	links3,
+	links4,
+	links5,
 	links6,
-	NULL,
-	NULL,
-	links9,
-	links10,
-	links11,
-	links12,
-	links13,
 };
 
 static u32 links_size[] = {
 	ARRAY_SIZE(links0),
-	0,
+	ARRAY_SIZE(links1),
 	ARRAY_SIZE(links2),
-	0,
-	0,
-	0,
+	ARRAY_SIZE(links3),
+	ARRAY_SIZE(links4),
+	ARRAY_SIZE(links5),
 	ARRAY_SIZE(links6),
-	0,
-	0,
-	ARRAY_SIZE(links9),
-	ARRAY_SIZE(links10),
-	ARRAY_SIZE(links11),
-	ARRAY_SIZE(links12),
-	ARRAY_SIZE(links13),
 };
 
 struct vid_video_device {
@@ -146,6 +144,8 @@ struct vid_video_device {
 	spinlock_t irqlock; /* lock for cam buf */
 	u32 buf_sequence;
 	u32 id;
+	unsigned long capture_queue_offset;
+	bool opened, closed;
 	struct list_head queued_list;
 	struct list_head entry;
 };
@@ -166,6 +166,21 @@ static int vid_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
+static int vid_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+{
+	struct vid_video_device *vdev =
+		container_of(ctx, struct vid_video_device, bctx);
+	unsigned long flags;
+
+	if (!ctx || !buf)
+		return -EINVAL;
+
+	spin_lock_irqsave(&vdev->irqlock, flags);
+	list_add_tail(&buf->entry, &vdev->queued_list);
+	spin_unlock_irqrestore(&vdev->irqlock, flags);
+	return 0;
+}
+
 static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
 {
 	struct vid_video_device *vdev =
@@ -182,21 +197,123 @@ static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
 	return buf;
 }
 
+static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx)
+{
+	struct vid_video_device *vdev =
+		container_of(ctx, struct vid_video_device, bctx);
+	unsigned long flags;
+	struct cam_buf *buf;
+
+	spin_lock_irqsave(&vdev->irqlock, flags);
+	buf = list_first_entry_or_null(&vdev->queued_list, struct cam_buf,
+				       entry);
+	spin_unlock_irqrestore(&vdev->irqlock, flags);
+	return buf;
+}
+
+static void init_fmt(struct v4l2_format *f, struct video_fmt *v_f)
+{
+	u32 bytesperline, sizeimage;
+
+	v4l_bound_align_image(&f->fmt.pix.width, MIN_W, MAX_W, ALIGN_W,
+			      &f->fmt.pix.height, MIN_H, MAX_H, ALIGN_H, 0);
+	bytesperline = ALIGN(f->fmt.pix.width * v_f->bpp, STRIDE_ALIGN);
+	if (v_f->bpp == 1)
+		sizeimage = f->fmt.pix.height * (bytesperline * v_f->bit_depth / 8);
+	else
+		sizeimage = f->fmt.pix.height * bytesperline;
+
+	if (f->fmt.pix.bytesperline < bytesperline)
+		f->fmt.pix.bytesperline = bytesperline;
+	if (f->fmt.pix.sizeimage < sizeimage)
+		f->fmt.pix.sizeimage = sizeimage;
+	f->fmt.pix.field = V4L2_FIELD_NONE;
+	f->fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+}
+
+#define pad_to_remote_sd(pad)                                            \
+	({                                                                \
+		struct media_pad *_pad = media_pad_remote_pad_first(pad); \
+		struct v4l2_subdev *_sd = NULL;                           \
+		if (_pad)                                                 \
+			_sd = media_entity_to_v4l2_subdev(_pad->entity);  \
+		_sd;                                                      \
+	})
+
+static int get_def_fmt(struct vid_video_device *vdev, struct v4l2_format *f)
+{
+	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct v4l2_buf_ctx *ctx = v4l2_get_subdevdata(sd);
+	struct video_fmt *v_f;
+	struct v4l2_frmsizeenum fsize;
+	u32 pixelformat = f->fmt.pix.pixelformat, width, height;
+	int rc;
+
+	if (!ctx || !ctx->enum_format || !ctx->enum_framesize)
+		return -EINVAL;
+
+	if (!pixelformat) {
+		rc = ctx->enum_format(ctx, 0, &pixelformat);
+		if (rc < 0)
+			return rc;
+	}
+
+	memset(&fsize, 0, sizeof(fsize));
+	fsize.pixel_format = pixelformat;
+	rc = ctx->enum_framesize(ctx, pad->index, &fsize);
+	if (rc < 0)
+		return rc;
+
+	if (fsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
+		width = fsize.discrete.width;
+		height = fsize.discrete.height;
+	} else if (fsize.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
+		width = fsize.stepwise.min_width;
+		height = fsize.stepwise.max_width;
+	} else {
+		return -EINVAL;
+	}
+
+	v_f = get_fmt_by_pixelformat(pixelformat);
+	if (!v_f)
+		return -EINVAL;
+
+	f->fmt.pix.pixelformat = pixelformat;
+	f->fmt.pix.width = width;
+	f->fmt.pix.height = height;
+	init_fmt(f, v_f);
+	return 0;
+}
+
 static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 			   unsigned int *num_planes, unsigned int sizes[],
 			   struct device *alloc_devs[])
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
-	unsigned int size = vdev->fmt.fmt.pix.sizeimage;
+	unsigned int size;
+	int rc;
 
-	if (!size)
-		return -ENOMEM;
+	if (!vdev->fmt.fmt.pix.sizeimage) {
+		rc = get_def_fmt(vdev, &vdev->fmt);
+		if (rc < 0)
+			return rc;
+	}
+
+	size = vdev->fmt.fmt.pix.sizeimage;
+
+	if (sizes[0] && sizes[0] < size)
+		return -EINVAL;
+
+	if (*num_planes > 1)
+		return -EINVAL;
 
 	if (!*num_buffers)
 		*num_buffers = 1;
-
-	*num_planes = 1;
-	sizes[0] = size;
+	if (!*num_planes)
+		*num_planes = 1;
+	if (!sizes[0])
+		sizes[0] = size;
 	return 0;
 }
 
@@ -246,22 +363,19 @@ static void vid_return_all_buffers(struct vid_video_device *dev,
 			vb2_buffer_done(vb, state);
 }
 
-#define pad_to_remote_sd(pad)                                             \
-	({                                                                \
-		struct media_pad *_pad = media_pad_remote_pad_first(pad); \
-		struct v4l2_subdev *_sd = NULL;                           \
-		if (_pad)                                                 \
-			_sd = media_entity_to_v4l2_subdev(_pad->entity);  \
-		_sd;                                                      \
-	})
-
 static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_buf_ctx *ctx;
 	int rc;
 
 	vdev->buf_sequence = 0;
+	ctx = v4l2_get_subdevdata(sd);
+	if (ctx && ctx->set_stream)
+		ctx->set_stream(ctx, pad->index, 1);
+
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
 	if (rc < 0)
 		return rc;
@@ -276,11 +390,17 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+	struct media_pad *pad = media_pad_remote_pad_first(&vdev->pad);
+	struct v4l2_buf_ctx *ctx;
 	int rc;
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 0);
 	if (rc < 0)
 		return;
+
+	ctx = v4l2_get_subdevdata(sd);
+	if (ctx && ctx->set_stream)
+		ctx->set_stream(ctx, pad->index, 0);
 
 	notify_buf_ready(vdev, 0);
 
@@ -328,12 +448,16 @@ static int vid_enum_fmt(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
+	int rc;
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	if (!vdev->fmt.fmt.pix.width || !vdev->fmt.fmt.pix.height)
-		return -EINVAL;
+	if (!vdev->fmt.fmt.pix.pixelformat) {
+		rc = get_def_fmt(vdev, &vdev->fmt);
+		if (rc < 0)
+			return rc;
+	}
 
 	*f = vdev->fmt;
 	return 0;
@@ -346,17 +470,14 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 	struct v4l2_subdev *sd;
 	struct v4l2_buf_ctx *ctx;
 	struct v4l2_subdev_state state;
+	struct v4l2_subdev_pad_config pads;
 	struct v4l2_subdev_format s_f;
 	struct video_fmt *v_f;
-	u32 bytesperline, sizeimage;
 	int rc;
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
 	if (!pad)
 		return -ENOLINK;
-
-	sd = media_entity_to_v4l2_subdev(pad->entity);
-	ctx = v4l2_get_subdevdata(sd);
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
@@ -365,6 +486,15 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 	if (!v_f)
 		return -EINVAL;
 
+	if (f->fmt.pix.width < MIN_W || f->fmt.pix.height < MIN_H ||
+	    f->fmt.pix.width > MAX_W || f->fmt.pix.height > MAX_H) {
+		rc = get_def_fmt(vdev, f);
+		if (rc < 0)
+			return -EINVAL;
+	}
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	ctx = v4l2_get_subdevdata(sd);
 	if (ctx && ctx->set_format) {
 		rc = ctx->set_format(ctx, f->fmt.pix.pixelformat, is_try);
 		if (rc < 0)
@@ -372,6 +502,7 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 	}
 
 	memset(&state, 0, sizeof(state));
+	memset(&pads, 0, sizeof(pads));
 	memset(&s_f, 0, sizeof(s_f));
 	if (is_try)
 		s_f.which = V4L2_SUBDEV_FORMAT_TRY;
@@ -381,22 +512,12 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 	s_f.format.width = f->fmt.pix.width;
 	s_f.format.height = f->fmt.pix.height;
 	s_f.format.code = v_f->mbus_code;
+	state.pads = &pads;
 	rc = v4l2_subdev_call(sd, pad, set_fmt, &state, &s_f);
 	if (rc < 0)
 		return rc;
 
-	v4l_bound_align_image(&f->fmt.pix.width, MIN_W, MAX_W, ALIGN_W,
-			      &f->fmt.pix.height, MIN_H, MAX_H, ALIGN_H, 0);
-	bytesperline = ALIGN(f->fmt.pix.width * v_f->bpp, STRIDE_ALIGN);
-	if (v_f->bpp == 1)
-		sizeimage = f->fmt.pix.height * (bytesperline * v_f->bit_depth / 8);
-	else
-		sizeimage = f->fmt.pix.height * bytesperline;
-
-	if (f->fmt.pix.bytesperline < bytesperline)
-		f->fmt.pix.bytesperline = bytesperline;
-	if (f->fmt.pix.sizeimage < sizeimage)
-		f->fmt.pix.sizeimage = sizeimage;
+	init_fmt(f, v_f);
 	return 0;
 }
 
@@ -482,14 +603,89 @@ static long vid_ioctl(struct file *file, void *fh, bool valid_prio, unsigned int
 	return rc;
 }
 
+static int vid_g_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+
+	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return -EINVAL;
+
+	return v4l2_g_parm_cap(&vdev->video, sd, a);
+}
+
+static int vid_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct v4l2_subdev *sd = pad_to_remote_sd(&vdev->pad);
+
+	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return -EINVAL;
+
+	return v4l2_s_parm_cap(&vdev->video, sd, a);
+}
+
+static int vid_enum_input(struct file *file, void *priv,
+				struct v4l2_input *input)
+{
+	if (input->index > 0)
+		return -EINVAL;
+
+	input->type = V4L2_INPUT_TYPE_CAMERA;
+	snprintf(input->name, sizeof(input->name), "vscam");
+	return 0;
+}
+
+static int vid_g_input(struct file *file, void *priv, unsigned int *index)
+{
+	*index = 0;
+	return 0;
+}
+
+static int vid_s_input(struct file *file, void *priv, unsigned int index)
+{
+	return index > 0 ? -EINVAL : 0;
+}
+
 static int vid_s_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 {
-	return 0;
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct sen_ctrl ctrl = {0};
+
+	ctrl.ctrl_id = a->id;
+	memcpy(&ctrl.ctrl_data, &a->value, sizeof(a->value));
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	return v4l2_subdev_call(sd, core, command, CAM_SET_CTRL, &ctrl);
 }
 
 static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 {
-	return 0;
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct sen_ctrl ctrl = {0};
+	int rc = 0;
+
+	ctrl.ctrl_id = a->id;
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	rc = v4l2_subdev_call(sd, core, command, CAM_GET_CTRL, &ctrl);
+	if (rc < 0)
+		return -EINVAL;
+
+	memcpy(&a->value, &ctrl.ctrl_data, sizeof(a->value));
+	return rc;
 }
 
 static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls *a)
@@ -497,6 +693,8 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	struct cam_v4l2_ext_control cam_ext_ctrl;
+	bool sd_is_vse = false;
 	int rc = 0;
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
@@ -504,8 +702,17 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 		return -ENOLINK;
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
-
-	rc = v4l2_subdev_call(sd, core, command, true, a->controls);
+	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
+	for (int i = 0; i < a->count; i++) {
+		if (sd_is_vse) {
+			cam_ext_ctrl.pad = pad->index;
+			cam_ext_ctrl.controls = &a->controls[i];
+			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &cam_ext_ctrl);
+		} else
+			rc = v4l2_subdev_call(sd, core, command, CAM_SET_EXT_CTRL, &a->controls[i]);
+		if(rc < 0)
+			return rc;
+	}
 
 	return rc;
 }
@@ -515,6 +722,65 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct media_pad *pad;
 	struct v4l2_subdev *sd;
+	struct cam_v4l2_ext_control cam_ext_ctrl;
+	bool sd_is_vse = false;
+	int rc = 0;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	sd_is_vse = (strncmp(sd->name, VSE_DEV_NAME, strlen(VSE_DEV_NAME)) == 0);
+	for (int i = 0; i < a->count; i++) {
+		if (sd_is_vse) {
+			cam_ext_ctrl.pad = pad->index;
+			cam_ext_ctrl.controls = &a->controls[i];
+			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &cam_ext_ctrl);
+		} else {
+			rc = v4l2_subdev_call(sd, core, command, CAM_GET_EXT_CTRL, &a->controls[i]);
+		}
+
+		if(rc < 0)
+			return rc;
+	}
+
+	return rc;
+}
+
+static int vid_queryctrl(struct file *file, void *fh, struct v4l2_queryctrl *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	return v4l2_subdev_call(sd, core, command, CAM_QUERY_CTRL, a);
+}
+
+static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext_ctrl *a)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	return v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
+}
+
+static int vid_ioc_reqbufs(struct file *file, void *fh, struct v4l2_requestbuffers *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
 	int rc = 0;
 
 	pad = media_pad_remote_pad_first(&vdev->pad);
@@ -523,9 +789,74 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
-	rc = v4l2_subdev_call(sd, core, command, false, a->controls);
+	rc = vb2_ioctl_reqbufs(file, fh, b);
+	if (rc < 0)
+		return -EINVAL;
+	if (!b->count)
+		return rc;
+	vdev->capture_queue_offset =
+		vdev->queue.num_buffers * vdev->queue.bufs[1]->planes[0].m.offset;
 
-	return rc;
+	return v4l2_subdev_call(sd, core, command, CAM_REQ_BUF, (void *)&vdev->capture_queue_offset);
+}
+
+static int vid_ioc_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return vb2_ioctl_querybuf(file, fh, b);
+	else
+		return v4l2_subdev_call(sd, core, command, CAM_QUERY_BUF, (void *)b);
+}
+
+static int vid_ioc_qbuf(struct file *file, void *fh, struct v4l2_buffer *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return vb2_ioctl_qbuf(file, fh, b);
+	else
+		return v4l2_subdev_call(sd, core, command, CAM_Q_BUF, (void *)b);
+}
+
+static int vid_ioc_dqbuf(struct file *file, void *fh, struct v4l2_buffer *b)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return vb2_ioctl_dqbuf(file, fh, b);
+	else
+		return v4l2_subdev_call(sd, core, command, CAM_DQ_BUF, (void *)b);
+}
+
+static int vid_g_fmt_vid_out(struct file *file, void *fh, struct v4l2_format *f)
+{
+	return 0;
 }
 
 static const struct v4l2_ioctl_ops vid_ioctl_ops = {
@@ -538,17 +869,95 @@ static const struct v4l2_ioctl_ops vid_ioctl_ops = {
 	.vidioc_enum_frameintervals = vid_enum_frameintervals,
 	.vidioc_streamon = vid_streamon,
 	.vidioc_streamoff = vid_streamoff,
-	.vidioc_reqbufs = vb2_ioctl_reqbufs,
-	.vidioc_querybuf = vb2_ioctl_querybuf,
-	.vidioc_qbuf = vb2_ioctl_qbuf,
-	.vidioc_dqbuf = vb2_ioctl_dqbuf,
+	.vidioc_create_bufs = vb2_ioctl_create_bufs,
+	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
+	.vidioc_reqbufs = vid_ioc_reqbufs,
+	.vidioc_querybuf = vid_ioc_querybuf,
+	.vidioc_qbuf = vid_ioc_qbuf,
+	.vidioc_dqbuf = vid_ioc_dqbuf,
 	.vidioc_expbuf = vb2_ioctl_expbuf,
 	.vidioc_default = vid_ioctl,
+	.vidioc_g_parm = vid_g_parm,
+	.vidioc_s_parm = vid_s_parm,
+	.vidioc_enum_input = vid_enum_input,
+	.vidioc_s_input = vid_s_input,
+	.vidioc_g_input = vid_g_input,
 	.vidioc_s_ctrl = vid_s_ctrl,
 	.vidioc_g_ctrl = vid_g_ctrl,
 	.vidioc_s_ext_ctrls = vid_s_ext_ctrls,
 	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
+	.vidioc_queryctrl = vid_queryctrl,
+	.vidioc_query_ext_ctrl = vid_query_ext_ctrl,
+	.vidioc_g_fmt_vid_out = vid_g_fmt_vid_out,
 };
+
+static int vid_open(struct file *file)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	int rc;
+
+	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
+		return 0;
+
+	rc = v4l2_fh_open(file);
+	if (rc < 0)
+		return rc;
+
+	if (!vdev->opened) {
+		vdev->opened = true;
+		return 0;
+	}
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad) {
+		v4l2_fh_release(file);
+		return -ENOLINK;
+	}
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	if (sd->internal_ops && sd->internal_ops->open)
+		sd->internal_ops->open(sd, NULL/*subdev_fh*/);
+	return 0;
+}
+
+static int vid_release(struct file *file)
+{
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
+		return 0;
+
+	if (!vdev->closed) {
+		vdev->closed = true;
+		return 0;
+	}
+
+	if (vdev->queue.num_buffers > 0) {
+		pr_warn("%s num_buffers of vdev queue is not 0 (%d)\n",
+			__func__, vdev->queue.num_buffers);
+		return -EFAULT;
+	}
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	if (sd->internal_ops && sd->internal_ops->close)
+		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+
+	v4l2_fh_release(file);
+	INIT_LIST_HEAD(&vdev->queued_list);
+	memset(&vdev->fmt, 0, sizeof(vdev->fmt));
+	vdev->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	vdev->fmt.fmt.pix.field = V4L2_FIELD_NONE;
+	vdev->fmt.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+	return 0;
+}
 
 static int vid_link_setup(struct media_entity *entity,
 			  const struct media_pad *local,
@@ -567,15 +976,34 @@ static const struct media_entity_operations vid_media_ops = {
 	.link_validate = vid_link_validate,
 };
 
-static void vid_video_device_release(struct video_device *vdev)
+static int vid_mmap(struct file * file, struct vm_area_struct * vma)
 {
+	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
+	struct vid_video_device *vdev = file_to_video_device(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+
+	pad = media_pad_remote_pad_first(&vdev->pad);
+	if (!pad)
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+
+	if (offset < vdev->capture_queue_offset)
+		return vb2_fop_mmap(file, vma);
+	else {
+		vma->vm_pgoff = (offset - vdev->capture_queue_offset) >> PAGE_SHIFT;
+		return v4l2_subdev_call(sd, core, command, CAM_MMAP, (void *)vma);
+	}
 }
 
 static const struct v4l2_file_operations video_ops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = video_ioctl2,
 	.poll = vb2_fop_poll,
-	.mmap = vb2_fop_mmap,
+	.mmap = vid_mmap,
+	.open = vid_open,
+	.release = vid_release,
 };
 
 static struct vid_video_device *create_video_device(struct vid_device *vdev,
@@ -594,15 +1022,16 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 
 	v->id = id;
 
+	mutex_init(&v->lock);
+
 	v->video.v4l2_dev = &vdev->v4l2_dev;
-	v->video.release = vid_video_device_release;
+	v->video.release = video_device_release_empty;
 	v->video.fops = &video_ops;
 	v->video.ioctl_ops = &vid_ioctl_ops;
 	v->video.minor = -1;
-	v->video.vfl_type = VFL_TYPE_VIDEO;
 	v->video.device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
-
-	mutex_init(&v->lock);
+	v->video.lock = &v->lock;
+	v->video.dev_parent = dev->parent;
 
 	v->queue.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	v->queue.drv_priv = v;
@@ -626,6 +1055,8 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 	INIT_LIST_HEAD(&v->queued_list);
 	v->bctx.qbuf = vid_qbuf;
 	v->bctx.dqbuf = vid_dqbuf;
+	v->bctx.acqbuf = vid_acqbuf;
+	v->bctx.drop = vid_drop;
 
 	video_set_drvdata(&v->video, &v->bctx);
 
@@ -645,11 +1076,13 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 		goto _media_pads_init_err;
 	}
 
-	rc = video_register_device(&v->video, v->video.vfl_type, -1);
+	rc = video_register_device(&v->video, VFL_TYPE_VIDEO, -1);
 	if (rc < 0) {
 		dev_err(dev, "failed to register video device (err=%d).\n", rc);
 		goto _video_dev_reg_err;
 	}
+
+	v->video.vfl_dir = VFL_DIR_M2M;
 
 	list_add_tail(&v->entry, &vdev->video_device_list);
 	return v;
@@ -668,11 +1101,13 @@ _vb2_queue_init_err:
 static void destroy_video_device(struct vid_video_device *vdev)
 {
 	if (vdev) {
+		memset(&vdev->video.vfl_dir, 0, sizeof(vdev->video.vfl_dir));
 		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
 		video_unregister_device(&vdev->video);
 		media_entity_cleanup(&vdev->video.entity);
 		vb2_queue_release(&vdev->queue);
 		mutex_destroy(&vdev->lock);
+		devm_kfree(vdev->queue.dev, vdev);
 	}
 }
 
@@ -685,6 +1120,91 @@ static struct media_entity *find_entity_by_name(struct v4l2_device *dev,
 		if (!strcmp(sd->entity.name, name))
 			return &sd->entity;
 	return NULL;
+}
+
+struct media_entity *get_sensor_media_entity(struct media_entity *csi_entity)
+{
+    struct v4l2_subdev *csi_subdev, *sensor_subdev;
+    struct device *dev;
+    struct fwnode_handle *csi_fwnode, *endpoint = NULL, *remote_endpoint = NULL;
+    struct fwnode_handle *remote_port = NULL, *remote_node = NULL;
+    struct media_entity *sensor_entity = NULL;
+    struct i2c_client *i2c_dev;
+    struct device_node *node;
+
+    csi_subdev = media_entity_to_v4l2_subdev(csi_entity);
+    if (!csi_subdev) {
+        pr_err("Failed to get CSI subdev\n");
+        return NULL;
+    }
+
+    dev = csi_subdev->dev;
+    if (!dev) {
+        pr_err("No device found for CSI subdev\n");
+        return NULL;
+    }
+
+    csi_fwnode = dev_fwnode(dev);
+    if (!csi_fwnode) {
+        dev_err(dev, "No fwnode found for CSI device\n");
+        return NULL;
+    }
+
+    endpoint = fwnode_graph_get_next_endpoint(csi_fwnode, NULL);
+    if (!endpoint) {
+        dev_err(dev, "No endpoint found for CSI\n");
+        return NULL;
+    }
+
+    remote_endpoint = fwnode_graph_get_remote_endpoint(endpoint);
+    if (!remote_endpoint) {
+        dev_err(dev, "No remote endpoint found\n");
+        goto out_put_endpoint;
+    }
+
+    remote_port = fwnode_get_parent(remote_endpoint);
+    if (!remote_port) {
+        dev_err(dev, "No remote port found\n");
+        goto out_put_remote_endpoint;
+    }
+
+    remote_node = fwnode_get_parent(remote_port);
+    if (!remote_node) {
+        dev_err(dev, "No remote node found\n");
+        goto out_put_remote_port;
+    }
+
+    node = to_of_node(remote_node);
+    if (!node) {
+        dev_err(dev, "Failed to convert remote node to device node\n");
+        goto out_put_remote_node;
+    }
+
+    i2c_dev = of_find_i2c_device_by_node(node);
+    if (!i2c_dev) {
+        dev_err(dev, "No I2C device found for sensor\n");
+        goto out_put_remote_node;
+    }
+
+    sensor_subdev = i2c_get_clientdata(i2c_dev);
+    if (!sensor_subdev) {
+        dev_err(dev, "No sensor subdev found\n");
+        goto out_put_remote_node;
+    }
+
+    sensor_entity = &sensor_subdev->entity;
+    dev_info(dev, "Successfully found sensor entity\n");
+
+out_put_remote_node:
+    fwnode_handle_put(remote_node);
+out_put_remote_port:
+    fwnode_handle_put(remote_port);
+out_put_remote_endpoint:
+    fwnode_handle_put(remote_endpoint);
+out_put_endpoint:
+    fwnode_handle_put(endpoint);
+
+    return sensor_entity;
 }
 
 static struct media_pad *get_pad(struct media_entity *ent, u16 pad,
@@ -766,7 +1286,7 @@ static int create_link(struct device *dev, struct media_entity *src,
 int create_default_links(struct vid_device *vdev)
 {
 	struct vid_video_device *v = NULL;
-	struct media_entity *src, *sink;
+	struct media_entity *src, *sink, *sensor_src;
 	char name[64];
 	u32 i = 0, j = 0;
 	int rc = 0;
@@ -789,6 +1309,16 @@ int create_default_links(struct vid_device *vdev)
 				 MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
 		if (rc < 0)
 			return rc;
+
+		if (j == 0) {
+			sensor_src = get_sensor_media_entity(src);
+			if (sensor_src) {
+				rc = create_link(vdev->v4l2_dev.dev, sensor_src, 0, src, 0,
+					MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE);
+				if (rc < 0)
+					return rc;
+			}
+		}
 
 		j++;
 	}
@@ -817,7 +1347,9 @@ int create_default_links(struct vid_device *vdev)
 		rc = create_link(vdev->v4l2_dev.dev, src, link->src_pad, sink,
 				 link->sink_pad, link->flags);
 		if (rc < 0) {
-			dev_err(vdev->v4l2_dev.dev, "failed to create link , src_pad=%d, sink_pad=%d", link->src_pad, link->sink_pad);
+			dev_err(vdev->v4l2_dev.dev,
+				"failed to create link, src_pad=%d, sink_pad=%d",
+				link->src_pad, link->sink_pad);
 			destroy_links(vdev);
 			return rc;
 		}
@@ -840,4 +1372,51 @@ void destroy_links(struct vid_device *vdev)
 		media_entity_remove_links(&v->video.entity);
 		destroy_video_device(v);
 	}
+}
+
+int vid_subdev_set_cap(struct vid_device *vdev)
+{
+	struct vid_video_device *v;
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct v4l2_buf_ctx *ctx;
+
+	list_for_each_entry(v, &vdev->video_device_list, entry) {
+		pad = media_pad_remote_pad_first(&v->pad);
+		if (!pad)
+			return -ENOLINK;
+		sd = media_entity_to_v4l2_subdev(pad->entity);
+		ctx = v4l2_get_subdevdata(sd);
+		if (ctx && ctx->set_cap)
+			ctx->set_cap(ctx);
+	}
+
+	return 0;
+}
+
+int vid_subdev_init_output_ctx(struct vid_device *vdev)
+{
+	struct vid_video_device *v;
+	struct media_pad *pad;
+	struct v4l2_subdev *sd;
+	struct v4l2_buf_ctx *ctx;
+	int rc = 0;
+
+	list_for_each_entry(v, &vdev->video_device_list, entry) {
+		pad = media_pad_remote_pad_first(&v->pad);
+		if (!pad)
+			return -ENOLINK;
+		sd = media_entity_to_v4l2_subdev(pad->entity);
+		ctx = v4l2_get_subdevdata(sd);
+		if (ctx && ctx->is_standalone && ctx->is_standalone(ctx))
+			v->video.vfl_dir = VFL_DIR_M2M;
+		else
+			continue;
+		if (ctx && ctx->init_output_ctx) {
+			rc = ctx->init_output_ctx(ctx);
+			if (rc < 0)
+				break;
+		}
+	}
+	return rc;
 }

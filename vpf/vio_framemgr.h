@@ -46,6 +46,7 @@ enum vio_frame_state {
 struct frame_id_desc {
 	u32 frame_id; //frame count
 	u64 timestamps;//readout system count
+	u64 sys_timestamps;//readout system timestamp
 	u64 tv_sec;// readout system time (unit:s)
 	u64 tv_usec;//readout system time (unit:us)
 	u64 trig_tv_sec;// lpwm trigger system time (unit:s)

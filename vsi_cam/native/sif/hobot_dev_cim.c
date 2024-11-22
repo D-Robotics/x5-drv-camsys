@@ -532,8 +532,33 @@ void cim_video_get_frameid(struct vio_node *vnode, struct frame_id_desc *frameid
 	}
 }
 
+int32_t cim_set_cam_pulse_gen(uint32_t enable)
+{
+	uint8_t index = 0;
+	uint32_t ret = 0;
+	struct j6_cim_dev *cim_dev = NULL;
+
+	for (index = 0; index < VIN_NODE_MAX_DEVICE; index ++) {
+		cim_dev = cim_get_dev(index);
+		if (cim_dev && cim_dev->sif.pulse_dev)
+			break;
+		if (index == (VIN_NODE_MAX_DEVICE - 1)) {
+			vio_err("%s cannot get pulse_dev, check your code \n", __func__);
+			return -EFAULT;
+		}
+	}
+
+	if (enable == 1)
+		ret = sif_set_cam_pulse_gen(cim_dev->sif.pulse_dev, true);
+	else if (enable == 0)
+		ret = sif_set_cam_pulse_gen(cim_dev->sif.pulse_dev, false);
+
+	return ret;
+}
+
 struct cim_interface_ops cim_cops = {
 	.get_frame_id = cim_video_get_frameid,
+	.set_cam_pulse_gen = cim_set_cam_pulse_gen,
 	// .cim_get_lpwm_timestamps = cim_get_lpwm_timestamps,
 };
 
@@ -861,11 +886,6 @@ static s32 cim_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-#ifdef CIM_DEBUG
-	cim->base_reg = devm_kzalloc(&pdev->dev, 0x20000, GFP_KERNEL);
-	dev_err(dev, "fake reg addr %p\n", cim->base_reg);
-#endif
-
 #ifdef CONFIG_OF
 	dnode = dev->of_node;
 	ret = of_property_read_u32(dnode, "id", &cim->hw_id);
@@ -882,7 +902,6 @@ static s32 cim_probe(struct platform_device *pdev)
 	}
 
 	ret = vin_node_device_node_init(cim->hw_id);
-	// ret = vin_node_device_node_init(cim->hw_id);
 	if (ret < 0) {
 		vio_err("vin_node_device_node_init fail\n");
 		return ret;
@@ -916,6 +935,7 @@ static s32 cim_probe(struct platform_device *pdev)
 		vio_get_callback_ops(&g_cim_sensor_cops, VIN_MODULE, COPS_5);
 #endif
 	vio_register_callback_ops(&cb_cim_interface, VIN_MODULE, COPS_0);
+	vio_register_callback_ops(&cb_cim_interface, VIN_MODULE, COPS_9);	/*for lpwm*/
 
 	platform_set_drvdata(pdev, (void *)cim);
 	osal_spin_init(&cim->slock);
@@ -987,17 +1007,20 @@ static s32 cim_remove(struct platform_device *pdev)
 	}
 
 	device_remove_file(dev, &dev_attr_regdump);
+#ifdef CIM_DEBUG
+	device_remove_file(dev, &dev_attr_simu_irq);
+#endif
 	device_remove_file(dev, &dev_attr_cim_stat);
-	// devm_free_irq(dev, (u32)cim->irq, cim);
-	devm_kfree(dev, (void *)cim);
 	vio_unregister_callback_ops(VIN_MODULE, COPS_0);
-	vio_unregister_callback_ops(VIN_MODULE, COPS_1);
-	// vio_unregister_callback_ops(VIN_MODULE, COPS_8);
-	// vio_unregister_callback_ops(VIN_MODULE, COPS_9);
+	vio_unregister_callback_ops(VIN_MODULE, COPS_9);
 	vin_node_device_node_deinit(cim->hw_id);
+	vin_device_node_deinit(cim->hw_id);
+	mutex_destroy(&cim->mlock);
 #ifdef CONFIG_DEBUG_FS
 	sif_debugfs_remo(&cim->sif);
 #endif
+	g_cim_dev[cim->hw_id] = NULL;
+	devm_kfree(dev, (void *)cim);
 	dev_info(dev, "%s\n", __func__);
 	return ret;
 }

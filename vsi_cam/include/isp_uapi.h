@@ -12,10 +12,14 @@
 
 #define ISP_MCM_CLOCK (CAM_CLOCK_EXT_BASE + 1)
 
-#define ISP_MSG_UNIT_TEST      (0x1 << 0)
-#define ISP_MSG_GET_FUNC       (0x2 << 0)
-#define ISP_MSG_GET_VI_INFO    (0x3 << 0)
-#define ISP_MSG_GET_FRAME_INFO (0x4 << 0)
+#define ISP_MSG_UNIT_TEST       (0x1 << 0)
+#define ISP_MSG_GET_FUNC        (0x2 << 0)
+#define ISP_MSG_GET_VI_INFO     (0x3 << 0)
+#define ISP_MSG_GET_FRAME_INFO  (0x4 << 0)
+#define ISP_MSG_GET_METADATA    (0x5 << 0)
+#define ISP_MSG_QRY_METADATA    (0x6 << 0)
+#define ISP_MSG_RESET_SCH       (0x7 << 0)
+#define ISP_MSG_SET_GAMMA_FE_BE (0x8 << 0)
 
 #define ISP_MSG_IRQ_MIS    (0x1 << 8)
 #define ISP_MSG_MCM_SCH    (0x2 << 8)
@@ -23,6 +27,7 @@
 #define ISP_MSG_FRAME_DONE (0x4 << 8)
 
 #define ISP_CTRL_DATA_LENGTH (128)
+#define ISP_CTRL_FEBE_NUM    (129)
 
 struct isp_format {
 	struct cam_format ifmt;
@@ -62,6 +67,12 @@ struct isp_ctrl_ext {
 	struct mem_buf buf;
 	__u32 size;
 	__u8 dir;
+};
+
+struct isp_gamma_febe_ctrl {
+	__u32 compress[ISP_CTRL_FEBE_NUM];
+	__u32 expand[ISP_CTRL_FEBE_NUM];
+	__u8  flag;
 };
 
 enum isp_work_mode {
@@ -106,6 +117,11 @@ struct isp_frame_info {
 	__u64 time_stamp;
 };
 
+struct isp_metadata {
+	struct mem_buf buf;
+	__u8 last;
+};
+
 struct isp_msg {
 	__u32 id;
 	__u32 inst;
@@ -128,7 +144,11 @@ struct isp_msg {
 		struct cam_log log;
 		struct isp_vi_info vinfo;
 		struct isp_frame_info frame_info;
+		struct isp_metadata meta;
+		__u32 meta_enabled;
 		__u32 tune_enabled;
+		struct isp_gamma_febe_ctrl febe_ctrl;
+		struct sen_ctrl sen_ctrl;
 	};
 };
 

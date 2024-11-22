@@ -11,11 +11,15 @@
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
+#include "cam_pulse.h"
 #include "isc.h"
 #include "sif_uapi.h"
 #include "sif_regs.h"
 
 #include "sif.h"
+
+static refcount_t sif_pm = REFCOUNT_INIT(REFCNT_INIT_VAL);
+static DEFINE_MUTEX(sif_pm_lock);
 
 void sif_post(struct sif_device *sif, void *msg, u32 len)
 {
@@ -278,6 +282,8 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 	u32 val;
 	u32 irq_val;
 
+	dev_dbg(dev->dev,"%s sif(%d-%d)+\n", __func__, dev->id, inst);
+
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&sif->lock, flags);
 	sif->frame_start_cnt = 0;
@@ -325,7 +331,7 @@ static void sif_start_ipi(struct sif_device *dev, u32 inst)
 
 	sif_write(dev, SIF_IPI_IRQ_CLR(inst), irq_val);
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
-
+	dev_dbg(dev->dev, "%s irq_val=0x%x\n", __func__, sif_read(dev, SIF_IPI_IRQ_EN(inst)));
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
 }
 
@@ -334,7 +340,9 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	struct sif_instance *sif;
 	unsigned long flags;
 	u32 val;
-	u32 irq_val;
+	u32 irq_val, reg_val;
+
+	dev_dbg(dev->dev, "%s sif(%d-%d)+\n", __func__, dev->id, inst);
 
 	sif = &dev->insts[inst];
 	spin_lock_irqsave(&dev->cfg_reg_lock, flags);
@@ -343,6 +351,7 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 	if (sif->ctx.buf_ctx || inst != sif->ipi_base) {
 		val = sif_read(dev, SIF_DMA_CTL);
 		val &= ~SIF_ENABLE_IPI[inst];
+		val |= SIF_DMA_CONFIG_IPI[inst];
 		sif_write(dev, SIF_DMA_CTL, val);
 		irq_val &= ~(SIF_IRQ_DONE);
 	}
@@ -351,7 +360,12 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 		irq_val &= ~SIF_IRQ_EBD_DMA_DONE;
 
 	sif_write(dev, SIF_IPI_IRQ_EN(inst), irq_val);
+	reg_val = sif_read(dev, SIF_ISP_CTRL);
+	reg_val &= ~BIT(inst);
+	sif_write(dev, SIF_ISP_CTRL, reg_val);
 	spin_unlock_irqrestore(&dev->cfg_reg_lock, flags);
+
+	dev_dbg(dev->dev, "%s-\n", __func__);
 }
 
 int sif_reset_ipi(struct sif_device *sif, u32 inst)
@@ -435,6 +449,48 @@ int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx)
 	return 0;
 }
 
+int sif_set_cam_pulse_gen(struct cam_pulse_device *dev, bool enable)
+{
+	int rc = 0;
+
+	if (!dev)
+		return -EINVAL;
+
+	if (enable)
+		rc = start_cam_pulse_gen(dev);
+	else
+		rc = stop_cam_pulse_gen(dev);
+
+	return rc;
+}
+
+int sif_get_frame_info(struct sif_device *sif, u32 inst,
+		       struct cam_frame_info *info)
+{
+	u64 time_stamp;
+	struct sif_instance *ins = &sif->insts[inst];
+
+	if (!sif || !info || inst >= sif->num_insts)
+		return -EINVAL;
+
+	info->frame_id = sif_read(sif, SIF_IPI_FRAME_ID(inst));
+	if (ins->sif_cfg.ts_ctrl.trigger_mode & IPI_VSYNC) {
+		time_stamp = sif_read(sif, SIF_IPI_TS_VSYNC_HI(inst));
+		time_stamp = sif_read(sif, SIF_IPI_TS_VSYNC_LO(inst)) | (info->time_stamp << 32);
+		info->tv_sec = time_stamp / sif->timestamp_clk;
+		info->tv_usec = (time_stamp % sif->timestamp_clk) / (sif->timestamp_clk / 1000000u);
+	}
+
+	if (ins->sif_cfg.ts_ctrl.trigger_mode & IPI_TRIGGER) {
+		time_stamp = sif_read(sif, SIF_IPI_TS_TRIG_HI(inst));
+		time_stamp = sif_read(sif, SIF_IPI_TS_TRIG_LO(inst)) | (info->time_stamp << 32);
+		info->trig_tv_sec = time_stamp / sif->timestamp_clk;
+		info->trig_tv_usec = (time_stamp % sif->timestamp_clk) / (sif->timestamp_clk / 1000000u);
+	}
+
+	return 0;
+}
+
 static void sif_bound(struct isc_handle *isc, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
@@ -470,6 +526,54 @@ static struct isc_notifier_ops sif_notifier_ops = {
 	.unbind = sif_unbind,
 	.got = sif_msg_handler,
 };
+
+int sif_open(struct sif_device *sif, u32 inst)
+{
+	bool en_clk = false;
+	int rc = 0;
+
+	if (!sif)
+		return -EINVAL;
+
+	mutex_lock(&sif->open_lock);
+	if (refcount_read(&sif->open_cnt) == REFCNT_INIT_VAL)
+		en_clk = true;
+	refcount_inc(&sif->open_cnt);
+
+	if (en_clk)
+		rc = sif_runtime_resume(sif->dev);
+	mutex_unlock(&sif->open_lock);
+	return rc;
+}
+
+int sif_close(struct sif_device *sif, u32 inst)
+{
+	bool dis_clk = false;
+	int rc;
+
+	if (!sif)
+		return -EINVAL;
+
+	if (inst >= sif->num_insts)
+		return -EINVAL;
+
+	mutex_lock(&sif->open_lock);
+	if (refcount_read(&sif->open_cnt) > REFCNT_INIT_VAL) {
+		refcount_dec(&sif->open_cnt);
+		if (refcount_read(&sif->open_cnt) == REFCNT_INIT_VAL)
+			dis_clk = true;
+	}
+
+	if (!dis_clk)
+		goto _exit;
+
+	sif_reset(sif);
+	rc = sif_runtime_suspend(sif->dev);
+
+_exit:
+	mutex_unlock(&sif->open_lock);
+	return rc;
+}
 
 int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 {
@@ -520,6 +624,8 @@ int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 	sif->rst = sif_dt.rsts[0].rst;
 	spin_lock_init(&sif->isc_lock);
 	spin_lock_init(&sif->cfg_reg_lock);
+	mutex_init(&sif->open_lock);
+	refcount_set(&sif->open_cnt, REFCNT_INIT_VAL);
 
 	sif->insts = devm_kcalloc(dev, sif_dt.num_insts, sizeof(*sif->insts),
 				  GFP_KERNEL);
@@ -529,6 +635,10 @@ int sif_probe(struct platform_device *pdev, struct sif_device *sif)
 	sif->ctrl_dev = get_cam_ctrl_device(pdev);
 	if (IS_ERR(sif->ctrl_dev))
 		return PTR_ERR(sif->ctrl_dev);
+
+	sif->pulse_dev = get_cam_pulse_device(pdev);
+	if (IS_ERR(sif->pulse_dev))
+		return PTR_ERR(sif->pulse_dev);
 
 	rc = of_property_read_u32(pdev->dev.of_node, "timestamp-clk", &sif->timestamp_clk);
 	if (rc) {
@@ -571,17 +681,21 @@ int sif_remove(struct platform_device *pdev, struct sif_device *sif)
 			rc);
 
 	put_cam_ctrl_device(sif->ctrl_dev);
+	put_cam_pulse_device(sif->pulse_dev);
+	devm_kfree(&pdev->dev, sif->insts);
 	dev_dbg(&pdev->dev, "VS SIF driver #%d (base) removed\n", sif->id);
 	return 0;
 }
 
 void sif_reset(struct sif_device *sif)
 {
+	dev_dbg(sif->dev, "%s sif(%d)+\n", __func__, sif->id);
 	if (sif->rst) {
 		reset_control_assert(sif->rst);
 		udelay(2);
 		reset_control_deassert(sif->rst);
 	}
+	dev_dbg(sif->dev, "%s sif(%d)-\n", __func__, sif->id);
 }
 
 #ifdef CONFIG_DEBUG_FS
@@ -679,31 +793,58 @@ int sif_system_resume(struct device *dev)
 int sif_runtime_suspend(struct device *dev)
 {
 	struct sif_device *sif = dev_get_drvdata(dev);
+	struct sif_instance *ins;
+	int inst, rc = 0;
 
-	if (sif->axi)
-		clk_disable_unprepare(sif->axi);
-	if (sif->pclk)
-		clk_disable_unprepare(sif->pclk);
-	return 0;
+	if (!sif)
+		return -EINVAL;
+
+	mutex_lock(&sif_pm_lock);
+	if (refcount_read(&sif_pm) <= REFCNT_INIT_VAL)
+		goto _exit;
+	refcount_dec(&sif_pm);
+	if (refcount_read(&sif_pm) == REFCNT_INIT_VAL) {
+		for (inst = 0; inst < sif->num_insts; inst++) {
+			ins = &sif->insts[inst];
+			if (ins->state == CAM_STATE_STARTED) {
+				rc = -EBUSY;
+				goto _exit;
+			}
+		}
+		if (sif->axi)
+			clk_disable_unprepare(sif->axi);
+		if (sif->pclk)
+			clk_disable_unprepare(sif->pclk);
+	}
+_exit:
+	mutex_unlock(&sif_pm_lock);
+	return rc;
 }
 
 int sif_runtime_resume(struct device *dev)
 {
 	struct sif_device *sif = dev_get_drvdata(dev);
-	int rc;
+	int rc = 0;
 
-	if (sif->axi) {
-		rc = clk_prepare_enable(sif->axi);
-		if (rc)
-			return rc;
-	}
-	if (sif->pclk) {
-		rc = clk_prepare_enable(sif->pclk);
-		if (rc) {
-			clk_disable_unprepare(sif->axi);
-			return rc;
+	mutex_lock(&sif_pm_lock);
+	if (refcount_read(&sif_pm) == REFCNT_INIT_VAL) {
+		if (sif->axi) {
+			rc = clk_prepare_enable(sif->axi);
+			if (rc)
+				goto _exit;
+		}
+		if (sif->pclk) {
+			rc = clk_prepare_enable(sif->pclk);
+			if (rc) {
+				clk_disable_unprepare(sif->axi);
+				goto _exit;
+			}
 		}
 	}
-	return 0;
+	refcount_inc(&sif_pm);
+_exit:
+	mutex_unlock(&sif_pm_lock);
+
+	return rc;
 }
 #endif

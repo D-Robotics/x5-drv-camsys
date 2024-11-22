@@ -84,11 +84,11 @@ static const mipi_host_cfg_union_t mipi_host_cfg_max = {
 		.mclk = 65535u,
 		.mipiclk = 23940u,
 #ifdef X5_CHIP
-		.width = 4656u,
+		.width = 8192u,
 #else
 		.width = 4096u,
 #endif
-		.height = 4096u,
+		.height = 8192u,
 		.linelenth = 65535u,
 		.framelenth = 65535u,
 		.settle = 127u,
@@ -3743,11 +3743,21 @@ static int32_t mipi_host_dphy_wait_stop(struct mipi_hdev_s *hdev, const mipi_hos
 #ifdef CONFIG_MIPI_CSI_STL_PILE_ENABLE
 			(void)mipi_csi_stl_phychk(&host->stl, cfg->lane, MIPI_CSI_PILE_PHYCHK);
 #endif
+
+			/* merge lane mode(4 lane mode) don't need to set source */
+			if (hdev->lane_mode == 0) {
+				(void)mipi_host_dphy_set_source(iomem);
+			}
 			return 0;
 		}
 		osal_mdelay(1); /* PRQA S 2877,2880 */ /* osal_mdelay macro */
 		ncount++;
 	} while ((param->notimeout != 0U) || (ncount <= param->wait_ms));
+
+	/* merge lane mode(4 lane mode) don't need to set source */
+	if (hdev->lane_mode == 0) {
+		(void)mipi_host_dphy_set_source(iomem);
+	}
 
 #ifdef CONFIG_HOBOT_FUSA_DIAG
 	(void)mipi_csi_stl_phychk(&host->stl, cfg->lane, 0);
@@ -3863,11 +3873,6 @@ static int32_t mipi_host_start(struct mipi_hdev_s *hdev)
 		}
 		/* no need check hs if ppi pg enable */
 		nocheck = 1U;
-	}
-
-	/* merge lane mode(4 lane mode) don't need to set source */
-	if (hdev->lane_mode == 0) {
-		(void)mipi_host_dphy_set_source(iomem);
 	}
 
 	if (nocheck == 0U) {
@@ -4075,13 +4080,6 @@ static int32_t mipi_host_init_common(struct mipi_hdev_s *hdev, mipi_host_cfg_t *
 		(void)mipi_host_deinit(hdev);
 		return -1;
 	}
-
-	(void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, hdev->port,
-		MIPI_CFG_CLK_FREQRANGE, MIPI_HOST_CFGCLK_DEFAULT);
-	osal_udelay(1);
-
-	(void)mipi_dphy_set_freqrange(MIPI_DPHY_TYPE_HOST, hdev->port,
-		MIPI_PHY_ENABLE_CLK, 0x1);
 #endif
 
 	/*Clear Synopsys D-PHY Reset*/
@@ -4192,6 +4190,14 @@ static int32_t mipi_host_init(struct mipi_hdev_s *hdev, mipi_host_cfg_t *cfg)
 			return -1;
 		}
 	}
+
+	if (param->need_stop_check != 0U) {
+		/* merge lane mode(4 lane mode) don't need to set source */
+		if (hdev->lane_mode == 0) {
+			(void)mipi_host_dphy_set_source(iomem);
+		}
+	}
+
 	if (hdev->is_ex == 0) {
 #ifdef CONFIG_HOBOT_FUSA_DIAG
 		{

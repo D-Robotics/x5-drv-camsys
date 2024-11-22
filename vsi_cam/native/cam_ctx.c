@@ -24,15 +24,14 @@ int cam_trigger(struct cam_ctx *ctx)
 			ops = get_ops(vdev->vnode->id);
 		if (ops && ops->trigger)
 			return ops->trigger((struct cam_ctx *)vdev);
-	} else if (vdev->vnode->next){
+	} else if (vdev->vnode->next) {
 		vnode = vdev->vnode->next;
 		if (vnode->id < MODULE_NUM)
 			ops = get_ops(vnode->id);
 		if (ops && ops->trigger)
 			return ops->trigger((struct cam_ctx *)vnode->ich_subdev[0]);
-	} else {
-		pr_err("cam trigger null\n");
 	}
+
 	return -EBUSY;
 }
 
@@ -83,6 +82,7 @@ void sif_set_frame_des(struct cam_ctx *ctx, void *data)
 	frameid.frame_id = des->frame_id;
 	/* todo: timestamp temp use kernel api */
 	frameid.timestamps = des->timestamps;
+	frameid.sys_timestamps = des->sys_timestamps;
 	frameid.tv_sec = des->fs_ts / des->trigger_freq;
 	frameid.tv_usec = (des->fs_ts % des->trigger_freq) / (des->trigger_freq / 1000000u);
 	frameid.trig_tv_sec = des->trigger_ts / des->trigger_freq;
@@ -247,4 +247,59 @@ void cam_dec_frame_status(void *cam_ctx)
 			vdev->frame_status--;
 		spin_unlock_irqrestore(&vdev->slock, flag);
 	}
+}
+
+void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
+{
+
+}
+
+void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
+{
+
+}
+
+int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+	struct vio_node *vnode;
+	int ret = 0;
+
+	if (unlikely(!subdev))
+		return -EINVAL;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode) {
+		vio_get_frame_id(vnode);
+		memcpy(info, &vnode->frameid, sizeof(struct cam_frame_info));
+	} else {
+		return -EINVAL;
+	}
+
+	return ret;
+}
+
+int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+	struct vio_node *vnode;
+	int ret = 0;
+
+	if (unlikely(!subdev))
+		return -EINVAL;
+
+	vnode = (struct vio_node *)subdev->vnode;
+
+	if (vnode && info)
+		memcpy(&vnode->frameid, info, sizeof(struct cam_frame_info));
+	else
+		return -EINVAL;
+
+	return ret;
+}
+
+bool vse_get_drop_status(struct cam_ctx *ctx)
+{
+	return false;
 }

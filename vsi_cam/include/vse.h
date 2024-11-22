@@ -79,14 +79,15 @@ struct vse_device {
 	struct device *dev;
 	void __iomem *base;
 	struct clk *core, *axi, *ups, *gdc_core, *gdc_hclk;
-	struct reset_control *rst;
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */
 	struct cam_ctrl_device *ctrl_dev;
+	struct dw_crc_device *crc_dev;
 	struct job_queue *jq; /* offline job queue */
 	struct vse_instance *insts;
 	u32 next_irq_ctx;
 	enum cam_error error;
+	spinlock_t err_lock; /* lock for error var. */
 	bool is_completed;
 	struct mutex open_lock; /* lock for open_cnt */
 	refcount_t open_cnt;
@@ -113,22 +114,22 @@ int vse_set_oformat(struct vse_device *vse, u32 inst, u32 chnl, struct cam_forma
 int vse_set_format(struct vse_device *vse, u32 inst, u32 chnl,
 		   struct vse_format *fmt, struct vse_stitching *stitch);
 int vse_set_cascade(struct vse_device *vse, u32 inst, u32 cas_id, bool en_cas);
-int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32 total_cnt);
+int vse_set_state(struct vse_device *vse, u32 inst, int enable);
 int vse_set_osd_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_info *info);
 int vse_set_osd_buf(struct vse_device *vse, u32 inst, u32 chnl, struct vse_osd_buf *osd_buf);
 int vse_set_osd_lut(struct vse_device *vse, u32 inst, u32 chnl, struct vse_lut_tbl *lut_tbl);
 int vse_set_hist_info(struct vse_device *vse, u32 inst, u32 chnl, struct vse_hist_info info[VSE_HIST_MAX]);
 int vse_set_bin_level(struct vse_device *vse, u32 inst, u32 chnl, u8 bin_level[BIN_LEVEL_NUM]);
 int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id);
-int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx);
+int vse_get_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_add_job(struct vse_device *vse, u32 inst);
+int vse_wake_up(struct vse_device *vse, u32 inst);
 int vse_open(struct vse_device *vse, u32 inst);
 int vse_close(struct vse_device *vse, u32 inst);
 int vse_probe(struct platform_device *pdev, struct vse_device *vse);
 int vse_remove(struct platform_device *pdev, struct vse_device *vse);
 
-void vse_reset(struct vse_device *vse);
 #ifdef CONFIG_DEBUG_FS
 void vse_debugfs_init(struct vse_device *vse);
 void vse_debugfs_remo(struct vse_device *vse);

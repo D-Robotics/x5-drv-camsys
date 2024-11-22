@@ -5,9 +5,12 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-ctrls.h>
 
 #include "cam_dev.h"
 #include "csi_drv.h"
+#include "isp_uapi.h"
+#include "v4l2_usr_api.h"
 
 #define sd_to_csi_v4l_instance(s) \
 ({ \
@@ -28,15 +31,31 @@ static long csi_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 static int csi_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *rsd;
+	int rc = 0;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	rsd = &v4l_dev->insts[0].node.sd;
+
+	if (!enable) {
+		rc = subdev_set_stream(rsd, enable);
+		if (rc < 0)
+			return rc;
+	}
 
 	if (csi->is_idi_mode)
 		return 0;
 
-	if (enable)
+	if (enable) {
 		csi_ipi_start(csi->dev, csi->id);
-	else
+		rc = subdev_set_stream(rsd, enable);
+		if (rc < 0)
+			return rc;
+	} else {
 		csi_ipi_stop(csi->dev, csi->id);
-	return 0;
+	}
+	return rc;
 }
 
 static int csi_g_frame_interval(struct v4l2_subdev *sd,
@@ -90,6 +109,7 @@ static u32 mbus_code_to_csi_format(u32 code)
 	case MEDIA_BUS_FMT_YVYU8_2X8:
 	case MEDIA_BUS_FMT_UYVY8_2X8:
 	case MEDIA_BUS_FMT_VYUY8_2X8:
+	case MEDIA_BUS_FMT_YUYV8_1X16:
 		return CAM_FMT_YUYV;
 	case MEDIA_BUS_FMT_YUYV8_1_5X8:
 		return CAM_FMT_NV12;
@@ -107,6 +127,16 @@ static int csi_set_fmt(struct v4l2_subdev *sd,
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
 	struct cam_format f;
 	struct csi_ipi_base_cfg ipi_cfg;
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *rsd;
+	int rc;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	rsd = &v4l_dev->insts[0].node.sd;
+
+	rc = subdev_set_fmt(rsd, state, fmt);
+	if (rc < 0)
+		return rc;
 
 	if (csi->is_idi_mode)
 		return 0;
@@ -120,6 +150,7 @@ static int csi_set_fmt(struct v4l2_subdev *sd,
 	ipi_cfg.cut_through = true;
 	ipi_cfg.mem_auto_flush = true;
 	csi_ipi_init(csi->dev, &ipi_cfg, &f);
+
 	csi->dev->subirq_func = csi_subirq_callback;
 	csi->dev->irq_done_func = NULL;
 	csi_irq_enable(csi->dev);
@@ -145,6 +176,17 @@ static int csi_enum_frame_size(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
+	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *rsd;
+	int rc = 0;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	rsd = &v4l_dev->insts[0].node.sd;
+
+	rc = subdev_enum_frame_size(rsd, state, fse);
+	if (rc < 0)
+		return rc;
 	return 0;
 }
 
@@ -155,7 +197,286 @@ static int csi_enum_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int v4l2_ctrl_sensor_need_off_auto(uint32_t ctrl_id, uint32_t *auto_id, uint32_t *auto_off)
+{
+	switch (ctrl_id) {
+		case V4L2_CID_EXPOSURE:
+			*auto_id = V4L2_CID_EXPOSURE_AUTO;
+			*auto_off = (uint32_t)V4L2_EXPOSURE_MANUAL;
+			return 1;
+		case V4L2_CID_ANALOGUE_GAIN:
+			*auto_id = V4L2_CID_AUTOGAIN;
+			*auto_off = 0;
+			return 1;
+		case V4L2_CID_RED_BALANCE:
+		case V4L2_CID_BLUE_BALANCE:
+			*auto_id = V4L2_CID_AUTO_WHITE_BALANCE;
+			*auto_off = 0;
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+static int csi_s_sensor_ext_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	return 0;
+}
+
+static int csi_g_sensor_ext_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
+	struct media_pad *pad;
+	struct v4l2_ext_control *ext_ctrl;
+	struct v4l2_ctrl *vctrl;
+	u16 i = 0;
+	int rc = 0;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	ext_ctrl = (struct v4l2_ext_control *)arg;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+
+			switch(ext_ctrl->id) {
+				case V4L2_CID_PIXEL_RATE:
+					vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ext_ctrl->id);
+					if (!vctrl) {
+						pr_debug("%s ctrl 0x%x not found\n", __func__, ext_ctrl->id);
+						return -EINVAL;
+					}
+					ext_ctrl->value64 = v4l2_ctrl_g_ctrl_int64(vctrl);
+					break;
+				default:
+					break;
+			}
+			return rc;
+		}
+		i++;
+	}
+	return rc;
+}
+
+static int csi_s_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
+	struct media_pad *pad;
+	struct sen_ctrl *ctrl;
+	struct v4l2_ctrl *vctrl;
+	int32_t ctrl_value = 0;
+	uint32_t auto_id, auto_off;
+	u16 i = 0;
+	int rc;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			ctrl = (struct sen_ctrl *)arg;
+			if (v4l2_ctrl_sensor_need_off_auto(ctrl->ctrl_id, &auto_id, &auto_off)) {
+				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, auto_id);
+				if (vctrl) {
+					if (vctrl->flags & V4L2_CTRL_FLAG_READ_ONLY) {
+						pr_debug("%s ctrl 0x%x is read only\n", __func__, ctrl->ctrl_id);
+						return -EINVAL;
+					}
+					rc = v4l2_ctrl_s_ctrl(vctrl, auto_off);
+					if (rc < 0)
+						return rc;
+				}
+			}
+			vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ctrl->ctrl_id);
+			if (!vctrl) {
+				pr_debug("%s ctrl 0x%x not found\n", __func__, ctrl->ctrl_id);
+				return -EINVAL;
+			}
+			if (vctrl->flags & V4L2_CTRL_FLAG_READ_ONLY) {
+				pr_debug("%s ctrl 0x%x is read only\n", __func__, ctrl->ctrl_id);
+				return -EINVAL;
+			}
+			memcpy(&ctrl_value, ctrl->ctrl_data, sizeof(ctrl_value));
+			return v4l2_ctrl_s_ctrl(vctrl, ctrl_value);
+		}
+		i++;
+	}
+	return -EINVAL;
+}
+
+static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
+	struct media_pad *pad;
+	struct sen_ctrl *ctrl;
+	struct v4l2_ctrl *vctrl;
+	u16 i = 0;
+	int rc = 0;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			ctrl = (struct sen_ctrl *)arg;
+			switch(ctrl->ctrl_id) {
+				case V4L2_CID_FPS:
+					uint32_t fps = 30;
+					memcpy(ctrl->ctrl_data, &fps, sizeof(fps));
+					break;
+				case V4L2_CID_EXP_RANGE:
+					uint32_t exp_range[3];
+					exp_range[0] = 1;
+					exp_range[1] = 1104;
+					exp_range[2] = 1;
+					memcpy(ctrl->ctrl_data, &exp_range, sizeof(exp_range));
+					break;
+				case V4L2_CID_AGAIN_RANGE:
+					uint32_t again_range[3];
+					again_range[0] = 0;
+					again_range[1] = 1023;
+					again_range[2] = 16;
+					memcpy(ctrl->ctrl_data, &again_range, sizeof(again_range));
+					break;
+				case V4L2_CID_DGAIN_RANGE:
+					uint32_t dgain_range[3];
+					dgain_range[0] = 1;
+					dgain_range[1] = 1;
+					dgain_range[2] = 1;
+					memcpy(ctrl->ctrl_data, &dgain_range, sizeof(dgain_range));
+					break;
+				case V4L2_CID_BAYER_PATTERN:
+					uint32_t bayerPattern = 3;
+					memcpy(ctrl->ctrl_data, &bayerPattern, sizeof(bayerPattern));
+					break;
+				case V4L2_CID_SENSOR_NAME:
+					char* space_pos = strchr(rsd->name, ' ');
+					ctrl->size = space_pos - rsd->name;
+					memcpy(ctrl->ctrl_data, rsd->name, ctrl->size);
+					break;
+				default:
+					int32_t ctrl_value = 0;
+					vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ctrl->ctrl_id);
+					if (!vctrl) {
+						pr_debug("%s ctrl 0x%x not found\n", __func__, ctrl->ctrl_id);
+						return -EINVAL;
+					}
+					ctrl_value = v4l2_ctrl_g_ctrl(vctrl);
+					memcpy(ctrl->ctrl_data, &ctrl_value, sizeof(ctrl_value));
+					break;
+			}
+			return rc;
+		}
+		i++;
+	}
+	return rc;
+}
+
+static int csi_query_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	struct media_entity *ent;
+	struct v4l2_subdev *rsd;
+	struct media_pad *pad;
+	struct v4l2_queryctrl *qctrl;
+	struct v4l2_ctrl *vctrl;
+	u16 i = 0;
+
+	if (unlikely(!sd || !sd->entity.pads))
+		return -EINVAL;
+
+	ent = &sd->entity;
+
+	while (i < ent->num_pads) {
+		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
+			pad = media_pad_remote_pad_first(&ent->pads[i]);
+			if (!pad) {
+				i++;
+				continue;
+			}
+			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			qctrl = (struct v4l2_queryctrl *)arg;
+			vctrl = v4l2_ctrl_find(rsd->ctrl_handler, qctrl->id);
+			if (!vctrl) {
+				pr_debug("%s ctrl 0x%x not found\n", __func__, qctrl->id);
+				return -EINVAL;
+			}
+			qctrl->type = vctrl->type;
+			memcpy(qctrl->name, vctrl->name, sizeof(qctrl->name));
+			qctrl->minimum = vctrl->minimum;
+			qctrl->maximum = vctrl->maximum;
+			qctrl->step = vctrl->step;
+			qctrl->default_value = vctrl->default_value;
+			qctrl->flags = vctrl->flags;
+			return 0;
+		}
+		i++;
+	}
+	return 0;
+}
+
+static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_device *v4l_dev;
+	struct v4l2_subdev *rsd;
+	int rc = 0;
+
+	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
+	rsd = &v4l_dev->insts[0].node.sd;
+
+	switch(cmd) {
+		case CAM_SET_CTRL:
+			rc = csi_s_sensor_ctrl(rsd, arg);
+			break;
+		case CAM_SET_EXT_CTRL:
+			rc = csi_s_sensor_ext_ctrl(rsd, arg);
+			break;
+		case CAM_GET_CTRL:
+			rc = csi_g_sensor_ctrl(rsd, arg);
+			break;
+		case CAM_GET_EXT_CTRL:
+			rc = csi_g_sensor_ext_ctrl(rsd, arg);
+			break;
+		case CAM_QUERY_CTRL:
+			rc = csi_query_sensor_ctrl(rsd, arg);
+			break;
+		default:
+			break;
+	}
+
+	return rc;
+}
+
 static const struct v4l2_subdev_core_ops csi_core_ops = {
+	.command = csi_command,
 	.ioctl = csi_ioctl,
 };
 
@@ -177,6 +498,25 @@ static const struct v4l2_subdev_ops csi_subdev_ops = {
 	.core = &csi_core_ops,
 	.video = &csi_video_ops,
 	.pad = &csi_pad_ops,
+};
+
+static int csi_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct csi_v4l_instance *inst = sd_to_csi_v4l_instance(sd);
+
+	return csi_open(inst->dev, inst->id);
+}
+
+static int csi_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	struct csi_v4l_instance *inst = sd_to_csi_v4l_instance(sd);
+
+	return csi_close(inst->dev, inst->id);
+}
+
+static const struct v4l2_subdev_internal_ops csi_internal_ops = {
+	.open = csi_v4l_open,
+	.close = csi_v4l_close,
 };
 
 static void csi_inst_remove(struct csi_v4l_instance *insts, u32 num)
@@ -276,6 +616,7 @@ static int csi_v4l_probe(struct platform_device *pdev)
 			csi_inst_remove(insts, i - 1);
 			return rc;
 		}
+		n->sd.internal_ops = &csi_internal_ops;
 
 		/* the last one is for idi-control */
 		if (i == v4l_dev->csi_dev.num_insts - 1) {
@@ -295,7 +636,7 @@ static int csi_v4l_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, v4l_dev);
 
 	rc = csi_runtime_resume(dev);
-		if (rc) {
+	if (rc) {
 		dev_err(dev, "failed to call csi_runtime_resume (err=%d)\n", rc);
 		return rc;
 	}
@@ -307,7 +648,6 @@ static int csi_v4l_probe(struct platform_device *pdev)
 	if (v4l_dev->csi_dev.cfg)
 		dev_dbg(dev, "cfg clock: %ld Hz\n", clk_get_rate(v4l_dev->csi_dev.cfg));
 
-
 	dev_dbg(dev, "VS CSI driver (v4l) probed done\n");
 	return 0;
 }
@@ -317,9 +657,15 @@ static int csi_v4l_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct csi_v4l_device *v4l_dev = platform_get_drvdata(pdev);
 	int rc;
+	u32 i;
 
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
-	csi_inst_remove(v4l_dev->insts, v4l_dev->csi_dev.num_insts);
+
+	for (i = 0; i < v4l_dev->csi_dev.num_insts; i++) {
+		subdev_deinit(&v4l_dev->insts[i].node);
+		devm_kfree(dev, v4l_dev->insts[i].node.pads);
+	}
+	devm_kfree(dev, v4l_dev->insts);
 
 	rc = csi_remove(pdev, &v4l_dev->csi_dev);
 	if (rc < 0) {
@@ -328,10 +674,11 @@ static int csi_v4l_remove(struct platform_device *pdev)
 	}
 
 	rc = csi_runtime_suspend(dev);
-		if (rc) {
+	if (rc) {
 		dev_err(dev, "failed to call csi_runtime_suspend (err=%d)\n", rc);
 		return rc;
 	}
+	devm_kfree(dev, v4l_dev);
 
 	dev_dbg(dev, "VS CSI driver (v4l) removed\n");
 	return 0;

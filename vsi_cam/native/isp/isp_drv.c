@@ -115,9 +115,14 @@ static void isp_frame_work(struct vio_node *vnode)
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
 
 	pr_debug("%s, isp_add_job:%d\n", __func__, vnode->ctx_id);
-	rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id, false);
-	if (rc)
-		pr_err("%s: failed to call isp_add_job.\n", __func__);
+	if (!inst->metadata_en) {
+		rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id);
+		if (rc) {
+			// pr_err("%s: failed to call isp_add_job.\n", __func__);
+		}
+	} else {
+		pr_info("%s:%d isp%d metadata enabled\n", __func__, __LINE__, inst->id);
+	}
 
 	vio_set_hw_free(vnode);
 	osal_clear_bit(VIO_NODE_SHOT, &vnode->state);
@@ -153,7 +158,7 @@ static s32 isp_nat_close(struct vio_video_ctx *vctx)
 	if (vctx->id == VNODE_ID_SRC) {
 		pr_debug("clean stream vnode, ctxid %d, online_mode %d, stream_idx %d\n",
 				vctx->ctx_id, inst->online_mode, inst->stream_idx);
-		if (inst->stream_idx > -1) {
+		if (inst->stream_idx > -1 && !inst->metadata_en) {
 			mutex_lock(&inst->dev->stream_vnodes_lock);
 			inst->dev->stream_vnodes[inst->stream_idx] = NULL;
 			mutex_unlock(&inst->dev->stream_vnodes_lock);
@@ -352,7 +357,10 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 		return rc;
 
 	dev = inst->dev;
-	if (inst->attr.input_mode == MCM_MODE) {
+	if (vctx->ctx_id && inst->attr.af_mode) {
+		inst->metadata_en = true;
+		dev->isp_dev.insts[vctx->ctx_id-1].meta_inst = vctx->ctx_id;
+	} else if (inst->attr.input_mode == MCM_MODE) {
 		dev->isp_dev.mode = ISP_MCM_MODE;
 		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 1;
 	} else if (inst->attr.input_mode == DDR_MODE) {
@@ -381,36 +389,39 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 
 	memset(&inst->ctx, 0, sizeof(inst->ctx));
 
-	if (vctx->id == VNODE_ID_SRC) {
-		vctx->vdev->leader = 1;
-		if (inst->attr.input_mode != DDR_MODE) {
-			mutex_lock(&dev->stream_vnodes_lock);
-			if (inst->attr.sensor_mode == ISP_DOL2_M ||
-			    inst->attr.input_mode == PASSTHROUGH_MODE) {
-				vn = &dev->stream_vnodes[0];
-				i = 0;
-			} else {
-				for (i = ARRAY_SIZE(dev->stream_vnodes) - 1; i > -1; i--) {
-					if (!dev->stream_vnodes[i]) {
-						vn = &dev->stream_vnodes[i];
-						pr_debug("got index %d for saving vnode\n", i);
-						break;
-					}
+	if (vctx->id != VNODE_ID_SRC)
+		return 0;
+
+	if (inst->metadata_en)
+		return 0;
+
+	vctx->vdev->leader = 1;
+	if (inst->attr.input_mode != DDR_MODE) {
+		mutex_lock(&dev->stream_vnodes_lock);
+		if (inst->attr.sensor_mode == ISP_DOL2_M ||
+		    inst->attr.input_mode == PASSTHROUGH_MODE) {
+			vn = &dev->stream_vnodes[0];
+			i = 0;
+		} else {
+			for (i = ARRAY_SIZE(dev->stream_vnodes) - 1; i > -1; i--) {
+				if (!dev->stream_vnodes[i]) {
+					vn = &dev->stream_vnodes[i];
+					pr_debug("got index %d for saving vnode\n", i);
+					break;
 				}
 			}
-			if (!vn || *vn) {
-				mutex_unlock(&dev->stream_vnodes_lock);
-				pr_err("%s no stream input channel available!\n", __func__);
-				return -EINVAL;
-			}
-			*vn = &dev->vnode[vctx->ctx_id];
-			mutex_unlock(&dev->stream_vnodes_lock);
 		}
-		inst->stream_idx = dev->isp_dev.insts[vctx->ctx_id].online_mcm ? i : 0;
-		isp_set_stream_idx(&dev->isp_dev, vctx->ctx_id, inst->stream_idx);
-		return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_INITED);
+		if (!vn || *vn) {
+			mutex_unlock(&dev->stream_vnodes_lock);
+			pr_err("%s no stream input channel available!\n", __func__);
+			return -EINVAL;
+		}
+		*vn = &dev->vnode[vctx->ctx_id];
+		mutex_unlock(&dev->stream_vnodes_lock);
 	}
-	return 0;
+	inst->stream_idx = dev->isp_dev.insts[vctx->ctx_id].online_mcm ? i : 0;
+	isp_set_stream_idx(&dev->isp_dev, vctx->ctx_id, inst->stream_idx);
+	return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_INITED);
 }
 
 static s32 isp_video_get_cfg(struct vio_video_ctx *vctx, unsigned long arg)
@@ -538,7 +549,8 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 	} else if (vctx->id == VNODE_ID_CAP) {
 		dev = inst->dev;
 		src_inst = &dev->src_instance[vctx->ctx_id];
-		if (src_inst->online_mode) {
+		dev->isp_dev.insts[vctx->ctx_id].prev = src_inst->prev;
+		if (src_inst->online_mode && !inst->metadata_en) {
 			get_csi_ipi_idx(src_inst->prev, &csi_idx, &ipi_idx, &ipi_num);
 			pr_info("%s stream_idx=%d,csi_idx=%d,ipi_idx=%d,ipi_num=%d\n", __func__,
 				src_inst->stream_idx, csi_idx, ipi_idx, ipi_num);
@@ -546,9 +558,12 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 		}
 
 		inst->ctx.is_sink_online_mode = !!src_inst->online_mode;
-		inst->ctx.is_src_online_mode = !!inst->online_mode;
-		inst->ctx.src_ctx = (struct cam_ctx *)vctx->vdev;
-		inst->ctx.ddr_en = inst->ochn_attr.ddr_en;
+		inst->ctx.src_ctx[0] = (struct cam_ctx *)vctx->vdev;
+		set_online(inst->ctx.is_src_online_mode, 0);
+		if (inst->ochn_attr.ddr_en) {
+			inst->ctx.src_ctx[1] = (struct cam_ctx *)vctx->vdev;
+			set_offline(inst->ctx.is_src_online_mode, 1);
+		}
 		if (!inst->ctx.is_sink_online_mode)
 			inst->ctx.sink_ctx = (struct cam_ctx *)&src_inst->vdev;
 		inst->ctx.stat_ctx = (struct cam_ctx *)&src_inst->vdev;
@@ -558,8 +573,10 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 			return rc;
 		}
 
-		pr_info("%s inst: %d, set isp state to STARTED\n", __func__, vctx->ctx_id);
-		return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STARTED);
+		if (!inst->metadata_en) {
+			pr_info("%s inst: %d, set isp state to STARTED\n", __func__, vctx->ctx_id);
+			return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STARTED);
+		}
 	}
 	return 0;
 }
@@ -576,11 +593,13 @@ static s32 isp_video_streamoff(struct vio_video_ctx *vctx)
 	if (vctx->id == VNODE_ID_CAP) {
 		dev = inst->dev;
 
-		pr_info("%s inst: %d, set isp state to STOPPED\n", __func__, vctx->ctx_id);
-		rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED);
-		if (rc < 0) {
-			pr_err("%s failed to call isp_set_state(err=%d).\n", __func__, rc);
-			return rc;
+		if (!inst->metadata_en) {
+			pr_info("%s inst: %d, set isp state to STOPPED\n", __func__, vctx->ctx_id);
+			rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED);
+			if (rc < 0) {
+				pr_err("%s failed to call isp_set_state(err=%d).\n", __func__, rc);
+				return rc;
+			}
 		}
 
 		memset(&ctx, 0, sizeof(ctx));
@@ -649,6 +668,9 @@ static s32 isp_video_set_ichn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	if (rc)
 		return rc;
 
+	if (inst->metadata_en)
+		return 0;
+
 	switch (inst->ichn_attr.bit_width) {
 	case 8:
 		fmt.format = CAM_FMT_RAW8;
@@ -710,6 +732,9 @@ static s32 isp_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	if (rc)
 		return rc;
 
+	if (inst->metadata_en)
+		return 0;
+
 	pr_info("%s fmt=%d\n", __func__, inst->ochn_attr.fmt);
 	if (inst->ochn_attr.fmt == FRM_FMT_NV12)
 		fmt.format = CAM_FMT_NV12;
@@ -769,6 +794,8 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 	char sensor_cali_name[100] = {0};
 
 	inst = container_of(vctx->vdev, struct isp_nat_instance, vdev);
+	if (inst->metadata_en)
+		return 0;
 	cops = (struct sensor_isp_ops_s *)inst->dev->sensor_ops->cops;
 	if (cops && cops->sensor_get_base_info) {
 		rc = cops->sensor_get_base_info(vctx->flow_id, &sensor_base_param,
@@ -787,7 +814,9 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 		}
 	}
 
-	pr_info("%s flow_id = %d, sensor_name = %s, sensor_cali_name = %s\n", __func__, vctx->flow_id, sensor_base_param.sensor_name, sensor_cali_name);
+	pr_info("%s flow_id = %d, sensor_name = %s, sensor_cali_name = %s\n",
+		__func__, vctx->flow_id, sensor_base_param.sensor_name,
+		sensor_cali_name);
 
 	in.type = CAM_INPUT_SENSOR;
 	in.index = vctx->flow_id;
@@ -873,9 +902,9 @@ static ssize_t isp_stat_show(struct device *dev, struct device_attribute *attr, 
 			break;
 
 		len += snprintf(&buf[len], size - len,
-			       "input_mode:%d\nsched_mode:%d\ntile_mode:%d\nsensor_mode:%d\n",
+			       "input_mode:%d\nsched_mode:%d\ntile_mode:%d\naf_mode:%d\nsensor_mode:%d\n",
 			       src_ins->attr.input_mode, src_ins->attr.sched_mode,
-			       src_ins->attr.tile_mode, src_ins->attr.sensor_mode);
+			       src_ins->attr.tile_mode, src_ins->attr.af_mode, src_ins->attr.sensor_mode);
 		if (size - len <= 0)
 			break;
 
@@ -1014,6 +1043,7 @@ static int isp_nat_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	isp_debugfs_remo(&nat_dev->isp_dev);
 #endif
+	devm_kfree(dev, nat_dev);
 
 	dev_dbg(dev, "VS ISP driver (native) removed\n");
 	return 0;

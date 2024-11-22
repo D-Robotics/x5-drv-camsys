@@ -44,10 +44,10 @@ struct gdc_device {
 	struct device *dev;
 	void __iomem *base;
 	struct clk *core, *axi, *hclk, *vse_core, *vse_ups;
-	struct reset_control *rst;
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */
 	struct cam_ctrl_device *ctrl_dev;
+	struct dw_crc_device *crc_dev;
 	struct job_queue *jq; /* offline job queue */
 	struct gdc_instance *insts;
 	struct list_head in_buf_list;
@@ -66,6 +66,8 @@ int gdc_set_format(struct gdc_device *dev, u32 inst, struct gdc_format *fmt);
 int gdc_set_state(struct gdc_device *dev, u32 inst, int enable);
 int gdc_set_ctx(struct gdc_device *dev, u32 inst, struct gdc_irq_ctx *ctx);
 int gdc_add_job(struct gdc_device *dev, u32 inst);
+int gdc_open(struct gdc_device *gdc, u32 inst);
+int gdc_close(struct gdc_device *gdc, u32 inst);
 int gdc_probe(struct platform_device *pdev, struct gdc_device *dev);
 int gdc_remove(struct platform_device *pdev, struct gdc_device *dev);
 

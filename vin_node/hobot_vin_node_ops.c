@@ -99,12 +99,6 @@ s32 vin_node_attr_check(struct vio_video_ctx *vctx, vin_node_attr_t *vin_node_at
 		return -EINVAL;
 	}
 
-	if (cim_attr->cim_isp_flyby + cim_attr->cim_pym_flyby > 1) {
-		vio_err("[S%d] cim otf attr error isp_flyby(%d) pym_flyby(%d)\n", vctx->ctx_id,
-				cim_attr->cim_isp_flyby, cim_attr->cim_pym_flyby);
-		return -EINVAL;
-	}
-
 	if (func->skip_frame == CIM_HW_SKIP) {
 		if ((func->hw_extract_m != 1 && func->hw_extract_n != 1) ||
 				func->hw_extract_m > MAX_HW_EXTRACT_FRAME ||
@@ -681,6 +675,24 @@ s32 vin_node_set_ochn_attr(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_att
 	return ret;
 }
 
+s32 vin_node_get_ochn_attr(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_attr)
+{
+	u32 ochn_id;
+	struct vio_subdev *vdev;
+	struct vin_node_subdev *subdev;
+
+	vdev = vctx->vdev;
+
+	subdev = container_of(vdev, struct vin_node_subdev, vdev);
+	ochn_id = vctx->id - VNODE_ID_CAP;
+
+	memcpy(ochn_attr, &subdev->vin_attr.vin_ochn_attr[ochn_id],
+		sizeof(vin_ochn_attr_t));
+
+	vio_info("[S%d]%s done\n", vctx->ctx_id, __func__);
+	return 0;
+}
+
 /**
  * @NO{S10E01C01}
  * @ASIL{B}
@@ -806,13 +818,19 @@ s32 vin_node_bind_check(struct vio_subdev *vdev, struct vio_subdev *remote_vdev,
 	vin_ochn_attr_t *vin_ochn_attr;
 	u32 id;
 
+	if ((virt_addr_valid(vdev->vctx[0]) == 0) ||
+			vdev->vctx[0]->state == (BIT((s32)VIO_VIDEO_CLOSE))) {
+		vio_err("vin_node_bind_check invalid vctx\n");
+		return -1;
+	}
+
+	id = vdev->vctx[0]->id;
 	subdev = container_of(vdev, struct vin_node_subdev, vdev);/*PRQA S 2810,0497*/
 	vin_attr = &subdev->vin_attr;
 	cim_attr = &vin_attr->vin_node_attr.cim_attr;
-	id = vdev->vctx[0]->id;
 
 	if (online) {
-		if (id != VNODE_ID_CAP || (cim_attr->cim_isp_flyby | cim_attr->cim_pym_flyby) == 0) {
+		if (id != VNODE_ID_CAP) {
 			vio_err("[V%d] unsuport otf bind\n", id);
 			ret = -1;
 		}
@@ -844,6 +862,11 @@ void vin_node_set_ochn_bind_param(struct vio_video_ctx *vctx)
 	vin_attr_t *vin_attr;
 	vin_ichn_attr_t *vin_ichn_attr;
 	struct chn_attr *chn_attr;
+
+	if ((virt_addr_valid(vctx) == 0) || vctx->state == (BIT((s32)VIO_VIDEO_CLOSE))) {
+		vio_err("vin_node_set_ochn_bind_param invalid vctx\n");
+		return;
+	}
 
 	vdev = vctx->vdev;
 	subdev = container_of(vdev, struct vin_node_subdev, vdev);/*PRQA S 2810,0497*/

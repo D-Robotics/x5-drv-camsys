@@ -2,22 +2,19 @@
 #define pr_fmt(fmt) "[vse_drv]: %s: " fmt, __func__
 #include <linux/clk.h>
 #include <linux/debugfs.h>
-#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/reset.h>
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
 #include "cam_ctx.h"
 #include "dw230_vse_regs.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "vse_uapi.h"
 
 #include "vse.h"
-
-#define REFCNT_INIT_VAL (1)
 
 #ifdef EN_CHK_FMT
 static bool check_iformat(struct vse_instance *ins, struct cam_format *fmt)
@@ -106,7 +103,7 @@ int vse_set_fps_rate(struct vse_device *vse, u32 inst, u32 chnl,
 	return 0;
 }
 
-int vse_server_trigger(struct vse_device *vse, u32 inst)
+static inline int vse_server_trigger(struct vse_device *vse, u32 inst)
 {
 	struct vse_instance *ins;
 	struct vse_msg msg;
@@ -288,7 +285,7 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 	pr_debug("inst %d\n", inst);
 }
 
-int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32 total_cnt)
+int vse_set_state(struct vse_device *vse, u32 inst, int enable)
 {
 	struct vse_instance *ins;
 	struct vse_msg msg;
@@ -296,9 +293,6 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 
 	if (!vse || inst >= vse->num_insts)
 		return -EINVAL;
-
-	if (cur_cnt < total_cnt)
-		return 0;
 
 	ins = &vse->insts[inst];
 	msg.id = CAM_MSG_STATE_CHANGED;
@@ -316,6 +310,7 @@ int vse_set_state(struct vse_device *vse, u32 inst, int enable, u32 cur_cnt, u32
 	if (rc < 0)
 		return rc;
 	ins->state = msg.state;
+	dw_set_state(vse->crc_dev, DW_MOD_VSE, msg.state);
 	return 0;
 }
 
@@ -418,17 +413,20 @@ int vse_get_hist_num(struct vse_device *vse, u32 inst, u32 chnl, u32 hist_id)
 	return 0;
 }
 
-int vse_set_src_ctx(struct vse_device *vse, u32 inst, u32 chnl, struct cam_ctx *ctx)
+int vse_get_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx)
 {
 	struct vse_instance *ins;
 	unsigned long flags;
 
-	if (!vse || inst >= vse->num_insts || chnl >= VSE_OUT_CHNL_MAX)
+	if (!vse || !ctx)
+		return -EINVAL;
+
+	if (inst >= vse->num_insts)
 		return -EINVAL;
 
 	ins = &vse->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
-	ins->ctx.src_ctx[chnl] = ctx;
+	*ctx = ins->ctx;
 	spin_unlock_irqrestore(&ins->lock, flags);
 	return 0;
 }
@@ -453,12 +451,10 @@ int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx)
 	return 0;
 }
 
-int vse_add_job(struct vse_device *vse, u32 inst)
+static inline int _add_job(struct vse_device *vse, u32 inst)
 {
 	struct irq_job job = { inst };
-	struct vse_irq_ctx *ctx;
-	int rc;
-	u32 id;
+	int rc = 0;
 
 	if (vse->mode != VSE_SCM_MODE) {
 		pr_debug("add job inst:%d\n", inst);
@@ -468,15 +464,49 @@ int vse_add_job(struct vse_device *vse, u32 inst)
 			return rc;
 		}
 	}
+	return rc;
+}
 
+int vse_add_job(struct vse_device *vse, u32 inst)
+{
+	struct vse_irq_ctx *ctx;
+	unsigned long flags;
+	int rc;
+
+	rc = _add_job(vse, inst);
+	if (rc < 0)
+		return rc;
+
+	spin_lock_irqsave(&vse->err_lock, flags);
 	if (vse->error) {
 		ctx = get_next_irq_ctx(vse);
-		if(ctx) {
-			id = vse->next_irq_ctx;
-			vse_set_cmd(vse, id);
-		}
+		if (ctx)
+			vse_set_cmd(vse, vse->next_irq_ctx);
 	}
+	spin_unlock_irqrestore(&vse->err_lock, flags);
 	return 0;
+}
+
+int vse_wake_up(struct vse_device *vse, u32 inst)
+{
+	struct vse_irq_ctx *ctx;
+	unsigned long flags;
+	int rc = 0;
+
+	spin_lock_irqsave(&vse->err_lock, flags);
+	if (vse->error) {
+		rc = _add_job(vse, inst);
+		if (rc < 0)
+			goto _exit;
+
+		ctx = get_next_irq_ctx(vse);
+		if (ctx)
+			vse_set_cmd(vse, vse->next_irq_ctx);
+	}
+
+_exit:
+	spin_unlock_irqrestore(&vse->err_lock, flags);
+	return rc;
 }
 
 static void vse_bound(struct isc_handle *isc, void *arg)
@@ -528,10 +558,11 @@ int vse_open(struct vse_device *vse, u32 inst)
 	if (refcount_read(&vse->open_cnt) == REFCNT_INIT_VAL)
 		en_clk = true;
 	refcount_inc(&vse->open_cnt);
-	mutex_unlock(&vse->open_lock);
 
 	if (en_clk)
 		rc = vse_runtime_resume(vse->dev);
+
+	mutex_unlock(&vse->open_lock);
 	return rc;
 }
 
@@ -541,7 +572,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	struct vse_msg msg;
 	bool dis_clk = false;
 	u32 value;
-	int rc;
+	int rc = 0;
 
 	if (!vse)
 		return -EINVAL;
@@ -576,10 +607,9 @@ int vse_close(struct vse_device *vse, u32 inst)
 		if (refcount_read(&vse->open_cnt) == REFCNT_INIT_VAL)
 			dis_clk = true;
 	}
-	mutex_unlock(&vse->open_lock);
 
 	if (!dis_clk)
-		return 0;
+		goto _exit;
 
 	reset_job_queue(vse->jq);
 
@@ -588,10 +618,16 @@ int vse_close(struct vse_device *vse, u32 inst)
 	value = vse_read(vse, VSE_CTRL);
 	vse_write(vse, VSE_CTRL, value | BIT(15));
 
-	/* vse_reset(vse); */
+	rc = dw_reset(vse->crc_dev, DW_MOD_VSE);
+	if (rc == -EBUSY)
+		dev_warn(vse->dev, "DW module is busy now and cannot be reset!\n");
 	vse->is_completed = true;
 	vse->error = 1;
-	return vse_runtime_suspend(vse->dev);
+	rc = vse_runtime_suspend(vse->dev);
+
+_exit:
+	mutex_unlock(&vse->open_lock);
+	return rc;
 }
 
 int vse_probe(struct platform_device *pdev, struct vse_device *vse)
@@ -616,7 +652,6 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		{},
 	};
 	struct rst_res vse_rsts[] = {
-		{ "rst", NULL },
 		{},
 	};
 	struct cam_dt vse_dt = {
@@ -647,10 +682,10 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->ups = vse_dt.clks[2].clk;
 	vse->gdc_core = vse_dt.clks[3].clk;
 	vse->gdc_hclk = vse_dt.clks[4].clk;
-	vse->rst = vse_dt.rsts[0].rst;
 	spin_lock_init(&vse->isc_lock);
 	mutex_init(&vse->open_lock);
 	refcount_set(&vse->open_cnt, REFCNT_INIT_VAL);
+	spin_lock_init(&vse->err_lock);
 
 	vse->error = 1;
 	vse->is_completed = true;
@@ -663,6 +698,10 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->ctrl_dev = get_cam_ctrl_device(pdev);
 	if (IS_ERR(vse->ctrl_dev))
 		return PTR_ERR(vse->ctrl_dev);
+
+	vse->crc_dev = get_dw_crc_device(pdev);
+	if (IS_ERR(vse->crc_dev))
+		return PTR_ERR(vse->crc_dev);
 
 	vse->jq = create_job_queue(32);
 	if (!vse->jq) {
@@ -703,17 +742,9 @@ int vse_remove(struct platform_device *pdev, struct vse_device *vse)
 			dma_free_coherent(vse->dev, ins->cmd_buf.size, ins->cmd_buf_va, ins->cmd_buf.addr);
 	}
 	put_cam_ctrl_device(vse->ctrl_dev);
+	devm_kfree(&pdev->dev, vse->insts);
 	dev_dbg(&pdev->dev, "VS VSE driver (base) removed\n");
 	return rc;
-}
-
-void vse_reset(struct vse_device *vse)
-{
-	if (vse->rst) {
-		reset_control_assert(vse->rst);
-		udelay(2);
-		reset_control_deassert(vse->rst);
-	}
 }
 
 #ifdef CONFIG_DEBUG_FS
@@ -853,6 +884,17 @@ int vse_system_resume(struct device *dev)
 int vse_runtime_suspend(struct device *dev)
 {
 	struct vse_device *vse = dev_get_drvdata(dev);
+	struct vse_instance *ins;
+	int inst;
+
+	if (!vse)
+		return -EINVAL;
+
+	for (inst = 0; inst < vse->num_insts; inst++) {
+		ins = &vse->insts[inst];
+		if (ins->state == CAM_STATE_STARTED)
+			return -EBUSY;
+	}
 
 	if (vse->gdc_hclk)
 		clk_disable_unprepare(vse->gdc_hclk);

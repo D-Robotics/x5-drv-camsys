@@ -11,6 +11,8 @@ int mem_free(struct device *dev, struct list_head *list, struct mem_buf *buf);
 int mem_free_all(struct device *dev, struct list_head *list);
 int mem_mmap(struct device *dev, struct list_head *list,
 	     struct vm_area_struct *vma);
+void *get_virt_addr(struct device *dev, struct list_head *list,
+		    struct mem_buf *buf);
 int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf);
 int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf);
 

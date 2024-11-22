@@ -13,7 +13,7 @@
 #include "sif_uapi.h"
 
 #define SIF_FMT_MAX (4)
-#define SIF_RES_MAX (3)
+#define SIF_RES_MAX (10)
 
 #define SIF_EBD_HSIZE_ALIGN (16)
 
@@ -126,7 +126,10 @@ struct sif_device {
 	spinlock_t isc_lock; /* lock for sending msg */
 	spinlock_t cfg_reg_lock; /* lock for cfg register*/
 	struct cam_ctrl_device *ctrl_dev;
+	struct cam_pulse_device *pulse_dev;
 	struct sif_instance *insts;
+	struct mutex open_lock; /* lock for open_cnt */
+	refcount_t open_cnt;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_fps_file;
@@ -141,6 +144,7 @@ struct sif_frame_des {
 	u64 pps1_ts; // pps1 timestamp read from sif register.
 	u64 pps2_ts; // pps2 timestamp read from sif register.
 	u64 timestamps; // kernel time read from kernel api.
+	u64 sys_timestamps; //system time read from kernel api.
 };
 
 void sif_post(struct sif_device *sif, void *msg, u32 len);
@@ -148,6 +152,8 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 		   bool post, enum sif_channel_type channel_type);
 int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post);
 int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx);
+int sif_open(struct sif_device *sif, u32 inst);
+int sif_close(struct sif_device *sif, u32 inst);
 int sif_probe(struct platform_device *pdev, struct sif_device *sif);
 int sif_remove(struct platform_device *pdev, struct sif_device *sif);
 #ifdef CONFIG_DEBUG_FS
@@ -155,6 +161,8 @@ void sif_debugfs_init(struct sif_device *sif);
 void sif_debugfs_remo(struct sif_device *sif);
 #endif
 int sif_reset_ipi(struct sif_device *sif, u32 inst);
+int sif_get_frame_info(struct sif_device *sif, u32 inst,
+		       struct cam_frame_info *info);
 
 void sif_reset(struct sif_device *sif);
 #ifdef CONFIG_PM_SLEEP
@@ -168,5 +176,6 @@ int sif_runtime_resume(struct device *dev);
 
 s32 sif_msg_handler(void *msg, u32 len, void *arg);
 irqreturn_t sif_irq_handler(int irq, void *arg);
+int sif_set_cam_pulse_gen(struct cam_pulse_device *dev, bool enable);
 
 #endif /* _SIF_H_ */

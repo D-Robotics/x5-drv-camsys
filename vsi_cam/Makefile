@@ -18,11 +18,11 @@ ccflags-y += -I$(srctree)/drivers/media/platform/horizon/camsys/vsi_cam/native/v
 ccflags-y += -D X5_CHIP
 
 # isc
-#ifneq ($(CONFIG_ION_HOBOT),)
-#  vs_isc-objs += isc/isc.o isc/ion_mem_helper.o
-#else
-  vs_isc-objs += isc/isc.o isc/mem_helper.o
-#endif
+ifneq ($(CONFIG_ION_HOBOT),)
+	vs_isc-objs += isc/isc.o isc/ion_mem_helper.o
+else
+	vs_isc-objs += isc/isc.o isc/mem_helper.o
+endif
 # obj-$(CONFIG_VIDEO_VS_SW_ISC) += vs_isc.o
 obj-m += vs_isc.o
 
@@ -38,10 +38,14 @@ obj-$(CONFIG_VIDEO_VS_CAM_PULSE) += vs_cam_pulse.o
 vs_csi_wrapper-objs += csi/csi_wrapper.o
 obj-$(CONFIG_VIDEO_VS_CSI_WRAPPER) += vs_csi_wrapper.o
 
+# dw cr control
+vs_dw_crc-objs += base/dw_crc.o
+obj-$(CONFIG_VIDEO_VS_DW_CRC) += vs_dw_crc.o
+
 cam_common = base/cam_dev.o base/job_queue.o
 
 # v4l2
-vs_vid_v4l-objs += v4l2/vid_drv.o v4l2/video.o v4l2/cam_ctx.o v4l2/cam_buf.o
+vs_vid_v4l-objs += v4l2/vid_drv.o v4l2/video.o v4l2/cam_ctx.o v4l2/cam_buf.o v4l2/utils.o
 obj-$(CONFIG_VIDEO_VS_VID_V4L) += vs_vid_v4l.o
 
 vs_isp_v4l-objs += $(cam_common)

@@ -276,6 +276,8 @@ struct isi_sensor_base_info_s {
         uint32_t  bus_type;
         uint32_t  reg_width;
         uint32_t  mode;
+        uint32_t  af_mode;
+        uint32_t  pwl_mode;
 };
 
 struct isi_sensor_again_info_s {

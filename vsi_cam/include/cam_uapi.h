@@ -116,6 +116,15 @@ enum cam_work_mode {
 	CAM_MULTIPLEX_MODE,
 };
 
+struct cam_frame_info {
+	__u32 frame_id;
+	__u64 time_stamp;
+	__u64 tv_sec;
+	__u64 tv_usec;
+	__u64 trig_tv_sec;
+	__u64 trig_tv_usec;
+};
+
 struct cam_reg {
 	__u32 offset;
 	__u32 value;
@@ -144,23 +153,32 @@ struct cam_clk {
 #define CAM_LOG_DEBUG      (1 << 3)
 #define CAM_LOG_VERBOSE    (1 << 4)
 
+#define SEN_CTRL_DATA_LENGTH (128)
+
 struct cam_log {
 	__u16 id;    /* log system id */
 	__u16 level; /* log priority */
 };
 
+struct sen_ctrl {
+	__u32 ctrl_id;
+	__u8 ctrl_data[SEN_CTRL_DATA_LENGTH];
+	__u32 size; // must no more than ISP_CTRL_DATA_LENGTH!
+	__u8 dir;
+};
+
 /* send */
-#define CAM_MSG_READ_REG        (0x1 << 16)
-#define CAM_MSG_WRITE_REG       (0x2 << 16)
-#define CAM_MSG_CHANGE_INPUT    (0x3 << 16)
-#define CAM_MSG_SET_FMT_CAP     (0x4 << 16)
-#define CAM_MSG_GET_FORMAT      (0x5 << 16)
-#define CAM_MSG_SET_FORMAT      (0x6 << 16)
-#define CAM_MSG_GET_STATE       (0x7 << 16)
-#define CAM_MSG_SET_STATE       (0x8 << 16)
-#define CAM_MSG_GET_CLOCK       (0x9 << 16)
-#define CAM_MSG_SET_CLOCK       (0xa << 16)
-#define CAM_MSG_RESET_CONTROL   (0xb << 16)
+#define CAM_MSG_READ_REG      (0x1 << 16)
+#define CAM_MSG_WRITE_REG     (0x2 << 16)
+#define CAM_MSG_GET_FORMAT    (0x3 << 16)
+#define CAM_MSG_SET_FORMAT    (0x4 << 16)
+#define CAM_MSG_GET_STATE     (0x5 << 16)
+#define CAM_MSG_SET_STATE     (0x6 << 16)
+#define CAM_MSG_GET_CLOCK     (0x7 << 16)
+#define CAM_MSG_SET_CLOCK     (0x8 << 16)
+#define CAM_MSG_RESET_CONTROL (0x9 << 16)
+#define CAM_MSG_SET_SEN_CTRL  (0xa << 16)
+#define CAM_MSG_GET_SEN_CTRL  (0xb << 16)
 /* recv */
 #define CAM_MSG_FORMAT_CHANGED      (0x1 << 24)
 #define CAM_MSG_STATE_CHANGED       (0x2 << 24)

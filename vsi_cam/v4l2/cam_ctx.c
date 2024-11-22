@@ -5,6 +5,10 @@
 #include "cam_buf.h"
 
 #include "cam_ctx.h"
+#include "isp_uapi.h"
+
+extern struct v4l2_subdev *isp_device_to_v4l2_subdev(void *isp_dev, uint32_t inst);
+extern struct v4l2_subdev *sif_device_to_v4l2_subdev(void *sif_dev, uint32_t inst);
 
 int cam_trigger(struct cam_ctx *ctx)
 {
@@ -110,15 +114,58 @@ int cam_set_mode(struct cam_ctx *ctx, u32 mode)
 
 void cam_set_frame_status(void *cam_ctx, enum cam_frame_status status)
 {
+	struct cam_ctx *ctx = (struct cam_ctx *)cam_ctx;
 
+	if (ctx)
+		ctx->status = status;
 }
 
 u8 cam_get_frame_status(void *cam_ctx)
 {
+	struct cam_ctx *ctx = (struct cam_ctx *)cam_ctx;
+
+	if (ctx)
+		return ctx->status;
 	return 0;
 }
 
 void cam_dec_frame_status(void *cam_ctx)
 {
+	struct cam_ctx *ctx = (struct cam_ctx *)cam_ctx;
 
+	if (ctx && ctx->status)
+		ctx->status--;
+}
+
+void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
+{
+	struct sen_ctrl *ctrl = (struct sen_ctrl *)data;
+	struct v4l2_subdev *sd = isp_device_to_v4l2_subdev(isp_dev, inst);
+
+	uint32_t cmd = CAM_SET_CTRL;
+	v4l2_subdev_call(sd, core, command, cmd, (void *)ctrl);
+}
+
+void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data)
+{
+	struct sen_ctrl *ctrl = (struct sen_ctrl *)data;
+	struct v4l2_subdev *sd = isp_device_to_v4l2_subdev(isp_dev, inst);
+
+	uint32_t cmd = CAM_GET_CTRL;
+	v4l2_subdev_call(sd, core, command, cmd, (void *)ctrl);
+}
+
+int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	return 0;
+}
+
+int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
+{
+	return 0;
+}
+
+bool vse_get_drop_status(struct cam_ctx *ctx)
+{
+	return !cam_acqbuf_irq(ctx, true);
 }

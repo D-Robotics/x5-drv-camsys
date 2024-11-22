@@ -14,6 +14,8 @@
 #include "vio_node_api.h"
 #include "vio_chain_api.h"
 #include "vio_debug_api.h"
+#include "hobot_vpf_manager.h"
+#include "vio_debug_dev.h"
 
 static void frame_delay_calcalate(struct frame_delay *fdelay, struct frame_id_desc *frameid)
 {
@@ -344,14 +346,8 @@ u32 vio_fps_stats(char* buf, u32 size, u32 flowid_mask)
 	struct frame_debug *fdebug;
 
 	len = snprintf(&buf[offset], size - offset,
-				"-------------------------------------------------------------------\n");
-	offset += len;
-	len = snprintf(&buf[offset], size - offset,
-				"%-10s%-10s%-10s%-5s%10s%10s%10s\n",
-				"flowid", "module", "ctx_id", "chn", "fcount", "avg_fps", "cur_fps");
-	offset += len;
-	len = snprintf(&buf[offset], size - offset,
-				"-------------------------------------------------------------------\n");
+				"%-7s%-7s%-7s%-4s%8s%10s%10s\n",
+				"flowid", "mod", "c_id", "chn", "fcnt", "avg_fps", "cur_fps");
 	offset += len;
 
 	cur_timestamps = osal_time_get_ns();
@@ -372,7 +368,7 @@ u32 vio_fps_stats(char* buf, u32 size, u32 flowid_mask)
 				if (size <= offset)
 					break;
 				len = snprintf(&buf[offset], size - offset,
-							"%-10d%-10s%-10d\n", flow_id, vnode->name, vnode->ctx_id);
+							"%-7d%-7s%-7d\n", flow_id, vnode->name, vnode->ctx_id);
 				offset += len;
 				for (k = 0; k < 16; k++) {
 					if (k < MAXIMUM_CHN) {
@@ -388,7 +384,7 @@ u32 vio_fps_stats(char* buf, u32 size, u32 flowid_mask)
 					if (size <= offset)
 						break;
 					len = snprintf(&buf[offset], size - offset,
-								"%-10s%-10s%-10s", " ", " ", " ");
+								"%-7s%-7s%-7s", " ", " ", " ");
 					offset += len;
 
 					dura_timestamps = cur_timestamps - fdebug->init_timestamps;
@@ -402,7 +398,7 @@ u32 vio_fps_stats(char* buf, u32 size, u32 flowid_mask)
 					if (size <= offset)
 						break;
 					len = snprintf(&buf[offset], size - offset,
-								"%-5d%10d%6d.%03d%6d.%03d\n", k, fdebug->fcount,
+								"%-4d%5d%6d.%03d%6d.%03d\n", k, fdebug->fcount,
 								avg_fps / 1000, avg_fps % 1000, cur_fps / 1000, cur_fps % 1000);
 					offset += len;
 				}
@@ -431,14 +427,11 @@ u32 vio_delay_stats(char* buf, u32 size, u32 flowid_mask)
 	char chn[10] = {0};
 
 	len = snprintf(&buf[offset], size - offset,
-				"---------------------------------------------------------------------------------------\n");
+				"delay status: (ms)\n");
 	offset += len;
 	len = snprintf(&buf[offset], size - offset,
-				"%-10s%-10s%-10s%-5s%13s%13s%13s%13s\n",
-				"flowid", "module", "ctx_id", "chn", "cur_delay_ms", "min_delay_ms", "avg_delay_ms", "max_delay_ms");
-	offset += len;
-	len = snprintf(&buf[offset], size - offset,
-				"---------------------------------------------------------------------------------------\n");
+				"%-7s%-7s%-7s%-4s%10s%10s%10s%10s\n",
+				"flowid", "module", "ctx_id", "chn", "cur_delay", "min_delay", "avg_delay", "max_delay");
 	offset += len;
 
 	for (flow_id = 0; flow_id < VIO_MAX_STREAM; flow_id++) {
@@ -458,7 +451,7 @@ u32 vio_delay_stats(char* buf, u32 size, u32 flowid_mask)
 				if (size <= offset)
 					break;
 				len = snprintf(&buf[offset], size - offset,
-							"%-10d%-10s%-10d\n", flow_id, vnode->name, vnode->ctx_id);
+							"%-7d%-7s%-7d\n", flow_id, vnode->name, vnode->ctx_id);
 				offset += len;
 				for (k = 0; k < 16; k++) {
 					if (k < MAXIMUM_CHN) {
@@ -474,7 +467,7 @@ u32 vio_delay_stats(char* buf, u32 size, u32 flowid_mask)
 					if (size <= offset)
 						break;
 					len = snprintf(&buf[offset], size - offset,
-								"%-10s%-10s%-10s", " ", " ", " ");
+								"%-7s%-7s%-7s", " ", " ", " ");
 					offset += len;
 
 					if (size <= offset)
@@ -485,7 +478,7 @@ u32 vio_delay_stats(char* buf, u32 size, u32 flowid_mask)
 						snprintf(chn, 10, "och%d", k - 8);
 					}
 					len = snprintf(&buf[offset], size - offset,
-								"%-5s%13d%13d%13lld%13d\n", chn, fdebug->fdelay.cur_delay_ns / 1000000,
+								"%-5s%6d%6d%6lld%6d\n", chn, fdebug->fdelay.cur_delay_ns / 1000000,
 								fdebug->fdelay.min_delay_ns / 1000000, fdebug->fdelay.avg_delay_ns / 1000000,
 								fdebug->fdelay.max_delay_ns / 1000000);
 					offset += len;
@@ -592,29 +585,29 @@ u32 vio_fmgr_stats(char* buf, u32 size, u32 head_index, u32 flowid_mask)
 {
 	u32 i, j, k;
 	u32 flow_id;
-	u32 len;
-	u32 offset = 0;
+	s32 len;
+	size_t offset = 0;
 	struct vio_node *vnode;
 	struct vio_node_mgr *vnode_mgr;
 	struct vio_chain *vchain;
 	struct vio_framemgr *framemgr;
-	char chn[10] = {0};
 
-	if (head_index == 0) {
+	if (head_index == 0u) {
 		len = snprintf(&buf[offset], size - offset,
-					"------------------------------------------------------------------------------\n");
-		offset += len;
+				"----------------------------------------------\n");
+		offset += (size_t)len;
 		len = snprintf(&buf[offset], size - offset,
-					"%-10s%-10s%-10s%-5s%6s%10s%10s%10s%6s\n",
-					"flowid", "module", "ctx_id", "chn", "FREE", "REQUEST", "PROCESS", "COMPLETE", "USED");
-		offset += len;
+				"%-7s%-7s%-4s%-3s%5s%5s%5s%5s%5s\n",
+				"flowid", "module", "cid", "chn", "FREE", "REQ", "PRO", "COM", "USED");
+		offset += (size_t)len;
 		len = snprintf(&buf[offset], size - offset,
-					"------------------------------------------------------------------------------\n");
-		offset += len;
+				"----------------------------------------------\n");
+		offset += (size_t)len;
+
 	}
 
 	for (flow_id = 0; flow_id < VIO_MAX_STREAM; flow_id++) {
-		if ((1 << flow_id & flowid_mask) == 0)
+		if ((((u32)1u << flow_id) & flowid_mask) == 0u)
 			continue;
 		vchain = vio_get_chain(flow_id);
 		if (vchain == NULL)
@@ -624,57 +617,48 @@ u32 vio_fmgr_stats(char* buf, u32 size, u32 head_index, u32 flowid_mask)
 			vnode_mgr = &vchain->vnode_mgr[i];
 			for (j = 0; j < MAX_VNODE_NUM; j++) {
 				vnode = vnode_mgr->vnode[j];
-				if (vnode == NULL || osal_test_bit(VIO_NODE_START, &vnode->state) == 0)
+				if (vnode == NULL || !osal_test_bit((u32)VIO_NODE_START, &vnode->state))
 					continue;
 
-				if (size <= offset)
-					break;
-				len = snprintf(&buf[offset], size - offset,
-							"%-10d%-10s%-10d\n", flow_id, vnode->name, vnode->ctx_id);
-				offset += len;
-				for (k = 0; k < 16; k++) {
+				for (k = 0; k < 16u; k++) {
 					if (k < MAXIMUM_CHN) {
-						if ((vnode->active_ich & 1 << k) == 0)
+						if ((vnode->active_ich & ((u32)1u << k)) == 0u)
 							continue;
 						framemgr = &vnode->ich_subdev[k]->framemgr;
+
 					} else {
-						if ((vnode->active_och & 1 << (k - MAXIMUM_CHN)) == 0)
+						if ((vnode->active_och & ((u32)1u << (k - MAXIMUM_CHN))) == 0u)
 							continue;
 						framemgr = &vnode->och_subdev[k - MAXIMUM_CHN]->framemgr;
 					}
 
-					if (framemgr->num_frames == 0)
+					if (framemgr->num_frames == 0u)
 						continue;
 
 					if (size <= offset)
 						break;
 					len = snprintf(&buf[offset], size - offset,
-								"%-10s%-10s%-10s", " ", " ", " ");
-					offset += len;
+							"%-7d%-7s%-4d", flow_id, vnode->name, vnode->ctx_id);
+					offset += (size_t)len;
 
 					if (size <= offset)
 						break;
-					if (k < 8) {
-						snprintf(chn, 10, "ich%d", k);
-					} else {
-						snprintf(chn, 10, "och%d", k - 8);
-					}
 					len = snprintf(&buf[offset], size - offset,
-								"%-5s%6d%10d%10d%10d%6d\n", chn, framemgr->queued_count[FS_FREE],
-								framemgr->queued_count[FS_REQUEST], framemgr->queued_count[FS_PROCESS],
-								framemgr->queued_count[FS_COMPLETE], framemgr->queued_count[FS_USED]);
-					offset += len;
+							"%-3d%5d%5d%5d%5d%5d\n", k, framemgr->queued_count[FS_FREE],
+							framemgr->queued_count[FS_REQUEST], framemgr->queued_count[FS_PROCESS],
+							framemgr->queued_count[FS_COMPLETE], framemgr->queued_count[FS_USED]);
+					offset += (size_t)len;
 				}
 
 				if (size <= offset)
 					break;
 				len = snprintf(&buf[offset], size - offset, "\n");
-				offset += len;
+				offset += (size_t)len;
 			}
 		}
 	}
 
-	return offset;
+	return (s32)offset;
 }
 
 static s32 vpf_dbg_query_active_ctx(struct vio_video_ctx *vctx, unsigned long arg)
@@ -814,7 +798,79 @@ static s32 vpf_dbg_get_fmgr_stats(struct vio_video_ctx *vctx, unsigned long arg)
 	if (offset > DEBUG_SIZE)
 		offset = DEBUG_SIZE;
 
-	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset);
+	buf[offset] = '\0';
+	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
+	if (copy_ret != 0u) {
+		vio_err("%s: failed to copy to user, ret = %lld\n", __func__, copy_ret);
+		ret = -EFAULT;
+	}
+
+	return ret;
+}
+
+static s32 vpf_dbg_get_vio_delay(struct vio_video_ctx *vctx, unsigned long arg)
+{
+	s32 ret = 0;
+	u32 offset = 0;
+	s64 copy_ret = 0;
+	char buf[DEBUG_SIZE];
+
+	offset = vio_print_delay_log(vctx->flow_id, buf, 1024);
+
+	if (offset > DEBUG_SIZE)
+		offset = DEBUG_SIZE;
+
+	buf[offset] = '\0';
+	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
+	if (copy_ret != 0u) {
+		vio_err("%s: failed to copy to user, ret = %lld\n", __func__, copy_ret);
+		ret = -EFAULT;
+	}
+
+	return ret;
+}
+
+static s32 vpf_dbg_get_fps_stats(struct vio_video_ctx *vctx, unsigned long arg)
+{
+	s32 ret = 0;
+	u32 offset = 0;
+	u32 flowid_mask;
+	s64 copy_ret = 0;
+	char buf[DEBUG_SIZE];
+
+	flowid_mask = 1 << vctx->flow_id;
+	offset = vio_fps_stats(buf, 1024, flowid_mask);
+
+	if (offset > DEBUG_SIZE)
+		offset = DEBUG_SIZE;
+
+	buf[offset] = '\0';
+
+	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
+	if (copy_ret != 0u) {
+		vio_err("%s: failed to copy to user, ret = %lld\n", __func__, copy_ret);
+		ret = -EFAULT;
+	}
+
+	return ret;
+}
+
+static s32 vpf_dbg_get_delay_status(struct vio_video_ctx *vctx, unsigned long arg)
+{
+	s32 ret = 0;
+	u32 offset = 0;
+	u32 flowid_mask;
+	s64 copy_ret = 0;
+	char buf[DEBUG_SIZE];
+
+	flowid_mask = 1 << vctx->flow_id;
+	offset = vio_delay_stats(buf, 1024, flowid_mask);
+
+	if (offset > DEBUG_SIZE)
+		offset = DEBUG_SIZE;
+
+	buf[offset] = '\0';
+	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
 	if (copy_ret != 0u) {
 		vio_err("%s: failed to copy to user, ret = %lld\n", __func__, copy_ret);
 		ret = -EFAULT;
@@ -856,6 +912,15 @@ s32 vio_debug_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long arg)
 	switch (cmd) {
 		case VIO_DBG_GET_FMGR_STATS:
 			ret = vpf_dbg_get_fmgr_stats(vctx, arg);
+			break;
+		case VIO_DBG_GET_VIO_DELAY:
+			ret = vpf_dbg_get_vio_delay(vctx, arg);
+			break;
+		case VIO_DBG_GET_FPS_STATUS:
+			ret = vpf_dbg_get_fps_stats(vctx, arg);
+			break;
+		case VIO_DBG_GET_DELAY_STATUS:
+			ret = vpf_dbg_get_delay_status(vctx, arg);
 			break;
 		case VIO_DBG_GET_ACTIVE_CTX:
 			ret = vpf_dbg_query_active_ctx(vctx, arg);

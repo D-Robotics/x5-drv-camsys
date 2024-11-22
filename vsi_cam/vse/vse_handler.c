@@ -6,44 +6,11 @@
 
 #include "cam_ctx.h"
 #include "dw230_vse_regs.h"
+#include "dw_crc.h"
 #include "isc.h"
 #include "vse_uapi.h"
 
 #include "vse.h"
-
-static s32 handle_set_fmt_cap(struct vse_device *vse, struct vse_msg *msg)
-{
-	struct vse_instance *ins;
-	struct vse_format_cap *cap, *c = NULL;
-	u32 i;
-
-	if (msg->inst >= vse->num_insts)
-		return -EINVAL;
-
-	ins = &vse->insts[msg->inst];
-
-	for (i = 0; i < ARRAY_SIZE(ins->fmt_cap); i++) {
-		cap = &ins->fmt_cap[i];
-		if (cap->format == msg->fcap.format) {
-			c = cap;
-			break;
-		} else if (cap->format == CAM_FMT_NULL) {
-			c = cap;
-			c->format = msg->fcap.format;
-			break;
-		}
-	}
-
-	if (!c)
-		return -EINVAL;
-
-	if (msg->fcap.index >= ARRAY_SIZE(c->res))
-		return -EINVAL;
-
-	for (i = 0; i < msg->fcap.res_num; i++)
-		c->res[i][msg->fcap.index] = msg->fcap.res[i];
-	return 0;
-}
 
 static s32 handle_set_state(struct vse_device *vse, struct vse_msg *msg)
 {
@@ -52,21 +19,7 @@ static s32 handle_set_state(struct vse_device *vse, struct vse_msg *msg)
 
 static s32 handle_reset_control(struct vse_device *vse, struct vse_msg *msg)
 {
-	vse_reset(vse);
-	return 0;
-}
-
-static s32 handle_change_input(struct vse_device *vse, struct vse_msg *msg)
-{
-	struct vse_instance *ins;
-
-	if (msg->inst >= vse->num_insts)
-		return -EINVAL;
-
-	ins = &vse->insts[msg->inst];
-
-	memset(ins->fmt_cap, 0, sizeof(ins->fmt_cap));
-	return 0;
+	return dw_reset(vse->crc_dev, DW_MOD_VSE);
 }
 
 static s32 handle_alloc_cmd_buf(struct vse_device *vse, struct vse_msg *msg)
@@ -120,12 +73,6 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 	case CAM_MSG_WRITE_REG:
 		vse_write(vse, m->reg.offset, m->reg.value);
 		break;
-	case CAM_MSG_CHANGE_INPUT:
-		rc = handle_change_input(vse, m);
-		break;
-	case CAM_MSG_SET_FMT_CAP:
-		rc = handle_set_fmt_cap(vse, m);
-		break;
 	case CAM_MSG_SET_STATE:
 		rc = handle_set_state(vse, m);
 		break;
@@ -144,7 +91,7 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct vse_instance *inst, bool timeout)
+static inline void frame_done(struct vse_instance *inst, bool drop)
 {
 	struct vse_irq_ctx *ctx = &inst->ctx;
 	ktime_t now_time = ktime_get_boottime();
@@ -157,8 +104,8 @@ static inline void frame_done(struct vse_instance *inst, bool timeout)
 
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
-			if (timeout) {
-				cam_drop(ctx->src_ctx[i]);
+			if (drop || vse_get_drop_status(ctx->src_ctx[i])) {
+				cam_drop_irq(ctx->src_ctx[i], ctx->src_buf[i]);
 				ctx->src_buf[i] = NULL;
 			} else if (!cam_osd_update(ctx->src_ctx[i])) {
 				cam_qbuf_irq(ctx->src_ctx[i], ctx->src_buf[i], true);
@@ -187,7 +134,7 @@ int new_frame(struct vse_irq_ctx *ctx)
 	}
 
 	if (!ctx->is_sink_online_mode && ctx->sink_ctx) {
-		buf = cam_acqbuf_irq(ctx->sink_ctx);
+		buf = cam_acqbuf_irq(ctx->sink_ctx, false);
 		if (!buf)
 			return -ENOMEM;
 	}
@@ -310,8 +257,13 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		vse_write(vse, VSE_MI_ICR1, mis1);
 		pr_debug("+mi mis1:0x%x\n", mis1);
 	}
-	if (mis1 & 0x5)
+	if (mis1 & 0x5) {
+		/** If mp bus timeout occurs, we report an artificial
+		 *  interrupt status and drop the current frame data.
+		 */
 		mis = BIT(13);
+		pr_info("mi bus timed-out!\n");
+	}
 
 	if (mis & BIT(13)) {
 		inst = &vse->insts[vse->next_irq_ctx];
@@ -333,6 +285,12 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		spin_lock_irqsave(&inst->lock, flags);
 		frame_done(inst, !!(mis1 & 0x5));
 		spin_unlock_irqrestore(&inst->lock, flags);
+
+		msg.inst = -1;
+		msg.channel = -1;
+		msg.irq.num = VSE_MI_MIS;
+		msg.irq.stat = mis;
+		vse_post(vse, &msg, false);
 
 		ctx = get_next_irq_ctx(vse);
 		if (!ctx) {
@@ -363,12 +321,6 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		} else {
 			vse_set_cmd(vse, vse->next_irq_ctx);
 		}
-
-		msg.inst = -1;
-		msg.channel = -1;
-		msg.irq.num = VSE_MI_MIS;
-		msg.irq.stat = mis;
-		vse_post(vse, &msg, false);
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;

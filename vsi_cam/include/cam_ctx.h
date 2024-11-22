@@ -46,4 +46,14 @@ u8 cam_get_frame_status(void *cam_ctx);
 
 void cam_dec_frame_status(void *cam_ctx);
 
+void isp_handle_set_sensor_ctrl(void *isp_dev, uint32_t inst, void *data);
+
+void isp_handle_get_sensor_ctrl(void *isp_dev, uint32_t inst, void *data);
+
+int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info);
+
+int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info);
+
+bool vse_get_drop_status(struct cam_ctx *ctx);
+
 #endif /* _CAM_COM_H_ */

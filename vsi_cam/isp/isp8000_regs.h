@@ -43,6 +43,12 @@
 #define MI_MP_CR_SIZE   (0x00001350)
 #define MI_MP_CR_OFFS   (0x00001354)
 
+#define ISP_GAMMA_FE_Y_ADDR   (0x00005f24)
+#define ISP_GAMMA_BE_Y_ADDR   (0x00006024)
+
+#define ISP_GAMMA_FE_Y_WRITE_DATA   (0x00005f28)
+#define ISP_GAMMA_BE_Y_WRITE_DATA   (0x00006028)
+
 /* MCM buffer related */
 #define MI_MCMn_RAW_BASE(n)         \
 ({ \
@@ -52,7 +58,6 @@
 #define MI_MCMn_RAW_ADDR(__base)    ((__base) + 0x00)
 #define MI_MCMn_RAW_SIZE(__base)    ((__base) + 0x04)
 #define MI_MCMn_RAW_OFFS(__base)    ((__base) + 0x08)
-#define MI_MCM_RDMA_START           (0x0000166c)
 #define MI_MCM_CTRL                 (0x00001600)
 #define MI_MCM_G2_CTRL              (0x00005000)
 
