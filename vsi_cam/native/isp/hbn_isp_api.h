@@ -114,8 +114,12 @@ typedef struct isp_exposure_auto_attr_s {
 	hbn_isp_param_range_t again_range;
 	hbn_isp_param_range_t dgain_range;
 	hbn_isp_param_range_t isp_dgain_range;
-	__u32 speed_over;          // 暗到亮速度
-	__u32 speed_under;         // 亮到暗速度
+	__u32 speed_over;          // 亮到暗速度
+	__u32 speed_under;         // 暗到亮速度
+	__u32 dampover_gain;       // 加速收敛控制参数
+	__u32 dampover_ratio;      // 加速收敛控制参数
+	__u32 dampunder_gain;      // 加速收敛控制参数
+	__u32 dampunder_ratio;     // 加速收敛控制参数
 	__u32 tolerance;           // 偏差容忍度
 	__u32 target;              // 目标亮度值
 	__u32 anti_flicker_status; // 抗频闪状态
@@ -136,6 +140,7 @@ typedef struct isp_exposure_manual_attr_s {
 
 typedef struct hbn_isp_exposure_attr_s {
 	hbn_isp_exposure_version_e version; //版本号
+	__u32 lock_state; // 是否收敛
 	hbn_isp_mode_e mode;
 	hbn_isp_exposure_auto_attr_t auto_attr;
 	hbn_isp_exposure_manual_attr_t manual_attr;
@@ -183,8 +188,11 @@ typedef struct hbn_isp_awb_gain_s {
 } hbn_isp_awb_gain_t;
 
 typedef struct hbn_isp_awb_auto_attr_s {
-	__u32 speed;
-	__u32 tolerance;
+	__u32 use_damping;
+	__u32 use_manual_damp_coff;
+	__u32 manual_damp_coff;
+	__u32 lock_tolerance;
+	__u32 unlock_tolerance;
 	__u32 rg_strength;  // r通道强度（设置白平衡偏好r通道）
 	__u32 bg_strength;  // b通道强度（设置白平衡偏好b通道）
 	hbn_isp_awb_gain_t gain;
@@ -198,6 +206,7 @@ typedef struct hbn_isp_awb_manual_attr_s {
 
 typedef struct hbn_isp_awb_attr_s {
 	hbn_isp_awb_version_e version;
+	__u32 lock_state; // 是否收敛
 	hbn_isp_mode_e mode;
 	hbn_isp_awb_auto_attr_t auto_attr;
 	hbn_isp_awb_manual_attr_t manual_attr;
@@ -234,23 +243,20 @@ typedef struct hbn_isp_color_process_attr_s {
 } hbn_isp_color_process_attr_t;
 
 /* AE 1024-zone weight */
+#define HBN_ISP_AE_ZONE_WEIGHT_MIN 0.0f
+#define HBN_ISP_AE_ZONE_WEIGHT_MAX 255.0f
+#define HBN_ISP_AE_ZONE_GRID_NUM 32
+#define HBN_ISP_AE_ZONE_GRID_ITEMS (HBN_ISP_AE_ZONE_GRID_NUM * HBN_ISP_AE_ZONE_GRID_NUM)  /**< number of grid items */
+#define HBN_ISP_GRID_ITEMS HBN_ISP_AE_ZONE_GRID_ITEMS
+
 typedef enum enum_isp_ae_zone_weight_version {
 	HBN_ISP_AE_ZONE_WEIGHT_A = 0,
 	HBN_ISP_AE_ZONE_WEIGHT_B,
 } hbn_isp_ae_zone_weight_version_e;
 
-#define HBN_ISP_GRID_ITEMS  (32 * 32)  /**< number of grid items */
-
-typedef struct isp_ae_zone_weight_func_a_attr_s {
-	__u32 total_size;
-	hbn_isp_zone_weight_t weight[HBN_ISP_GRID_ITEMS];
-} isp_ae_zone_weight_func_a_attr_t;
-
 typedef struct hbn_isp_ae_zone_weight_attr_s {
 	hbn_isp_ae_zone_weight_version_e version;
-	union {
-		isp_ae_zone_weight_func_a_attr_t func_a_attr;
-	} attr;
+	hbn_isp_zone_weight_t weight[HBN_ISP_AE_ZONE_GRID_ITEMS];
 } hbn_isp_ae_zone_weight_attr_t;
 
 /* AF 225-zone weight */
@@ -276,14 +282,14 @@ typedef struct hbn_isp_af_zone_weight_attr_s {
 #define HBN_ISP_AFM_BLOCK_NUM 225
 
 typedef struct hbn_isp_ae_statistics_s {
-	__u32 expStat[HBN_ISP_GRID_ITEMS * HBN_ISP_PIXEL_CHANNEL];
+	__u32 expStat[HBN_ISP_AE_ZONE_GRID_ITEMS * HBN_ISP_PIXEL_CHANNEL];
 	__u32 datatype;
 	__u32 frame_id;
 	__u64 timestamps;
 } hbn_isp_ae_statistics_t;
 
 typedef struct hbn_isp_awb_statistics_s {
-	__u32 awbStat[HBN_ISP_GRID_ITEMS * HBN_ISP_PIXEL_CHANNEL];
+	__u32 awbStat[HBN_ISP_AE_ZONE_GRID_ITEMS * HBN_ISP_PIXEL_CHANNEL];
 	__u32 datatype;
 	__u32 frame_id;
 	__u64 timestamps;
