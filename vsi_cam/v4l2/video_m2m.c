@@ -526,6 +526,28 @@ static long vid_ioctl(struct file *file, void *fh, bool valid_prio,
 	return rc;
 }
 
+static int vid_queryctrl(struct file *file, void *fh, struct v4l2_queryctrl *a)
+{
+	struct vid_m2m_dev *dev = file2dev(file);
+	struct v4l2_subdev *sd;
+
+	(void)get_remote_pad_sd(sink_pad(dev), &sd);
+	if (sd)
+		return v4l2_subdev_call(sd, core, command, CAM_QUERY_CTRL, a);
+	return -ENOLINK;
+}
+
+static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext_ctrl *a)
+{
+	struct vid_m2m_dev *dev = file2dev(file);
+	struct v4l2_subdev *sd;
+
+	(void)get_remote_pad_sd(sink_pad(dev), &sd);
+	if (sd)
+		return v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
+	return -ENOLINK;
+}
+
 static const struct v4l2_ioctl_ops vid_m2m_ioctl_ops = {
 	.vidioc_querycap = vid_querycap,
 	.vidioc_enum_fmt_vid_cap = vid_enum_fmt_vid_cap,
@@ -551,6 +573,8 @@ static const struct v4l2_ioctl_ops vid_m2m_ioctl_ops = {
 	.vidioc_g_ctrl = vid_g_ctrl,
 	.vidioc_s_ext_ctrls = vid_s_ext_ctrls,
 	.vidioc_g_ext_ctrls = vid_g_ext_ctrls,
+	.vidioc_queryctrl = vid_queryctrl,
+	.vidioc_query_ext_ctrl = vid_query_ext_ctrl,
 };
 
 static int vid_m2m_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
