@@ -13,20 +13,6 @@
 #include "video_fmt.h"
 #include "isp_drv.h"
 
-#define ISP_OFFLINE_IN_BUF_NUM (4)
-
-#define sd_to_isp_v4l_instance(s) \
-({ \
-	struct subdev_node *sn = container_of(s, struct subdev_node, sd); \
-	container_of(sn, struct isp_v4l_instance, node); \
-})
-
-#define buf_ctx_to_isp_v4l_instance(ctx) \
-({ \
-	struct subdev_node *sn = container_of(ctx, struct subdev_node, bctx); \
-	container_of(sn, struct isp_v4l_instance, node); \
-})
-
 static char input_fmt_str[16];
 module_param_string(input_fmt, input_fmt_str, 16, 0644);
 
@@ -83,7 +69,7 @@ static int isp_link_setup(struct media_entity *entity,
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
-	isp = sd_to_isp_v4l_instance(sd);
+	isp = sd_to_v4l_instance(isp, sd);
 	attr.dev = sd->dev;
 
 	pad = media_pad_remote_pad_first(local);
@@ -143,7 +129,7 @@ static void isp_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 
 static int isp_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
-	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
 	int rc;
 
 	if (!ctx || !buf)
@@ -165,7 +151,7 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 
 static int isp_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
-	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
 
 	if (!ctx || !buf)
 		return -EINVAL;
@@ -181,7 +167,7 @@ static int isp_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 
 static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
-	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
 
 	if (!ctx)
 		return NULL;
@@ -309,7 +295,7 @@ static inline int isp_set_sub_chnl_format(struct isp_v4l_instance *ins,
 static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_format *format, bool is_try)
 {
-	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *inst = buf_ctx_to_v4l_instance(isp, ctx);
 	struct isp_instance *isp;
 	struct isp_format f = {0};
 	struct v4l2_format s_f = *format;
@@ -430,7 +416,7 @@ _exit:
 
 static int isp_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
-	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *inst = buf_ctx_to_v4l_instance(isp, ctx);
 
 	if (index >= inst->fmt_cap_num)
 		return -EINVAL;
@@ -443,7 +429,7 @@ static int isp_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32
 static int isp_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
-	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *inst = buf_ctx_to_v4l_instance(isp, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fse;
@@ -468,7 +454,7 @@ static int isp_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int isp_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *inst = buf_ctx_to_v4l_instance(isp, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmivalenum fiv;
@@ -492,7 +478,7 @@ static int isp_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 
 static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 {
-	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *inst = buf_ctx_to_v4l_instance(isp, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	int i, j = 0, rc;
@@ -535,7 +521,7 @@ default_fmt:
 
 static int isp_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
 {
-	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
 
 	if (!devid || !insid)
 		return -EINVAL;
@@ -548,7 +534,7 @@ static int isp_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
 
 static int isp_check_datapath(struct v4l2_buf_ctx *ctx, bool *online)
 {
-	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *inst = buf_ctx_to_v4l_instance(isp, ctx);
 	struct isp_instance *isp;
 
 	isp = &inst->dev->insts[inst->id];
@@ -694,7 +680,7 @@ static int get_name_for_ext_ctrl(uint32_t id, char *name)
 
 static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+	struct isp_v4l_instance *isp = sd_to_v4l_instance(isp, sd);
 	struct v4l2_query_ext_ctrl *qectrl;
 	struct v4l2_ext_control *vectl;
 	int rc = 0;
@@ -769,7 +755,7 @@ static void fill_irq_ctx(struct isp_v4l_instance *isp, u32 i, int enable,
 
 static int isp_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 {
-	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
+	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
 	struct isp_irq_ctx irq_ctx;
 	int index = get_src_pad_index(isp, pad);
 
@@ -784,26 +770,22 @@ static int isp_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 
 static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+	struct isp_v4l_instance *isp = sd_to_v4l_instance(isp, sd);
 	u32 devid, insid;
 	int rc;
 
+	if (cam_refcount_check(&isp->start_count, enable))
+		return 0;
+
 	if (enable) {
-		if (refcount_read(&isp->start_count) > REFCNT_INIT_VAL) {
-			refcount_inc(&isp->start_count);
-			return 0;
-		}
-
-		refcount_inc(&isp->start_count);
-
 		if (is_sink_online_en(&isp->node.bctx)) {
 			get_front_info(sink_pad(isp), &devid, &insid);
 			isp_set_input_select(isp->dev, isp->id, devid, insid);
 		} else {
-			cam_reqbufs(sink_ctx(isp), ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
+			cam_reqbufs(sink_ctx(isp), V4L2_SUBDEV_BUF_NUM, &isp_buf_ops);
 		}
 		if (isp->metadata_en)
-			cam_reqbufs(sub_sink_ctx(isp), ISP_OFFLINE_IN_BUF_NUM,
+			cam_reqbufs(sub_sink_ctx(isp), V4L2_SUBDEV_BUF_NUM,
 				    &isp_sub_chnl_buf_ops);
 		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STARTED, V4L_GROUP);
 		if (rc < 0)
@@ -813,11 +795,6 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 	} else {
-		if (refcount_read(&isp->start_count) > REFCNT_INIT_VAL)
-			refcount_dec(&isp->start_count);
-		if (refcount_read(&isp->start_count) > REFCNT_INIT_VAL)
-			return 0;
-
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
@@ -839,7 +816,7 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 static int isp_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+	struct isp_v4l_instance *isp = sd_to_v4l_instance(isp, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -855,7 +832,7 @@ static int isp_g_frame_interval(struct v4l2_subdev *sd,
 static int isp_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
+	struct isp_v4l_instance *isp = sd_to_v4l_instance(isp, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -885,15 +862,12 @@ static const struct v4l2_subdev_ops isp_subdev_ops = {
 
 static int isp_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct isp_v4l_instance *inst = sd_to_isp_v4l_instance(sd);
+	struct isp_v4l_instance *inst = sd_to_v4l_instance(isp, sd);
 	int rc;
 
 	mutex_lock(&inst->open_lock);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
-		refcount_inc(&inst->open_count);
+	if (cam_refcount_check(&inst->open_count, true))
 		goto _exit;
-	}
-	refcount_inc(&inst->open_count);
 
 	rc = subdev_open(sd);
 	if (rc < 0)
@@ -907,13 +881,11 @@ _exit:
 
 static int isp_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct isp_v4l_instance *inst = sd_to_isp_v4l_instance(sd);
+	struct isp_v4l_instance *inst = sd_to_v4l_instance(isp, sd);
 	int rc;
 
 	mutex_lock(&inst->open_lock);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
-		refcount_dec(&inst->open_count);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+	if (cam_refcount_check(&inst->open_count, false))
 		goto _exit;
 
 	rc = subdev_close(sd);
@@ -1034,10 +1006,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->bctx.check_datapath = isp_check_datapath;
 
 		n->dev = dev;
-		if (i < ISP_SINK_ONLINE_PATH_MAX)
-			n->num_pads = 4;
-		else
-			n->num_pads = 3;
+		n->num_pads = (i < ISP_SINK_ONLINE_PATH_MAX) ? 4 : 3;
 		n->pads = devm_kzalloc
 				(dev, sizeof(*n->pads) * n->num_pads, GFP_KERNEL);
 		if (!n->pads) {

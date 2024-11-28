@@ -6,6 +6,12 @@
 #include "vid_drv.h"
 #include "video_fmt.h"
 
+#define IS_CAPTURE_V4L2_TYPE(type) \
+	((type) == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+
+#define IS_OUTPUT_V4L2_TYPE(type) \
+	((type) == V4L2_BUF_TYPE_VIDEO_OUTPUT)
+
 static int vid_querycap(struct file *file, void *fh,
 			struct v4l2_capability *cap)
 {

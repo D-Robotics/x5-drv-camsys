@@ -12,20 +12,6 @@
 
 #include "sif_drv.h"
 
-#define sd_to_sif_v4l_instance(s)                                \
-	({                                                       \
-		struct subdev_node *sn =                         \
-			container_of(s, struct subdev_node, sd); \
-		container_of(sn, struct sif_v4l_instance, node); \
-	})
-
-#define buf_ctx_to_sif_v4l_instance(ctx)                             \
-	({                                                           \
-		struct subdev_node *sn =                             \
-			container_of(ctx, struct subdev_node, bctx); \
-		container_of(sn, struct sif_v4l_instance, node);     \
-	})
-
 static inline void update_en_post_status(struct sif_v4l_instance *sif,
 					 struct v4l2_subdev *sd, bool connect)
 {
@@ -51,7 +37,7 @@ static int sif_link_setup(struct media_entity *entity,
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
-	sif = sd_to_sif_v4l_instance(sd);
+	sif = sd_to_v4l_instance(sif, sd);
 
 	pad = media_pad_remote_pad_first(local);
 	if (pad && pad != remote)
@@ -141,7 +127,7 @@ static u32 sif_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_format *format, bool is_try)
 {
-	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *inst = buf_ctx_to_v4l_instance(sif, ctx);
 	struct v4l2_subdev *sd;
 	struct v4l2_subdev_state state = {0};
 	struct v4l2_subdev_pad_config pads = {0};
@@ -151,11 +137,7 @@ static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	int rc = 0;
 
 	sd = &inst->node.sd;
-	if (is_try)
-		senfmt.which = V4L2_SUBDEV_FORMAT_TRY;
-	else
-		senfmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-
+	senfmt.which = is_try ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
 	senfmt.format.width = format->fmt.pix.width;
 	senfmt.format.height = format->fmt.pix.height;
 	f.width = format->fmt.pix.width;
@@ -205,7 +187,7 @@ _exit:
 
 static int sif_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
-	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *inst = buf_ctx_to_v4l_instance(sif, ctx);
 
 	if (index >= inst->fmt_cap_num)
 		return -EINVAL;
@@ -217,7 +199,7 @@ static int sif_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32
 static int sif_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
-	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *inst = buf_ctx_to_v4l_instance(sif, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_subdev_frame_size_enum fse = {
@@ -249,7 +231,7 @@ static int sif_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int sif_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *inst = buf_ctx_to_v4l_instance(sif, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_subdev_frame_interval_enum fie = {
@@ -281,7 +263,7 @@ static int sif_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 
 static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 {
-	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *inst = buf_ctx_to_v4l_instance(sif, ctx);
 	struct v4l2_subdev *rsd;
 	struct v4l2_subdev_mbus_code_enum mbus_code;
 	struct media_pad *rpad;
@@ -324,7 +306,7 @@ static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 
 static int sif_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
 {
-	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *sif = buf_ctx_to_v4l_instance(sif, ctx);
 
 	if (!devid || !insid)
 		return -EINVAL;
@@ -336,7 +318,7 @@ static int sif_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
 
 static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 {
-	struct sif_v4l_instance *sif = buf_ctx_to_sif_v4l_instance(ctx);
+	struct sif_v4l_instance *sif = buf_ctx_to_v4l_instance(sif, ctx);
 	struct sif_irq_ctx irq_ctx;
 	int rc = 0;
 	u32 set_dma = 0, set_isp = 0;
@@ -388,34 +370,24 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 
 static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_v4l_instance *inst = sd_to_v4l_instance(sif, sd);
 	int rc;
 
+	if (cam_refcount_check(&inst->start_refcnt, enable))
+		return 0;
+
 	if (!enable) {
-		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL)
-			return 0;
-		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL)
-			refcount_dec(&inst->start_refcnt);
+		sif_set_isp_ctrl(inst->dev, inst->id, 0, true);
+		sif_set_dma(inst->dev, inst->id, 0);
+		rc = subdev_set_stream(sd, enable);
+		if (rc < 0)
+			return rc;
+		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
+		if (rc < 0)
+			return rc;
 
-		if (refcount_read(&inst->start_refcnt) == REFCNT_INIT_VAL) {
-			sif_set_isp_ctrl(inst->dev, inst->id, 0, true);
-			sif_set_dma(inst->dev, inst->id, 0);
-			rc = subdev_set_stream(sd, enable);
-			if (rc < 0)
-				return rc;
-			rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
-			if (rc < 0)
-				return rc;
-
-			inst->fmt_changed = false;
-		}
+		inst->fmt_changed = false;
 	} else {
-		if (refcount_read(&inst->start_refcnt) > REFCNT_INIT_VAL) {
-			refcount_inc(&inst->start_refcnt);
-			return 0;
-		}
-
-		refcount_inc(&inst->start_refcnt);
 		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 		if (rc < 0)
 			return rc;
@@ -431,7 +403,7 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 static int sif_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_v4l_instance *inst = sd_to_v4l_instance(sif, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -447,7 +419,7 @@ static int sif_g_frame_interval(struct v4l2_subdev *sd,
 static int sif_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_v4l_instance *inst = sd_to_v4l_instance(sif, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -482,15 +454,12 @@ static const struct v4l2_subdev_ops sif_subdev_ops = {
 
 static int sif_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_v4l_instance *inst = sd_to_v4l_instance(sif, sd);
 	int rc = 0;
 
 	mutex_lock(&inst->open_lock);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
-		refcount_inc(&inst->open_count);
+	if (cam_refcount_check(&inst->open_count, true))
 		goto _exit;
-	}
-	refcount_inc(&inst->open_count);
 
 	rc = subdev_open(sd);
 	if (rc < 0)
@@ -505,13 +474,11 @@ _exit:
 
 static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
+	struct sif_v4l_instance *inst = sd_to_v4l_instance(sif, sd);
 	int rc = 0;
 
 	mutex_lock(&inst->open_lock);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
-		refcount_dec(&inst->open_count);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+	if (cam_refcount_check(&inst->open_count, false))
 		goto _exit;
 
 	rc = subdev_close(sd);
@@ -705,15 +672,16 @@ static const struct of_device_id sif_of_match[] = {
 
 MODULE_DEVICE_TABLE(of, sif_of_match);
 
-static struct platform_driver sif_driver = { .probe = sif_v4l_probe,
-					     .remove = sif_v4l_remove,
-					     .driver = {
-						     .name = SIF_DEV_NAME,
-						     .owner = THIS_MODULE,
-						     .of_match_table =
-							     sif_of_match,
-						     .pm = &sif_pm_ops,
-					     } };
+static struct platform_driver sif_driver = {
+	.probe  = sif_v4l_probe,
+	.remove = sif_v4l_remove,
+	.driver = {
+		.name = SIF_DEV_NAME,
+		.owner = THIS_MODULE,
+		.of_match_table = sif_of_match,
+		.pm = &sif_pm_ops,
+	}
+};
 
 static int __init sif_init_module(void)
 {

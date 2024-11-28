@@ -13,18 +13,6 @@
 #include "v4l2_usr_api.h"
 #include "gdc_drv.h"
 
-#define sd_to_gdc_v4l_instance(s) \
-({ \
-	struct subdev_node *sn = container_of(s, struct subdev_node, sd); \
-	container_of(sn, struct gdc_v4l_instance, node); \
-})
-
-#define buf_ctx_to_gdc_v4l_instance(ctx) \
-({ \
-	struct subdev_node *sn = container_of(ctx, struct subdev_node, bctx); \
-	container_of(sn, struct gdc_v4l_instance, node); \
-})
-
 static int gdc_link_setup(struct media_entity *entity,
 			  const struct media_pad *local,
 			  const struct media_pad *remote, u32 flags)
@@ -43,7 +31,7 @@ static int gdc_link_setup(struct media_entity *entity,
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
-	gdc = sd_to_gdc_v4l_instance(sd);
+	gdc = sd_to_v4l_instance(gdc, sd);
 	attr.dev = sd->dev;
 
 	pad = media_pad_remote_pad_first(local);
@@ -99,7 +87,7 @@ static const struct media_entity_operations gdc_media_ops = {
 
 static void gdc_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *gdc = buf_ctx_to_v4l_instance(gdc, ctx);
 	int rc;
 
 	if (gdc && on) {
@@ -111,7 +99,7 @@ static void gdc_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 
 static int gdc_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *gdc = buf_ctx_to_v4l_instance(gdc, ctx);
 
 	if (!ctx || !buf)
 		return -EINVAL;
@@ -121,7 +109,7 @@ static int gdc_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 
 static int gdc_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *gdc = buf_ctx_to_v4l_instance(gdc, ctx);
 	int rc;
 
 	if (!ctx || !buf)
@@ -139,7 +127,7 @@ static int gdc_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 
 static struct cam_buf *gdc_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *gdc = buf_ctx_to_v4l_instance(gdc, ctx);
 
 	if (!ctx)
 		return NULL;
@@ -152,7 +140,7 @@ static struct cam_buf *gdc_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 
 static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
-	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *gdc = buf_ctx_to_v4l_instance(gdc, ctx);
 
 	if (!ctx)
 		return NULL;
@@ -172,7 +160,7 @@ static u32 gdc_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 static int gdc_set_ctx_format_out(struct v4l2_buf_ctx *ctx,
 				  struct v4l2_format *format, bool is_try)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 
 	if (!is_try)
 		inst->input_fmt = format->fmt.pix.pixelformat;
@@ -181,7 +169,7 @@ static int gdc_set_ctx_format_out(struct v4l2_buf_ctx *ctx,
 
 static int gdc_enum_ctx_format_out(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 
 	if (index >= inst->fmt_cap_num)
 		return -EINVAL;
@@ -199,7 +187,7 @@ static int gdc_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx, struct v4l2_frms
 static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_format *format, bool is_try)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 	struct gdc_format f;
 	struct v4l2_format s_f = *format;
 	struct v4l2_subdev *rsd;
@@ -239,7 +227,7 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 
 static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 
 	if (is_sink_pad(inst, pad))
 		return gdc_enum_ctx_format_out(ctx, index, format);
@@ -254,7 +242,7 @@ static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32
 static int gdc_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fse;
@@ -282,7 +270,7 @@ static int gdc_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 static int gdc_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmivalenum fiv;
@@ -314,7 +302,7 @@ static void gdc_set_default_input(struct gdc_v4l_instance *inst)
 
 static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 {
-	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
+	struct gdc_v4l_instance *inst = buf_ctx_to_v4l_instance(gdc, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fsize;
@@ -398,13 +386,13 @@ static struct cam_buf_ops gdc_buf_ops = {
 
 static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
+	struct gdc_v4l_instance *gdc = sd_to_v4l_instance(gdc, sd);
 	struct gdc_irq_ctx ctx;
 	int rc;
 
 	if (enable) {
 		if (!is_sink_online_en(&gdc->node.bctx))
-			cam_reqbufs(&gdc->sink_ctx, 4, &gdc_buf_ops);
+			cam_reqbufs(&gdc->sink_ctx, V4L2_SUBDEV_BUF_NUM, &gdc_buf_ops);
 
 		fill_irq_ctx(gdc, &ctx);
 		gdc_set_ctx(gdc->dev, gdc->id, &ctx);
@@ -438,7 +426,7 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 static int gdc_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
+	struct gdc_v4l_instance *gdc = sd_to_v4l_instance(gdc, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -454,7 +442,7 @@ static int gdc_g_frame_interval(struct v4l2_subdev *sd,
 static int gdc_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
+	struct gdc_v4l_instance *gdc = sd_to_v4l_instance(gdc, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -595,7 +583,7 @@ static int get_name_for_ext_ctrl(uint32_t id, char *name)
 
 static long gdc_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
+	struct gdc_v4l_instance *gdc = sd_to_v4l_instance(gdc, sd);
 	struct v4l2_query_ext_ctrl *qectrl;
 	struct v4l2_ext_control *vectl;
 	int rc = 0;
@@ -666,7 +654,7 @@ static const struct v4l2_subdev_ops gdc_subdev_ops = {
 
 static int gdc_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
+	struct gdc_v4l_instance *inst = sd_to_v4l_instance(gdc, sd);
 	int rc;
 
 	if (!inst->m2m_en) {
@@ -680,7 +668,7 @@ static int gdc_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 
 static int gdc_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct gdc_v4l_instance *inst = sd_to_gdc_v4l_instance(sd);
+	struct gdc_v4l_instance *inst = sd_to_v4l_instance(gdc, sd);
 	int rc;
 
 	if (!inst->m2m_en) {

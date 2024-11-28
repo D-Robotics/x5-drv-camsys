@@ -23,7 +23,7 @@ static int cam_queue_setup(struct vb2_queue *vq,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
-	struct cam_ctx *cbc = (struct cam_ctx *)vq->drv_priv;
+	struct cam_ctx *cbc = (struct cam_ctx *)vb2_get_drv_priv(vq);
 	struct local_buf_ctx *lbc = (struct local_buf_ctx *)cbc->priv;
 
 	if (lbc->ops && lbc->ops->queue_setup)
@@ -35,7 +35,7 @@ static int cam_queue_setup(struct vb2_queue *vq,
 static void cam_buf_queue(struct vb2_buffer *vb)
 {
 	struct cam_buf *buf = vb2_buf_to_cam_buf(vb);
-	struct cam_ctx *cbc = (struct cam_ctx *)vb->vb2_queue->drv_priv;
+	struct cam_ctx *cbc = (struct cam_ctx *)vb2_get_drv_priv(vb->vb2_queue);
 	struct local_buf_ctx *lbc = (struct local_buf_ctx *)cbc->priv;
 
 	list_add_tail(&buf->entry, &lbc->queued_list);
@@ -48,7 +48,7 @@ static int cam_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 static void cam_stop_streaming(struct vb2_queue *vq)
 {
-	struct cam_ctx *cbc = (struct cam_ctx *)vq->drv_priv;
+	struct cam_ctx *cbc = (struct cam_ctx *)vb2_get_drv_priv(vq);
 	struct local_buf_ctx *lbc = (struct local_buf_ctx *)cbc->priv;
 	struct cam_buf *buf, *node;
 	struct vb2_buffer *vb;
@@ -423,6 +423,7 @@ void cam_buf_ctx_release(struct cam_ctx *ctx)
 phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf,
 			  unsigned int plane)
 {
+	struct vb2_buffer *vb;
 	dma_addr_t addr;
 	size_t size;
 	int rc;
@@ -430,9 +431,10 @@ phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf,
 	if (unlikely(!buf))
 		return 0;
 
-	addr = vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, plane);
+	vb = &buf->vb.vb2_buf;
+	addr = vb2_dma_contig_plane_dma_addr(vb, plane);
 	if (dev && addr) {
-		size = buf->vb.vb2_buf.planes[plane].length;
+		size = vb2_plane_size(vb, plane);
 		rc = mem_iommu_map(dev, addr, size, &addr);
 		if (rc < 0)
 			dev_warn(dev, "failed to call mem_iommu_map (err=%d)\n", rc);

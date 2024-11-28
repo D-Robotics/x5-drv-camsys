@@ -99,7 +99,7 @@ static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 			   unsigned int *num_planes, unsigned int sizes[],
 			   struct device *alloc_devs[])
 {
-	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
+	struct vid_video_device *vdev = (struct vid_video_device *)vb2_get_drv_priv(vq);
 	unsigned int size;
 	int rc;
 
@@ -138,7 +138,7 @@ static inline void notify_buf_ready(struct vid_video_device *dev, int on)
 static void vid_buf_queue(struct vb2_buffer *vb)
 {
 	struct vid_video_device *vdev =
-		(struct vid_video_device *)vb->vb2_queue->drv_priv;
+		(struct vid_video_device *)vb2_get_drv_priv(vb->vb2_queue);
 	struct cam_buf *buf = vb2_buf_to_cam_buf(vb);
 	unsigned long flags;
 
@@ -168,7 +168,7 @@ static void vid_return_all_buffers(struct vid_video_device *dev,
 
 static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
-	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
+	struct vid_video_device *vdev = (struct vid_video_device *)vb2_get_drv_priv(vq);
 	struct v4l2_subdev *sd;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
@@ -193,7 +193,7 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 static void vid_stop_streaming(struct vb2_queue *vq)
 {
-	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
+	struct vid_video_device *vdev = (struct vid_video_device *)vb2_get_drv_priv(vq);
 	struct v4l2_subdev *sd;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
@@ -230,7 +230,7 @@ static int vid_enum_fmt(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 	struct v4l2_subdev *sd;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	if (sd)
@@ -243,7 +243,7 @@ static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	int rc;
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	if (!vdev->fmt.fmt.pix.pixelformat) {
@@ -267,7 +267,7 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 	if (!sd)
 		return -ENOLINK;
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	v_f = get_fmt_by_pixelformat(f->fmt.pix.pixelformat);
@@ -348,7 +348,7 @@ static int vid_enum_framesizes(struct file *file, void *fh,
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
-	if (fsize->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(fsize->type))
 		return -EINVAL;
 
 	rc = vid_check_pixelformat(sink_pad(vdev), fsize->pixel_format);
@@ -368,7 +368,7 @@ static int vid_enum_frameintervals(struct file *file, void *fh,
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
-	if (fival->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(fival->type))
 		return -EINVAL;
 
 	rc = vid_check_pixelformat(sink_pad(vdev), fival->pixel_format);
@@ -421,7 +421,7 @@ static int vid_g_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
 
-	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(a->type))
 		return -EINVAL;
 
 	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
@@ -435,7 +435,7 @@ static int vid_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
 
-	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(a->type))
 		return -EINVAL;
 
 	(void)get_remote_pad_sd(sink_pad(vdev), &sd);

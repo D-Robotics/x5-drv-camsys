@@ -20,6 +20,7 @@
 #define GDC_DEV_NAME    "vs-arm-gdc"
 
 #define STRIDE_ALIGN    (64)
+#define V4L2_SUBDEV_BUF_NUM (4)
 
 #define BCTX_MAGIC         (0x12345678)
 #define is_v4l2_buf_ctx(x) ((x) && (x)->magic == BCTX_MAGIC)
@@ -28,6 +29,20 @@
 ({ \
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb2); \
 	container_of(vbuf, struct cam_buf, vb); \
+})
+
+#define buf_ctx_to_v4l_instance(module, ctx) \
+({ \
+	struct subdev_node *sn = \
+		container_of(ctx, struct subdev_node, bctx); \
+	container_of(sn, struct module##_v4l_instance, node); \
+})
+
+#define sd_to_v4l_instance(module, s) \
+({ \
+	struct subdev_node *sn =  \
+		container_of(s, struct subdev_node, sd); \
+	container_of(sn, struct module##_v4l_instance, node); \
 })
 
 #define v4l2_subdev_ctx_call(sd, f, args...) \

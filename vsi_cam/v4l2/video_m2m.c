@@ -220,7 +220,7 @@ static int vid_enum_fmt_vid_cap(struct file *file, void *fh,
 	struct v4l2_subdev *sd;
 	struct media_pad *pad = get_remote_pad_sd(src_pad(dev), &sd);
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	if (sd)
@@ -236,7 +236,7 @@ static int vid_enum_fmt_vid_out(struct file *file, void *fh,
 	struct v4l2_subdev *sd;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(dev), &sd);
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
+	if (!IS_OUTPUT_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	if (sd)
@@ -332,7 +332,7 @@ static int vid_try_fmt_vid_cap(struct file *file, void *fh,
 {
 	struct vid_m2m_dev *dev = file2dev(file);
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	return try_fmt_vid(src_pad(dev), f, true);
@@ -343,7 +343,7 @@ static int vid_try_fmt_vid_out(struct file *file, void *fh,
 {
 	struct vid_m2m_dev *dev = file2dev(file);
 
-	if (f->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
+	if (!IS_OUTPUT_V4L2_TYPE(f->type))
 		return -EINVAL;
 
 	return try_fmt_vid(sink_pad(dev), f, true);
@@ -373,7 +373,7 @@ static int vid_s_fmt(struct vid_m2m_dev *dev, struct media_pad *pad,
 	fmt->fmt.pix.height = f->fmt.pix.height;
 
 	init_fmt(fmt);
-	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+	if (IS_OUTPUT_V4L2_TYPE(f->type)) {
 		fmt->fmt.pix.colorspace = f->fmt.pix.colorspace;
 		fmt->fmt.pix.xfer_func = f->fmt.pix.xfer_func;
 		fmt->fmt.pix.ycbcr_enc = f->fmt.pix.ycbcr_enc;
@@ -563,10 +563,10 @@ static int vid_m2m_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 	unsigned int size;
 	int rc;
 
-	if (vq->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+	if (IS_OUTPUT_V4L2_TYPE(vq->type)) {
 		pad = sink_pad(dev);
 		fmt = &dev->fmt[V4L2_M2M_SRC];
-	} else if (vq->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+	} else if (IS_CAPTURE_V4L2_TYPE(vq->type)) {
 		pad = src_pad(dev);
 		fmt = &dev->fmt[V4L2_M2M_DST];
 	} else {
@@ -654,13 +654,13 @@ static int vid_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 	if (!fmt)
 		return -EINVAL;
 
-	if (V4L2_TYPE_IS_OUTPUT(q->type))
+	if (IS_OUTPUT_V4L2_TYPE(q->type))
 		dev->aborting = 0;
 
 	dev->buf_sequence[V4L2_M2M_SRC] = 0;
 	dev->buf_sequence[V4L2_M2M_DST] = 0;
 
-	if (V4L2_TYPE_IS_CAPTURE(q->type)) {
+	if (IS_CAPTURE_V4L2_TYPE(q->type)) {
 		pad = get_remote_pad_sd(sink_pad(dev), &sd);
 		if (!sd)
 			return -ENOLINK;
@@ -679,7 +679,7 @@ static void vid_m2m_stop_streaming(struct vb2_queue *q)
 	struct media_pad *pad;
 	int rc;
 
-	if (V4L2_TYPE_IS_CAPTURE(q->type)) {
+	if (IS_CAPTURE_V4L2_TYPE(q->type)) {
 		pad = get_remote_pad_sd(sink_pad(dev), &sd);
 		if (!sd)
 			return;
@@ -693,7 +693,7 @@ static void vid_m2m_stop_streaming(struct vb2_queue *q)
 	}
 
 	for (;;) {
-		if (V4L2_TYPE_IS_OUTPUT(q->type))
+		if (IS_OUTPUT_V4L2_TYPE(q->type))
 			vbuf = v4l2_m2m_src_buf_remove(dev->m2m_ctx);
 		else
 			vbuf = v4l2_m2m_dst_buf_remove(dev->m2m_ctx);

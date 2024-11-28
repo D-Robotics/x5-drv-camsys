@@ -3,6 +3,7 @@
 #define _CAM_DEV_H_
 
 #include <linux/interrupt.h>
+#include <linux/refcount.h>
 
 #define REFCNT_INIT_VAL (1)
 
@@ -38,6 +39,23 @@ struct cam_dt {
 	struct clk_res *clks;
 	struct rst_res *rsts;
 };
+
+static inline bool cam_refcount_check(refcount_t *refcnt, bool inc)
+{
+	unsigned int cnt = refcount_read(refcnt);
+	bool ret = false;
+
+	if (inc) {
+		refcount_inc(refcnt);
+		ret = (cnt > REFCNT_INIT_VAL);
+	} else {
+		if (cnt > REFCNT_INIT_VAL) {
+			refcount_dec(refcnt);
+			ret = (refcount_read(refcnt) > REFCNT_INIT_VAL);
+		}
+	}
+	return ret;
+}
 
 int parse_cam_dt(struct platform_device *pdev, struct cam_dt *dt, void *arg);
 bool check_framesize(struct cam_res_cap *cap, u32 size, struct cam_format *fmt);

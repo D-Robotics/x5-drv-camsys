@@ -12,15 +12,9 @@
 #include "isp_uapi.h"
 #include "v4l2_usr_api.h"
 
-#define sd_to_csi_v4l_instance(s) \
-({ \
-	struct subdev_node *sn = container_of(s, struct subdev_node, sd); \
-	container_of(sn, struct csi_v4l_instance, node); \
-})
-
 static long csi_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 
 	if (csi->is_idi_mode)
 		return csi_idi_ioctl(sd, cmd, arg);
@@ -44,7 +38,7 @@ static long csi_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 
 static int csi_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	int rc = 0;
 
 	sd = to_sd(csi);
@@ -72,7 +66,7 @@ static int csi_s_stream(struct v4l2_subdev *sd, int enable)
 static int csi_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -87,7 +81,7 @@ static int csi_g_frame_interval(struct v4l2_subdev *sd,
 static int csi_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -154,7 +148,7 @@ static int csi_set_fmt(struct v4l2_subdev *sd,
 		       struct v4l2_subdev_state *state,
 		       struct v4l2_subdev_format *fmt)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	struct cam_format f;
 	struct csi_ipi_base_cfg ipi_cfg;
 	int rc;
@@ -195,7 +189,7 @@ static int csi_enum_mbus_code(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state,
 			      struct v4l2_subdev_mbus_code_enum *code)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -211,7 +205,7 @@ static int csi_enum_frame_size(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -227,7 +221,7 @@ static int csi_enum_frame_interval(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_state *state,
 				   struct v4l2_subdev_frame_interval_enum *fie)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -535,7 +529,7 @@ static int csi_query_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 
 static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *csi = sd_to_v4l_instance(csi, sd);
 	int rc = 0;
 
 	sd = to_sd(csi);
@@ -591,14 +585,14 @@ static const struct v4l2_subdev_ops csi_subdev_ops = {
 
 static int csi_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct csi_v4l_instance *inst = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *inst = sd_to_v4l_instance(csi, sd);
 
 	return csi_open(inst->dev, inst->id);
 }
 
 static int csi_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct csi_v4l_instance *inst = sd_to_csi_v4l_instance(sd);
+	struct csi_v4l_instance *inst = sd_to_v4l_instance(csi, sd);
 
 	return csi_close(inst->dev, inst->id);
 }

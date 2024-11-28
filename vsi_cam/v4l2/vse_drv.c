@@ -14,18 +14,6 @@
 
 #define VSE_SINK_ONLINE_PATH_MAX (4)
 
-#define sd_to_vse_v4l_instance(s) \
-({ \
-	struct subdev_node *sn = container_of(s, struct subdev_node, sd); \
-	container_of(sn, struct vse_v4l_instance, node); \
-})
-
-#define buf_ctx_to_vse_v4l_instance(ctx) \
-({ \
-	struct subdev_node *sn = container_of(ctx, struct subdev_node, bctx); \
-	container_of(sn, struct vse_v4l_instance, node); \
-})
-
 static int get_channel_index(struct vse_v4l_instance *vse, u32 pad)
 {
 	int i;
@@ -54,7 +42,7 @@ static int vse_link_setup(struct media_entity *entity,
 		return -EINVAL;
 
 	sd = media_entity_to_v4l2_subdev(entity);
-	vse = sd_to_vse_v4l_instance(sd);
+	vse = sd_to_v4l_instance(vse, sd);
 	attr.dev = sd->dev;
 
 	pad = media_pad_remote_pad_first(local);
@@ -111,7 +99,7 @@ static const struct media_entity_operations vse_media_ops = {
 
 static void vse_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
-	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *vse = buf_ctx_to_v4l_instance(vse, ctx);
 	int rc;
 
 	if (!ctx || !on)
@@ -127,7 +115,7 @@ static void vse_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 
 static int vse_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
-	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *vse = buf_ctx_to_v4l_instance(vse, ctx);
 	int rc;
 
 	if (!ctx || !buf)
@@ -145,7 +133,7 @@ static int vse_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 
 static int vse_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
-	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *vse = buf_ctx_to_v4l_instance(vse, ctx);
 
 	if (!ctx || !buf)
 		return -EINVAL;
@@ -158,7 +146,7 @@ static int vse_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 
 static struct cam_buf *vse_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
-	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *vse = buf_ctx_to_v4l_instance(vse, ctx);
 
 	if (!ctx)
 		return NULL;
@@ -171,7 +159,7 @@ static struct cam_buf *vse_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 
 static void vse_trigger(struct v4l2_buf_ctx *ctx)
 {
-	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *vse = buf_ctx_to_v4l_instance(vse, ctx);
 
 	if (ctx)
 		vse_add_job(vse->dev, vse->id);
@@ -198,7 +186,7 @@ static void vse_set_res_cap(struct vse_v4l_instance *inst);
 static int vse_set_ctx_format_out(struct v4l2_buf_ctx *ctx,
 				  struct v4l2_format *format, bool is_try)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 
 	if (!is_try) {
 		inst->input_fmt = format->fmt.pix.pixelformat;
@@ -211,7 +199,7 @@ static int vse_set_ctx_format_out(struct v4l2_buf_ctx *ctx,
 
 static int vse_enum_ctx_format_out(struct v4l2_buf_ctx *ctx, u32 index, u32 *format)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 
 	if (index >= inst->input_fmt_cap_num)
 		return -EINVAL;
@@ -223,7 +211,7 @@ static int vse_enum_ctx_format_out(struct v4l2_buf_ctx *ctx, u32 index, u32 *for
 static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx,
 				      struct v4l2_frmsizeenum *fsize)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct cam_res_cap *res;
 
 	res = &inst->input_res_range;
@@ -240,7 +228,7 @@ static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx,
 static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_format *format, bool is_try)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct cam_format f;
 	struct v4l2_format s_f = *format;
 	struct cam_rect crop = {0};
@@ -251,6 +239,7 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	int channel = -1;
 	int hfactor = 1, vfactor = 1;
 	int rc = 0;
+	bool cascade_en;
 
 	if (is_sink_pad(inst, pad))
 		return vse_set_ctx_format_out(ctx, format, is_try);
@@ -298,11 +287,9 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		inst->fmt_changed = true;
 	}
 
+	cascade_en = is_sink_online_en(&inst->node.bctx) ? true : false;
 	get_front_info(sink_pad(inst), &devid, &insid);
-	if (is_sink_online_en(&inst->node.bctx))
-		vse_set_cascade(inst->dev, inst->id, insid, true);
-	else
-		vse_set_cascade(inst->dev, inst->id, insid, false);
+	vse_set_cascade(inst->dev, inst->id, insid, cascade_en);
 
 	f.width = ALIGN_DOWN(format->fmt.pix.width / hfactor, 16);
 	f.height = format->fmt.pix.height / vfactor;
@@ -314,10 +301,7 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		goto _exit;
 	}
 
-	if (!inst->m2m_en)
-		fps.src = vse_get_sensor_fps(sd);
-	else
-		fps.src = 30;
+	fps.src = inst->m2m_en ? 30 : vse_get_sensor_fps(sd);
 	fps.dst = fps.src;
 	rc = vse_set_fps_rate(inst->dev, inst->id, channel, &fps);
 	if (rc < 0) {
@@ -332,7 +316,7 @@ _exit:
 
 static int vse_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 
 	if (is_sink_pad(inst, pad))
 		return vse_enum_ctx_format_out(ctx, index, format);
@@ -347,7 +331,7 @@ static int vse_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32
 static int vse_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 								  struct v4l2_frmsizeenum *fsize)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct cam_res_cap *res;
 	int channel = -1;
 
@@ -396,7 +380,7 @@ static bool vse_check_res(struct cam_res_cap *res, u32 width, u32 height)
 static int vse_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	int channel = -1;
@@ -447,13 +431,8 @@ static void vse_set_res_cap(struct vse_v4l_instance *inst)
 		res[i].type           = V4L2_FRMSIZE_TYPE_STEPWISE;
 		res[i].sw.step_width  = 2;
 		res[i].sw.step_height = 2;
-		if (i < 5) {
-			res[i].sw.min_width = 64;
-			res[i].sw.min_height = 64;
-		} else {
-			res[i].sw.min_width = iwidth;
-			res[i].sw.min_height = iheight;
-		}
+		res[i].sw.min_width   = (i < 5) ? 64 : iwidth;
+		res[i].sw.min_height  = (i < 5) ? 64 : iheight;
 		switch (i) {
 		case 0:
 			res[i].sw.max_width = min_t(u32, 4096, iwidth);
@@ -499,7 +478,7 @@ static void vse_set_default_input(struct vse_v4l_instance *inst)
 
 static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 {
-	struct vse_v4l_instance *inst = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fsize;
@@ -588,7 +567,7 @@ static void fill_irq_ctx(struct vse_v4l_instance *vse, u32 i, int enable,
 
 static int vse_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 {
-	struct vse_v4l_instance *vse = buf_ctx_to_vse_v4l_instance(ctx);
+	struct vse_v4l_instance *vse = buf_ctx_to_v4l_instance(vse, ctx);
 	struct vse_irq_ctx irq_ctx;
 	int index, rc = 0;
 
@@ -615,27 +594,23 @@ _exit:
 
 static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
-	int rc;
+	struct vse_v4l_instance *vse = sd_to_v4l_instance(vse, sd);
+	int rc, vse_src_type;
+
+	if (cam_refcount_check(&vse->state_count, enable))
+		return 0;
 
 	if (enable) {
-		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL) {
-			refcount_inc(&vse->state_count);
-			return 0;
-		}
-
-		refcount_inc(&vse->state_count);
-		if (is_sink_online_en(&vse->node.bctx))
-			rc = vse_set_source(vse->dev, vse->id, VSE_SRC_STRM0);
-		else
-			rc = vse_set_source(vse->dev, vse->id, VSE_SRC_RDMA);
+		vse_src_type = is_sink_online_en(&vse->node.bctx)
+			? VSE_SRC_STRM0 : VSE_SRC_RDMA;
+		rc = vse_set_source(vse->dev, vse->id, vse_src_type);
 		if (rc < 0) {
 			pr_err("%s failed to call vse_set_source (rc=%d)!\n", __func__, rc);
 			return rc;
 		}
 
 		if (!is_sink_online_en(&vse->node.bctx))
-			cam_reqbufs(&vse->sink_ctx, 4, &vse_buf_ops);
+			cam_reqbufs(&vse->sink_ctx, V4L2_SUBDEV_BUF_NUM, &vse_buf_ops);
 
 		rc = vse_set_state(vse->dev, vse->id, enable);
 		if (rc < 0)
@@ -647,11 +622,6 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 				return rc;
 		}
 	} else {
-		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL)
-			refcount_dec(&vse->state_count);
-		if (refcount_read(&vse->state_count) > REFCNT_INIT_VAL)
-			return 0;
-
 		if (!vse->m2m_en) {
 			rc = subdev_set_stream(sd, enable);
 			if (rc < 0)
@@ -672,7 +642,7 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 static int vse_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
+	struct vse_v4l_instance *vse = sd_to_v4l_instance(vse, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -688,7 +658,7 @@ static int vse_g_frame_interval(struct v4l2_subdev *sd,
 static int vse_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
-	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
+	struct vse_v4l_instance *vse = sd_to_v4l_instance(vse, sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
@@ -705,10 +675,7 @@ static void vse_get_cur_attr(struct vse_instance *ins, int chnl, vse_ochn_attr_e
 {
 	vse_attr->src_fps = ins->fps[chnl].src;
 	vse_attr->dst_fps = ins->fps[chnl].dst;
-	if (ins->fps[chnl].dst == 0)
-		vse_attr->chn_en = 0;
-	else
-		vse_attr->chn_en = 1;
+	vse_attr->chn_en = (ins->fps[chnl].dst == 0) ? 0 : 1;
 	vse_attr->roi.x = ins->crop[chnl].x;
 	vse_attr->roi.y = ins->crop[chnl].y;
 	vse_attr->roi.w = ins->crop[chnl].w;
@@ -808,7 +775,7 @@ static int get_name_for_ext_ctrl(uint32_t id, char *name)
 
 static long vse_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
-	struct vse_v4l_instance *vse = sd_to_vse_v4l_instance(sd);
+	struct vse_v4l_instance *vse = sd_to_v4l_instance(vse, sd);
 	struct v4l2_query_ext_ctrl *qectrl;
 	struct cam_v4l2_ext_control *cam_ext_ctrl;
 	int rc = -EINVAL;
@@ -879,15 +846,12 @@ static const struct v4l2_subdev_ops vse_subdev_ops = {
 
 static int vse_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
+	struct vse_v4l_instance *inst = sd_to_v4l_instance(vse, sd);
 	int rc = 0;
 
 	mutex_lock(&inst->open_lock);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL) {
-		refcount_inc(&inst->open_count);
+	if (cam_refcount_check(&inst->open_count, true))
 		goto _exit;
-	}
-	refcount_inc(&inst->open_count);
 	if (!inst->m2m_en) {
 		rc = subdev_open(sd);
 		if (rc < 0)
@@ -902,15 +866,12 @@ _exit:
 
 static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	struct vse_v4l_instance *inst = sd_to_vse_v4l_instance(sd);
+	struct vse_v4l_instance *inst = sd_to_v4l_instance(vse, sd);
 	int rc = 0;
 
 	mutex_lock(&inst->open_lock);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
-		refcount_dec(&inst->open_count);
-	if (refcount_read(&inst->open_count) > REFCNT_INIT_VAL)
+	if (cam_refcount_check(&inst->open_count, false))
 		goto _exit;
-
 	if (!inst->m2m_en) {
 		rc = subdev_close(sd);
 		if (rc < 0) {
