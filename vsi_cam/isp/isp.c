@@ -1585,8 +1585,10 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 		INIT_LIST_HEAD(&isp->ibm[i].list3);
 	}
 
-	INIT_LIST_HEAD(&isp->in_buf_list);
-	INIT_LIST_HEAD(&isp->hdr_buf_list);
+	INIT_LIST_HEAD(&isp->in_buf_list.list);
+	INIT_LIST_HEAD(&isp->hdr_buf_list.list);
+	mutex_init(&isp->in_buf_list.lock);
+	mutex_init(&isp->hdr_buf_list.lock);
 	isp->unit_test = false;
 	spin_lock_init(&isp->sch.lock);
 	isp->sch.next_mi_inst = INVALID_INST;
@@ -1627,6 +1629,11 @@ int isp_remove(struct platform_device *pdev, struct isp_device *isp)
 	put_cam_ctrl_device(isp->ctrl_dev);
 	devm_kfree(&pdev->dev, isp->insts);
 	pm_runtime_disable(isp->dev);
+	mutex_destroy(&isp->open_lock);
+	mutex_destroy(&isp->set_input_lock);
+	mutex_destroy(&isp->set_state_lock);
+	mutex_destroy(&isp->in_buf_list.lock);
+	mutex_destroy(&isp->hdr_buf_list.lock);
 
 	dev_dbg(&pdev->dev, "VS ISP driver (base) removed\n");
 	return rc;

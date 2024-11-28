@@ -800,6 +800,7 @@ int vse_remove(struct platform_device *pdev, struct vse_device *vse)
 	}
 	put_cam_ctrl_device(vse->ctrl_dev);
 	devm_kfree(&pdev->dev, vse->insts);
+	mutex_destroy(&vse->open_lock);
 	dev_dbg(&pdev->dev, "VS VSE driver (base) removed\n");
 	return rc;
 }

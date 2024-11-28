@@ -11,7 +11,7 @@ struct _mem_buf {
 	struct list_head entry;
 };
 
-int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
+int mem_alloc(struct device *dev, struct mem_list *list, struct mem_buf *buf)
 {
 	struct _mem_buf *_buf;
 
@@ -31,53 +31,63 @@ int mem_alloc(struct device *dev, struct list_head *list, struct mem_buf *buf)
 	}
 
 	buf->addr = _buf->addr;
-	list_add_tail(&_buf->entry, list);
+	mutex_lock(&list->lock);
+	list_add_tail(&_buf->entry, &list->list);
+	mutex_unlock(&list->lock);
 	return 0;
 }
 EXPORT_SYMBOL(mem_alloc);
 
-int mem_free(struct device *dev, struct list_head *list, struct mem_buf *buf)
+int mem_free(struct device *dev, struct mem_list *list, struct mem_buf *buf)
 {
 	struct _mem_buf *b, *_buf = NULL;
 
 	if (!dev || !list || !buf || !buf->addr || !buf->size)
 		return -EINVAL;
 
-	list_for_each_entry(b, list, entry) {
+	mutex_lock(&list->lock);
+	list_for_each_entry(b, &list->list, entry) {
 		if (b->addr == buf->addr && b->size == buf->size) {
 			_buf = b;
 			break;
 		}
 	}
+	mutex_unlock(&list->lock);
 
 	if (unlikely(!_buf))
 		return -EINVAL;
 
 	dma_free_coherent(dev, _buf->size, _buf->vaddr, _buf->addr);
+	mutex_lock(&list->lock);
 	list_del(&_buf->entry);
+	mutex_unlock(&list->lock);
 	devm_kfree(dev, _buf);
 	return 0;
 }
 EXPORT_SYMBOL(mem_free);
 
-int mem_free_all(struct device *dev, struct list_head *list)
+int mem_free_all(struct device *dev, struct mem_list *list)
 {
 	struct _mem_buf *_buf;
 
 	if (!dev || !list)
 		return -EINVAL;
 
-	while (!list_empty(list)) {
-		_buf = list_first_entry(list, struct _mem_buf, entry);
-		dma_free_coherent(dev, _buf->size, _buf->vaddr, _buf->addr);
+	mutex_lock(&list->lock);
+	while (!list_empty(&list->list)) {
+		_buf = list_first_entry(&list->list, struct _mem_buf, entry);
 		list_del(&_buf->entry);
+		mutex_unlock(&list->lock);
+		dma_free_coherent(dev, _buf->size, _buf->vaddr, _buf->addr);
 		devm_kfree(dev, _buf);
+		mutex_lock(&list->lock);
 	}
+	mutex_unlock(&list->lock);
 	return 0;
 }
 EXPORT_SYMBOL(mem_free_all);
 
-int mem_mmap(struct device *dev, struct list_head *list,
+int mem_mmap(struct device *dev, struct mem_list *list,
 	     struct vm_area_struct *vma)
 {
 	dma_addr_t addr = ((dma_addr_t)vma->vm_pgoff << PAGE_SHIFT);
@@ -87,12 +97,14 @@ int mem_mmap(struct device *dev, struct list_head *list,
 	if (!addr || !size)
 		return -EINVAL;
 
-	list_for_each_entry(b, list, entry) {
+	mutex_lock(&list->lock);
+	list_for_each_entry(b, &list->list, entry) {
 		if (b->addr <= addr && b->addr + b->size >= addr + size) {
 			_buf = b;
 			break;
 		}
 	}
+	mutex_unlock(&list->lock);
 
 	if (unlikely(!_buf))
 		return -EINVAL;
@@ -102,7 +114,7 @@ int mem_mmap(struct device *dev, struct list_head *list,
 }
 EXPORT_SYMBOL(mem_mmap);
 
-void *get_virt_addr(struct device *dev, struct list_head *list,
+void *get_virt_addr(struct device *dev, struct mem_list *list,
 		    struct mem_buf *buf)
 {
 	struct _mem_buf *b, *_buf = NULL;
@@ -110,12 +122,14 @@ void *get_virt_addr(struct device *dev, struct list_head *list,
 	if (!dev || !list || !buf || !buf->addr || !buf->size)
 		return ERR_PTR(-EINVAL);
 
-	list_for_each_entry(b, list, entry) {
+	mutex_lock(&list->lock);
+	list_for_each_entry(b, &list->list, entry) {
 		if (b->addr == buf->addr && b->size == buf->size) {
 			_buf = b;
 			break;
 		}
 	}
+	mutex_unlock(&list->lock);
 
 	if (unlikely(!_buf))
 		return ERR_PTR(-EINVAL);
@@ -124,7 +138,7 @@ void *get_virt_addr(struct device *dev, struct list_head *list,
 }
 EXPORT_SYMBOL(get_virt_addr);
 
-int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *buf)
+int mem_cache_flush(struct device *dev, struct mem_list *list, struct mem_buf *buf)
 {
 	struct _mem_buf *b, *_buf = NULL;
 	unsigned long pfn;
@@ -136,12 +150,14 @@ int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *
 	if (!dev || !list || !buf || !buf->addr || !buf->size)
 		return -EINVAL;
 
-	list_for_each_entry(b, list, entry) {
+	mutex_lock(&list->lock);
+	list_for_each_entry(b, &list->list, entry) {
 		if (b->addr == buf->addr/* && b->size == buf->size*/) {
 			_buf = b;
 			break;
 		}
 	}
+	mutex_unlock(&list->lock);
 
 	if (unlikely(!_buf))
 		return -EINVAL;
@@ -162,7 +178,7 @@ int mem_cache_flush(struct device *dev, struct list_head *list, struct mem_buf *
 }
 EXPORT_SYMBOL(mem_cache_flush);
 
-int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf *buf)
+int mem_cache_invalid(struct device *dev, struct mem_list *list, struct mem_buf *buf)
 {
 	struct _mem_buf *b, *_buf = NULL;
 	unsigned long pfn;
@@ -174,12 +190,14 @@ int mem_cache_invalid(struct device *dev, struct list_head *list, struct mem_buf
 	if (!dev || !list || !buf || !buf->addr || !buf->size)
 		return -EINVAL;
 
+	mutex_lock(&list->lock);
 	list_for_each_entry(b, list, entry) {
 		if (b->addr == buf->addr/* && b->size == buf->size*/) {
 			_buf = b;
 			break;
 		}
 	}
+	mutex_unlock(&list->lock);
 
 	if (unlikely(!_buf))
 		return -EINVAL;

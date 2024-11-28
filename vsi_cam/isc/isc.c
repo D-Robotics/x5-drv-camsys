@@ -74,7 +74,7 @@ struct isc_handle {
 	struct isc_mem k2u_mem, u2k_mem;
 	struct isc_mem k2u_mem_ex, u2k_mem_ex;
 	struct isc_cus k2u_cus, u2k_cus;
-	struct list_head buf_list;
+	struct mem_list buf_list;
 	struct isc_sync sync;
 	struct mutex lock; /* lock for updating k2u_ex_mem_stat */
 	u64 k2u_ex_mem_stat, k2u_ex_mem_mask;
@@ -195,6 +195,7 @@ static void isc_free(struct kref *ref)
 	isc_mem_free(isc, &isc->u2k_mem_ex);
 	mem_free_all(isc->dev, &isc->buf_list);
 	mutex_destroy(&isc->lock);
+	mutex_destroy(&isc->buf_list.lock);
 	kfree(isc);
 }
 
@@ -981,7 +982,8 @@ static int isc_open(struct inode *inode, struct file *file)
 	refcount_set(&isc->nowait, ISC_REFCNT_INIT_VAL);
 	refcount_set(&isc->noack, ISC_REFCNT_INIT_VAL);
 	init_waitqueue_head(&isc->wait);
-	INIT_LIST_HEAD(&isc->buf_list);
+	INIT_LIST_HEAD(&isc->buf_list.list);
+	mutex_init(&isc->buf_list.lock);
 	isc->dev = dev->dev;
 	isc->fh = file;
 	file->private_data = isc;
