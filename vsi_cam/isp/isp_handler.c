@@ -126,7 +126,247 @@ static s32 handle_set_gamma_febe(struct isp_device *isp, struct isp_msg *msg)
 		memcpy(&ins->febe_ctrl, &msg->febe_ctrl, sizeof(msg->febe_ctrl));
 		ins->febe_ctrl.flag = true;
 	}
+	return 0;
+}
 
+static s32 handle_set_rgbgamma(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_instance *ins;
+	void * pData = NULL;
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->rgbgamma_data.flag) {
+		pr_debug("rgb gamma data size %lld  %d  ",  ctrl_ext->buf.size,  ctrl_ext->size);
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(&ins->rgbgamma_data, pData, ctrl_ext->size);
+		ins->rgbgamma_data.flag = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_hist(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.histogram_w_data_changed) {
+		pr_debug("wdr  data size %lld  %d  ",  ctrl_ext->buf.size,  ctrl_ext->size);
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_histogram_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.histogram_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_shift(struct isp_device *isp, struct isp_msg *msg)
+{
+
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.lut_shift_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_shift_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.lut_shift_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_shift0(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.lut_shift0_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_shift0_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.lut_shift0_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_gammapre(struct isp_device *isp, struct isp_msg *msg)
+{
+
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.gammapre_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_gammapre_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.gammapre_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_gammadown(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.gammadown_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_gammadown_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.gammadown_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_entropy(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.entropy_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_entropy_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.entropy_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_distance(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.lut_distance_weight_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_distance_weight_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.lut_distance_weight_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_difference(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.difference_weight_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_difference_weight_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.difference_weight_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_factor(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.flat_factor_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_flat_factor_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.flat_factor_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_level(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.flat_level_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_flat_level_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.flat_level_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
+	return 0;
+}
+
+static s32 handle_set_wdr5_sat_shift(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+
+	struct isp_instance *ins;
+	void * pData = NULL;
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	if (!ins->wdr5_data.sat_shift_w_data_changed) {
+		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+
+		memcpy(ins->wdr5_data.lut_sat_shift_write_data, pData, ctrl_ext->size);
+		ins->wdr5_data.sat_shift_w_data_changed = true;
+		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	}
 	return 0;
 }
 
@@ -253,6 +493,42 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case ISP_MSG_SET_GAMMA_FE_BE:
 		rc = handle_set_gamma_febe(isp, m);
+		break;
+	case ISP_MSG_SET_RGBGAMMA:
+		rc = handle_set_rgbgamma(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_HIST:
+		rc = handle_set_wdr5_hist(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_SHIFT:
+		rc = handle_set_wdr5_shift(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_SHIFT0:
+		rc = handle_set_wdr5_shift0(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_GAMMAPRE:
+		rc = handle_set_wdr5_gammapre(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_GAMMADOWN:
+		rc = handle_set_wdr5_gammadown(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_ENTROPY:
+		rc = handle_set_wdr5_entropy(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_DISTANCE:
+		rc = handle_set_wdr5_distance(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_DIFFERENCE:
+		rc = handle_set_wdr5_difference(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_FACTOR:
+		rc = handle_set_wdr5_factor(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_LEVEL:
+		rc = handle_set_wdr5_level(isp, m);
+		break;
+	case ISP_MSG_SET_WDR5_SAT_SHIFT:
+		rc = handle_set_wdr5_sat_shift(isp, m);
 		break;
 	case CAM_MSG_SET_SEN_CTRL:
 		rc = handle_set_sensor_ctrl(isp, m);
@@ -545,6 +821,454 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 	return IRQ_HANDLED;
 }
 
+static int isp_wdr5_histogram(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_HISTOGRAM_ADDR, 0);
+
+	for (k = 0; k < 21; k++) {
+		val = (wdr5->lut_histogram_write_data[k * 3] |
+				((wdr5->lut_histogram_write_data[k * 3 + 1] & 0x3FF) << 20));
+		isp_write(isp, ISP_WDR5_LUT_HISTOGRAM_WRITE_DATA, val);
+		val = (((wdr5->lut_histogram_write_data[k * 3 + 1] & 0XFFC00) << 10)
+				| wdr5->lut_histogram_write_data[k * 3 + 2]);
+		isp_write(isp, ISP_WDR5_LUT_HISTOGRAM_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_HISTOGRAM_WRITE_DATA, wdr5->lut_histogram_write_data[63]);
+	isp_write(isp, ISP_WDR5_LUT_HISTOGRAM_WRITE_DATA, wdr5->lut_histogram_write_data[64]);
+	wdr5->histogram_w_data_changed = false;
+
+	return 0;
+}
+
+static int isp_wdr5_gammapre(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_GAMMAPRE_ADDR, 0);
+
+	for (k = 0; k < 21; k++) {
+		val = (wdr5->lut_gammapre_write_data[k * 3] |
+				((wdr5->lut_gammapre_write_data[k * 3 + 1] & 0x3FF) << 20));
+		isp_write(isp, ISP_WDR5_LUT_GAMMAPRE_WRITE_DATA, val);
+		val = (((wdr5->lut_gammapre_write_data[k * 3 + 1] & 0XFFC00) << 10)
+				|  wdr5->lut_gammapre_write_data[k * 3 + 2]);
+		isp_write(isp, ISP_WDR5_LUT_GAMMAPRE_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_GAMMAPRE_WRITE_DATA, wdr5->lut_gammapre_write_data[63]);
+	isp_write(isp, ISP_WDR5_LUT_GAMMAPRE_WRITE_DATA, wdr5->lut_gammapre_write_data[64]);
+	wdr5->gammapre_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_gammadown(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_GAMMADOWN_ADDR, 0);
+
+	for (k = 0; k < 21; k++) {
+		val = ((wdr5->lut_gammadown_write_data[k * 3] << 20)
+				| (wdr5->lut_gammadown_write_data[k * 3 + 1] << 10)
+				| wdr5->lut_gammadown_write_data[k * 3 + 2]);
+		isp_write(isp, ISP_WDR5_LUT_GAMMADOWN_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_GAMMADOWN_WRITE_DATA,
+			((wdr5->lut_gammadown_write_data[63] << 20)
+			 | (wdr5->lut_gammadown_write_data[64] << 10)));
+
+	wdr5->gammadown_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_entropy(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_ENTROPY_ADDR, 0);
+
+	for (k = 0; k < 21; k++) {
+		val = ((wdr5->lut_entropy_write_data[k * 3] << WDR5_ENTROPY_CONVERT0_SHIFT)
+				| (wdr5->lut_entropy_write_data[k * 3 + 1] << WDR5_ENTROPY_CONVERT1_SHIFT)
+				| wdr5->lut_entropy_write_data[k * 3 + 2]);
+		isp_write(isp, ISP_WDR5_LUT_ENTROPY_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_ENTROPY_WRITE_DATA,
+			((wdr5->lut_entropy_write_data[63] << WDR5_ENTROPY_CONVERT18_SHIFT)
+			 | (wdr5->lut_entropy_write_data[64] << WDR5_ENTROPY_CONVERT19_SHIFT)));
+
+	wdr5->entropy_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_lut_shift(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_SHIFT_ADDR, 0);
+
+	for (k = 0; k < 10; k++) {
+		val = ((wdr5->lut_shift_write_data[k * 6] << 25)
+				| (wdr5->lut_shift_write_data[k * 6 + 1] << 20)
+				| (wdr5->lut_shift_write_data[k * 6 + 2] << 15)
+				| (wdr5->lut_shift_write_data[k * 6 + 3] << 10)
+				| (wdr5->lut_shift_write_data[k * 6 + 4] << 5)
+				| wdr5->lut_shift_write_data[k * 6 + 5]);
+		isp_write(isp, ISP_WDR5_LUT_SHIFT_WRITE_DATA, val);
+	}
+
+	val = ((wdr5->lut_shift_write_data[60] << 25U)
+			| (wdr5->lut_shift_write_data[61] << 20U)
+			| (wdr5->lut_shift_write_data[62] << 15U)
+			| (wdr5->lut_shift_write_data[63] << 10U)
+			| (wdr5->lut_shift_write_data[64] << 5U));
+	isp_write(isp, ISP_WDR5_LUT_SHIFT_WRITE_DATA, val);
+	wdr5->lut_shift_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_lut_shift0(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_SHIFT0_ADDR, 0);
+	for (k = 0; k < 8; k++) {
+		val = ((wdr5->lut_shift0_write_data[k * 8] << 28)
+				| (wdr5->lut_shift0_write_data[k * 8 + 1] << 24)
+				| (wdr5->lut_shift0_write_data[k * 8 + 2] << 20)
+				| (wdr5->lut_shift0_write_data[k * 8 + 3] << 16)
+				| (wdr5->lut_shift0_write_data[k * 8 + 4] << 12)
+				| (wdr5->lut_shift0_write_data[k * 8 + 5] << 8)
+				| (wdr5->lut_shift0_write_data[k * 8 + 6] << 4)
+				| wdr5->lut_shift0_write_data[k * 8 + 7]);
+		isp_write(isp, ISP_WDR5_LUT_SHIFT0_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_SHIFT0_WRITE_DATA, wdr5->lut_shift0_write_data[64]);
+	wdr5->lut_shift0_w_data_changed = false;
+	return 0;
+}
+
+int isp_wdr5_distance_weight(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_DISTANCE_WEIGHT_ADDR, 0);
+
+	for (k = 0; k < 16; k++) {
+		val = ((wdr5->lut_distance_weight_write_data[k * 4] << 21)
+				| (wdr5->lut_distance_weight_write_data[k * 4 + 1] << 14)
+				| (wdr5->lut_distance_weight_write_data[k * 4 + 2] << 7)
+				|  wdr5->lut_distance_weight_write_data[k * 4 + 3]);
+		isp_write(isp, ISP_WDR5_LUT_DISTANCE_WEIGHT_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_DISTANCE_WEIGHT_WRITE_DATA,  wdr5->lut_distance_weight_write_data[64]);
+	wdr5->lut_distance_weight_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_difference_weight(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_DIFFERENCE_WEIGHT_ADDR, 0);
+
+	for (k = 0; k < 16; k++) {
+		val = ((wdr5->lut_difference_weight_write_data[k * 4] << 21)
+				| (wdr5->lut_difference_weight_write_data[k * 4 + 1] << 14)
+				| (wdr5->lut_difference_weight_write_data[k * 4 + 2] << 7)
+				| wdr5->lut_difference_weight_write_data[k * 4 + 3]);
+		isp_write(isp, ISP_WDR5_LUT_DIFFERENCE_WEIGHT_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_DIFFERENCE_WEIGHT_WRITE_DATA,
+			wdr5->lut_difference_weight_write_data[64]);
+	wdr5->difference_weight_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_flat_factor(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_FLAT_FACTOR_ADDR, 0);
+
+	for (k = 0; k < 90; k++) {
+		val = ((wdr5->lut_flat_factor_write_data[k * 3] << 20)
+				| (wdr5->lut_flat_factor_write_data[k * 3 + 1] << 10)
+				|  wdr5->lut_flat_factor_write_data[k * 3 + 2]);
+		isp_write(isp, ISP_WDR5_LUT_FLAT_FACTOR_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_FLAT_FACTOR_WRITE_DATA,
+			((wdr5->lut_flat_factor_write_data[270] << 20)
+			 | (wdr5->lut_flat_factor_write_data[271] << 10)));
+
+	wdr5->flat_factor_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_flat_level(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_FLAT_LEVEL_ADDR, 0);
+
+	for (k = 0; k < 8; k++) {
+		val = ((wdr5->lut_flat_level_write_data[k * 8] << 28)
+				| (wdr5->lut_flat_level_write_data[k * 8 + 1] << 24)
+				| (wdr5->lut_flat_level_write_data[k * 8 + 2] << 20)
+				| (wdr5->lut_flat_level_write_data[k * 8 + 3] << 16)
+				| (wdr5->lut_flat_level_write_data[k * 8 + 4] << 12)
+				| (wdr5->lut_flat_level_write_data[k * 8 + 5] << 8)
+				| (wdr5->lut_flat_level_write_data[k * 8 + 6] << 4)
+				|  wdr5->lut_flat_level_write_data[k * 8 + 7]);
+		isp_write(isp, ISP_WDR5_LUT_FLAT_LEVEL_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_FLAT_LEVEL_WRITE_DATA,
+			((wdr5->lut_flat_level_write_data[64] << 28)
+			 | (wdr5->lut_flat_level_write_data[65] << 24)
+			 | (wdr5->lut_flat_level_write_data[66] << 20)
+			 | (wdr5->lut_flat_level_write_data[67] << 16)));
+
+	wdr5->flat_level_w_data_changed = false;
+
+	return 0;
+}
+
+int isp_wdr5_sat_shift(struct isp_device *isp, struct isp_wdr5_data *pwdr_data)
+{
+	struct isp_wdr5_data *wdr5 = pwdr_data;
+	u32 k = 0;
+	u32 val;
+
+	isp_write(isp, ISP_WDR5_LUT_SAT_SHIFT_ADDR, 0);
+
+	for (k = 0; k < 2; k++) {
+		val = ((wdr5->lut_sat_shift_write_data[k * 8] << 28)
+				| (wdr5->lut_sat_shift_write_data[k * 8 + 1] << 24)
+				| (wdr5->lut_sat_shift_write_data[k * 8 + 2] << 20)
+				| (wdr5->lut_sat_shift_write_data[k * 8 + 3] << 16)
+				| (wdr5->lut_sat_shift_write_data[k * 8 + 4] << 12)
+				| (wdr5->lut_sat_shift_write_data[k * 8 + 5] << 8)
+				| (wdr5->lut_sat_shift_write_data[k * 8 + 6] << 4)
+				| wdr5->lut_sat_shift_write_data[k * 8 + 7]);
+		isp_write(isp, ISP_WDR5_LUT_SAT_SHIFT_WRITE_DATA, val);
+	}
+
+	isp_write(isp, ISP_WDR5_LUT_SAT_SHIFT_WRITE_DATA,
+			((wdr5->lut_sat_shift_write_data[16] << 28)
+			 | (wdr5->lut_sat_shift_write_data[17] << 24)));
+
+	wdr5->sat_shift_w_data_changed = false;
+
+	return 0;
+}
+
+static int isp_s_rgbgammapx(struct isp_device *isp, struct isp_rgbgamma_data *data)
+{
+	u32 isp_r_px_reg = ISP_GCRGB_R_PX_0;
+	u32 isp_g_px_reg = ISP_GCRGB_G_PX_0;
+	u32 isp_b_px_reg = ISP_GCRGB_B_PX_0;
+	u32 *p_r_table = NULL;
+	u32 *p_g_table = NULL;
+	u32 *p_b_table = NULL;
+	int i;
+	u32 gc_px_r_data = 0;
+	u32 gc_px_g_data = 0;
+	u32 gc_px_b_data = 0;
+
+	p_r_table = (u32 *)&data->rgbgc_r_px;
+	p_g_table = (u32 *)&data->rgbgc_g_px;
+	p_b_table = (u32 *)&data->rgbgc_b_px;
+	for (i = 0; i < 64; i++) {
+		gc_px_r_data |= (*(p_r_table + i) << (i % 6 * 5));
+		if (i % 6 == 5 || i == 63) {
+			isp_write(isp, isp_r_px_reg, gc_px_r_data);
+			isp_r_px_reg += 4;
+			gc_px_r_data = 0;
+		}
+
+		gc_px_g_data |= (*(p_g_table + i) << (i % 6 * 5));
+		if (i % 6 == 5 || i == 63) {
+			isp_write(isp, isp_g_px_reg, gc_px_g_data);
+			isp_g_px_reg += 4;
+			gc_px_g_data = 0;
+		}
+
+		gc_px_b_data |= (*(p_b_table + i) << (i % 6 * 5));
+		if (i % 6 == 5 || i == 63) {
+			isp_write(isp, isp_b_px_reg, gc_px_b_data);
+			isp_b_px_reg += 4;
+			gc_px_b_data = 0;
+		}
+	}
+	return 0;
+}
+
+static int isp_s_rgbgammaWriteData(struct isp_device *isp,
+			    struct isp_rgbgamma_data *data)
+{
+	u32 isp_gc_x_data, isp_gc_y_data;
+
+	int i;
+	u32 *r_tblX, *r_tblY;
+	u32 *g_tblX, *g_tblY;
+	u32 *b_tblX, *b_tblY;
+
+	isp_write(isp, ISP_GCRGB_R_Y_ADDR, 0);
+	isp_write(isp, ISP_GCRGB_R_X_ADDR, 0);
+
+	isp_write(isp, ISP_GCRGB_G_Y_ADDR, 0);
+	isp_write(isp, ISP_GCRGB_G_X_ADDR, 0);
+
+	isp_write(isp, ISP_GCRGB_B_Y_ADDR, 0);
+	isp_write(isp, ISP_GCRGB_B_X_ADDR, 0);
+
+	r_tblX = data->rgbgc_r_datax;
+	r_tblY = data->rgbgc_r_datay;
+
+	g_tblX = data->rgbgc_g_datax;
+	g_tblY = data->rgbgc_g_datay;
+
+	b_tblX = data->rgbgc_b_datax;
+	b_tblY = data->rgbgc_b_datay;
+
+	for (i = 0; i < 64; i++) {
+		isp_gc_y_data = *(r_tblY + i);
+		isp_write(isp, ISP_GCRGB_R_Y_WRITE_DATA,
+				isp_gc_y_data);
+
+		isp_gc_y_data = *(g_tblY + i);
+		isp_write(isp, ISP_GCRGB_G_Y_WRITE_DATA,
+				isp_gc_y_data);
+
+		isp_gc_y_data = *(b_tblY + i);
+		isp_write(isp, ISP_GCRGB_B_Y_WRITE_DATA,
+				isp_gc_y_data);
+
+		if (i < 63) {
+			isp_gc_x_data = *(r_tblX + i);
+			isp_write(isp, ISP_GCRGB_R_X_WRITE_DATA,
+				isp_gc_x_data);
+
+			isp_gc_x_data = *(g_tblX + i);
+			isp_write(isp, ISP_GCRGB_G_X_WRITE_DATA,
+				isp_gc_x_data);
+
+			isp_gc_x_data = *(b_tblX + i);
+			isp_write(isp, ISP_GCRGB_B_X_WRITE_DATA,
+				isp_gc_x_data);
+
+		}
+	}
+	return 0;
+}
+
+void isp_update_none_shd_regs(unsigned long data)
+{
+	struct isp_instance *ins = (struct isp_instance *)data;
+	struct isp_device *isp = ins->pisp;
+	u32  i = 0;
+	if (ins->febe_ctrl.flag) {
+		pr_debug("config febe\n");
+		isp_write(isp, ISP_GAMMA_FE_Y_ADDR, 0);
+		isp_write(isp, ISP_GAMMA_BE_Y_ADDR, 0);
+		for (i = 0; i < ISP_CTRL_FEBE_NUM; i++) {
+			// if (i % 20 == 0)
+			// 	pr_debug("%s i %d  %d %d\n", __func__, i,
+			// 			ins->febe_ctrl.compress[i],
+			// 			ins->febe_ctrl.expand[i]);
+			isp_write(isp, ISP_GAMMA_FE_Y_WRITE_DATA,
+					ins->febe_ctrl.compress[i]);
+			isp_write(isp, ISP_GAMMA_BE_Y_WRITE_DATA,
+					ins->febe_ctrl.expand[i]);
+		}
+		ins->febe_ctrl.flag = false;
+	}
+	if (ins->rgbgamma_data.flag) {
+		pr_debug("config rgb gamma\n");
+		isp_s_rgbgammapx(isp, &ins->rgbgamma_data);
+		isp_s_rgbgammaWriteData(isp, &ins->rgbgamma_data);
+		ins->rgbgamma_data.flag = false;
+	}
+
+	pr_debug("ins->wdr5_data.histogram_w_data_changed %d\n",
+			ins->wdr5_data.histogram_w_data_changed);
+	if (ins->wdr5_data.histogram_w_data_changed) {
+		isp_wdr5_histogram(isp, &(ins->wdr5_data));
+	}
+
+	if (ins->wdr5_data.gammapre_w_data_changed) {
+		isp_wdr5_gammapre(isp, &(ins->wdr5_data));
+	}
+
+	if (ins->wdr5_data.gammadown_w_data_changed) {
+		isp_wdr5_gammadown(isp, &(ins->wdr5_data));
+	}
+	if (ins->wdr5_data.entropy_w_data_changed) {
+		isp_wdr5_entropy(isp, &(ins->wdr5_data));
+	}
+
+	if (ins->wdr5_data.lut_shift_w_data_changed) {
+		isp_wdr5_lut_shift(isp, &(ins->wdr5_data));
+	}
+	if (ins->wdr5_data.lut_shift0_w_data_changed) {
+		isp_wdr5_lut_shift0(isp, &(ins->wdr5_data));
+	}
+
+	if (ins->wdr5_data.lut_distance_weight_w_data_changed) {
+		isp_wdr5_distance_weight(isp, &(ins->wdr5_data));
+	}
+	if (ins->wdr5_data.difference_weight_w_data_changed) {
+		isp_wdr5_difference_weight(isp, &(ins->wdr5_data));
+	}
+
+	if (ins->wdr5_data.flat_factor_w_data_changed) {
+		isp_wdr5_flat_factor(isp, &(ins->wdr5_data));
+	}
+	if (ins->wdr5_data.flat_level_w_data_changed) {
+		isp_wdr5_flat_level(isp, &(ins->wdr5_data));
+	}
+
+	if (ins->wdr5_data.sat_shift_w_data_changed) {
+		isp_wdr5_sat_shift(isp, &(ins->wdr5_data));
+	}
+}
 irqreturn_t isp_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -579,21 +1303,9 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			if (isp_mis & BIT(1)) {
 				if (isp->mode != ISP_STRM_MODE) {
 					isp_set_schedule(isp, &sch, 0, isp_mis, true);
-				} else if (ins->febe_ctrl.flag) {
-					pr_debug("config febe\n");
-					isp_write(isp, ISP_GAMMA_FE_Y_ADDR, 0);
-					isp_write(isp, ISP_GAMMA_BE_Y_ADDR, 0);
-					for (i = 0; i < ISP_CTRL_FEBE_NUM; i++) {
-						if (i % 20 == 0)
-							pr_debug("%s i %d  %d %d\n", __func__, i,
-								 ins->febe_ctrl.compress[i],
-								 ins->febe_ctrl.expand[i]);
-						isp_write(isp, ISP_GAMMA_FE_Y_WRITE_DATA,
-							  ins->febe_ctrl.compress[i]);
-						isp_write(isp, ISP_GAMMA_BE_Y_WRITE_DATA,
-							  ins->febe_ctrl.expand[i]);
-					}
-					ins->febe_ctrl.flag = false;
+				} else {
+					// isp_update_none_shd_regs(isp, ins);
+					tasklet_schedule(&isp->update_lut_tbl);
 				}
 			}
 		}

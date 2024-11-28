@@ -20,6 +20,19 @@
 #define ISP_MSG_QRY_METADATA    (0x6 << 0)
 #define ISP_MSG_RESET_SCH       (0x7 << 0)
 #define ISP_MSG_SET_GAMMA_FE_BE (0x8 << 0)
+#define ISP_MSG_SET_RGBGAMMA    (0x9 << 0)
+
+#define ISP_MSG_SET_WDR5_HIST       (0xa << 0)
+#define ISP_MSG_SET_WDR5_SHIFT      (0xb << 0)
+#define ISP_MSG_SET_WDR5_SHIFT0     (0xc << 0)
+#define ISP_MSG_SET_WDR5_GAMMAPRE   (0xd << 0)
+#define ISP_MSG_SET_WDR5_GAMMADOWN  (0xe << 0)
+#define ISP_MSG_SET_WDR5_ENTROPY    (0xf << 0)
+#define ISP_MSG_SET_WDR5_DISTANCE   (0x10 << 0)
+#define ISP_MSG_SET_WDR5_DIFFERENCE (0x11 << 0)
+#define ISP_MSG_SET_WDR5_FACTOR     (0x12 << 0)
+#define ISP_MSG_SET_WDR5_LEVEL      (0x13 << 0)
+#define ISP_MSG_SET_WDR5_SAT_SHIFT  (0x14 << 0)
 
 #define ISP_MSG_IRQ_MIS    (0x1 << 8)
 #define ISP_MSG_MCM_SCH    (0x2 << 8)
@@ -73,6 +86,47 @@ struct isp_gamma_febe_ctrl {
 	__u32 compress[ISP_CTRL_FEBE_NUM];
 	__u32 expand[ISP_CTRL_FEBE_NUM];
 	__u8  flag;
+};
+
+struct isp_rgbgamma_data {
+	__u32 rgbgc_r_px[64];
+	__u32 rgbgc_r_datax[63];
+	__u32 rgbgc_r_datay[64];
+	__u32 rgbgc_g_px[64];
+	__u32 rgbgc_g_datax[63];
+	__u32 rgbgc_g_datay[64];
+	__u32 rgbgc_b_px[64];
+	__u32 rgbgc_b_datax[63];
+	__u32 rgbgc_b_datay[64];
+	__u8  flag;
+};
+
+struct isp_wdr5_data {
+    __u32 lut_histogram_write_data[65];
+    __u32 lut_shift_write_data[65];
+    __u32 lut_shift0_write_data[65];
+    __u32 lut_gammapre_write_data[65];
+    __u32 lut_gammadown_write_data[65];
+    __u32 lut_entropy_write_data[65];
+
+    __u32 lut_distance_weight_write_data[65];
+    __u32 lut_difference_weight_write_data[65];
+    __u32 lut_flat_factor_write_data[272];
+    __u8 lut_flat_level_write_data[68];
+    __u32 lut_sat_shift_write_data[18];
+
+    __u8 histogram_w_data_changed;
+    __u8 lut_shift_w_data_changed;
+    __u8 lut_shift0_w_data_changed;
+    __u8 gammapre_w_data_changed;
+    __u8 gammadown_w_data_changed;
+    __u8 entropy_w_data_changed;
+
+    __u8 lut_distance_weight_w_data_changed;
+    __u8 difference_weight_w_data_changed;
+    __u8 flat_factor_w_data_changed;
+    __u8 flat_level_w_data_changed;
+    __u8 sat_shift_w_data_changed;
 };
 
 enum isp_work_mode {

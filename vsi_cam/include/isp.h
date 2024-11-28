@@ -82,8 +82,11 @@ struct isp_instance {
 	ktime_t last_frame_done, frame_interval;
 	u32 frame_count;
 	struct isp_gamma_febe_ctrl febe_ctrl;
+	struct isp_rgbgamma_data   rgbgamma_data;
+	struct isp_wdr5_data       wdr5_data;
 	u32 meta_inst;
 	void *prev;
+	void *pisp;
 };
 
 struct ibuf {
@@ -139,6 +142,7 @@ struct isp_device {
 	struct dentry *debugfs_tune_file;
 	struct dentry *debugfs_fps_file;
 #endif
+	struct tasklet_struct update_lut_tbl;
 };
 
 void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr);
@@ -194,5 +198,6 @@ int handle_mcm(struct isp_device *isp, u32 path, bool error);
 irqreturn_t isp_irq_handler(int irq, void *arg);
 irqreturn_t mi_irq_handler(int irq, void *arg);
 irqreturn_t fe_irq_handler(int irq, void *arg);
+void isp_update_none_shd_regs(unsigned long data);
 
 #endif /* _ISP_H_ */
