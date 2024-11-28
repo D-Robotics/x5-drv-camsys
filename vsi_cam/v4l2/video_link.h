@@ -21,18 +21,15 @@ static struct entity_link links0[] = {
 };
 
 /* [0,1,2,3] sif online isp x4 */
-/* [4,5] sif raw offline isp */
 static struct entity_link links1[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "3-0", 0, ISP_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED }, // sif offline isp
 	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-1", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
 	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
 	{ SIF_DEV_NAME "2-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED }, // SIF capture data
@@ -65,15 +62,15 @@ static struct entity_link links2[] = {
 
 /* sif offline vse */
 static struct entity_link links3[] = {
-	{ SIF_DEV_NAME "0-1", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "1-1", 0, VSE_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 1, VSE_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-5", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 /* sif offline isp offline vse 6 channel */
 static struct entity_link links4[] = {
-	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-4", 0, VSE_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
@@ -134,7 +131,7 @@ static struct entity_link links6[] = {
 /* + 1v sif offline isp gdc */
 static struct entity_link links7[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED }, // sif online isp
-	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED }, // sif offline isp
+	{ SIF_DEV_NAME "0-0", 1, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED }, // sif offline isp
 	{ ISP_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-4", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
@@ -143,8 +140,8 @@ static struct entity_link links7[] = {
 
 /* 2v sif yuv offline gdc */
 static struct entity_link links8[] = {
-	{ SIF_DEV_NAME "0-1", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "1-1", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 1, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
@@ -235,8 +232,16 @@ static struct entity_link links14[] = {
 	{ GDC_DEV_NAME "0-0", 0, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* sif0 & sif1 connect to isp0 device (2 to 1 case) */
+/* sif raw offline isp */
 static struct entity_link links15[] = {
+	{ SIF_DEV_NAME "0-0", 1, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 1, ISP_DEV_NAME "0-5", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-5", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* sif0 & sif1 connect to isp0 device (2 to 1 case) */
+static struct entity_link links16[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-0", 1, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
@@ -259,6 +264,7 @@ static struct entity_link *links[] = {
 	links13,
 	links14,
 	links15,
+	links16,
 };
 
 static u32 links_size[] = {
@@ -278,6 +284,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links13),
 	ARRAY_SIZE(links14),
 	ARRAY_SIZE(links15),
+	ARRAY_SIZE(links16),
 };
 
 #endif /* _VIDEO_LINK_H_ */
