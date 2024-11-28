@@ -117,34 +117,39 @@ static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_set_gamma_febe(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_instance *ins;
+	struct isp_gamma_febe_ctrl *febe_ctrl;
 
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->febe_ctrl.flag) {
-		memcpy(&ins->febe_ctrl, &msg->febe_ctrl, sizeof(msg->febe_ctrl));
-		ins->febe_ctrl.flag = true;
+	febe_ctrl = &ins->febe_ctrl;
+	if (!febe_ctrl->flag) {
+		memcpy(febe_ctrl, &msg->febe_ctrl, sizeof(msg->febe_ctrl));
+		febe_ctrl->flag = true;
 	}
 	return 0;
 }
 
 static s32 handle_set_rgbgamma(struct isp_device *isp, struct isp_msg *msg)
 {
-	struct isp_instance *ins;
-	void * pData = NULL;
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
+	struct isp_instance *ins;
+	struct isp_rgbgamma_data *rgbgamma_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->rgbgamma_data.flag) {
-		pr_debug("rgb gamma data size %lld  %d  ",  ctrl_ext->buf.size,  ctrl_ext->size);
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(&ins->rgbgamma_data, pData, ctrl_ext->size);
-		ins->rgbgamma_data.flag = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	rgbgamma_data = &ins->rgbgamma_data;
+	if (!rgbgamma_data->flag) {
+		pr_debug("rgb gamma data size %lld %d\n",
+			 ctrl_ext->buf.size, ctrl_ext->size);
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(rgbgamma_data, pdata, ctrl_ext->size);
+		rgbgamma_data->flag = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -153,18 +158,21 @@ static s32 handle_set_wdr5_hist(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.histogram_w_data_changed) {
-		pr_debug("wdr  data size %lld  %d  ",  ctrl_ext->buf.size,  ctrl_ext->size);
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_histogram_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.histogram_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->histogram_w_data_changed) {
+		pr_debug("wdr data size %lld %d\n",
+			 ctrl_ext->buf.size, ctrl_ext->size);
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_histogram_write_data, pdata, ctrl_ext->size);
+		wdr5_data->histogram_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -173,19 +181,20 @@ static s32 handle_set_wdr5_shift(struct isp_device *isp, struct isp_msg *msg)
 {
 
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.lut_shift_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_shift_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.lut_shift_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->lut_shift_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_shift_write_data, pdata, ctrl_ext->size);
+		wdr5_data->lut_shift_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -194,38 +203,40 @@ static s32 handle_set_wdr5_shift0(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.lut_shift0_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_shift0_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.lut_shift0_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->lut_shift0_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_shift0_write_data, pdata, ctrl_ext->size);
+		wdr5_data->lut_shift0_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
 
 static s32 handle_set_wdr5_gammapre(struct isp_device *isp, struct isp_msg *msg)
 {
-
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.gammapre_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_gammapre_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.gammapre_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->gammapre_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_gammapre_write_data, pdata, ctrl_ext->size);
+		wdr5_data->gammapre_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -233,19 +244,20 @@ static s32 handle_set_wdr5_gammapre(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_set_wdr5_gammadown(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.gammadown_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_gammadown_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.gammadown_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->gammadown_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_gammadown_write_data, pdata, ctrl_ext->size);
+		wdr5_data->gammadown_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -253,19 +265,20 @@ static s32 handle_set_wdr5_gammadown(struct isp_device *isp, struct isp_msg *msg
 static s32 handle_set_wdr5_entropy(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.entropy_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_entropy_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.entropy_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->entropy_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_entropy_write_data, pdata, ctrl_ext->size);
+		wdr5_data->entropy_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -273,19 +286,20 @@ static s32 handle_set_wdr5_entropy(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_set_wdr5_distance(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.lut_distance_weight_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_distance_weight_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.lut_distance_weight_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->lut_distance_weight_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_distance_weight_write_data, pdata, ctrl_ext->size);
+		wdr5_data->lut_distance_weight_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -293,19 +307,20 @@ static s32 handle_set_wdr5_distance(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_set_wdr5_difference(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.difference_weight_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_difference_weight_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.difference_weight_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->difference_weight_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_difference_weight_write_data, pdata, ctrl_ext->size);
+		wdr5_data->difference_weight_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -313,19 +328,20 @@ static s32 handle_set_wdr5_difference(struct isp_device *isp, struct isp_msg *ms
 static s32 handle_set_wdr5_factor(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.flat_factor_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_flat_factor_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.flat_factor_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->flat_factor_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_flat_factor_write_data, pdata, ctrl_ext->size);
+		wdr5_data->flat_factor_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -333,19 +349,20 @@ static s32 handle_set_wdr5_factor(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_set_wdr5_level(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.flat_level_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_flat_level_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.flat_level_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->flat_level_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_flat_level_write_data, pdata, ctrl_ext->size);
+		wdr5_data->flat_level_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -353,19 +370,20 @@ static s32 handle_set_wdr5_level(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_set_wdr5_sat_shift(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_ctrl_ext *ctrl_ext = &msg->ctrl_ext;
-
 	struct isp_instance *ins;
-	void * pData = NULL;
+	struct isp_wdr5_data *wdr5_data;
+	void *pdata;
+
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	if (!ins->wdr5_data.sat_shift_w_data_changed) {
-		pData = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
-
-		memcpy(ins->wdr5_data.lut_sat_shift_write_data, pData, ctrl_ext->size);
-		ins->wdr5_data.sat_shift_w_data_changed = true;
-		isc_put_extra_data(isp->isc,  &ctrl_ext->buf);
+	wdr5_data = &ins->wdr5_data;
+	if (!wdr5_data->sat_shift_w_data_changed) {
+		pdata = isc_get_extra_data(isp->isc, &ctrl_ext->buf);
+		memcpy(wdr5_data->lut_sat_shift_write_data, pdata, ctrl_ext->size);
+		wdr5_data->sat_shift_w_data_changed = true;
+		isc_put_extra_data(isp->isc, &ctrl_ext->buf);
 	}
 	return 0;
 }
@@ -1201,74 +1219,73 @@ static int isp_s_rgbgammaWriteData(struct isp_device *isp,
 
 void isp_update_none_shd_regs(unsigned long data)
 {
-	struct isp_instance *ins = (struct isp_instance *)data;
-	struct isp_device *isp = ins->pisp;
-	u32  i = 0;
-	if (ins->febe_ctrl.flag) {
+	struct isp_device *isp = (struct isp_device *)data;
+	/* For using tasklet to update non-shading registers, it's just enabled
+	 * in the stream mode, that's, there's just only isp instance 0 which
+	 * should be used in the case. And for others, it's updated in camera
+	 * service.
+	 */
+	struct isp_instance *ins = &isp->insts[0];
+	struct isp_gamma_febe_ctrl *febe_ctrl = &ins->febe_ctrl;
+	struct isp_rgbgamma_data *rgbgamma_data = &ins->rgbgamma_data;
+	struct isp_wdr5_data *wdr5_data = &ins->wdr5_data;
+	u32 i = 0;
+
+	if (febe_ctrl->flag) {
 		pr_debug("config febe\n");
 		isp_write(isp, ISP_GAMMA_FE_Y_ADDR, 0);
 		isp_write(isp, ISP_GAMMA_BE_Y_ADDR, 0);
 		for (i = 0; i < ISP_CTRL_FEBE_NUM; i++) {
-			// if (i % 20 == 0)
-			// 	pr_debug("%s i %d  %d %d\n", __func__, i,
-			// 			ins->febe_ctrl.compress[i],
-			// 			ins->febe_ctrl.expand[i]);
 			isp_write(isp, ISP_GAMMA_FE_Y_WRITE_DATA,
-					ins->febe_ctrl.compress[i]);
+					febe_ctrl->compress[i]);
 			isp_write(isp, ISP_GAMMA_BE_Y_WRITE_DATA,
-					ins->febe_ctrl.expand[i]);
+					febe_ctrl->expand[i]);
 		}
-		ins->febe_ctrl.flag = false;
+		febe_ctrl->flag = false;
 	}
-	if (ins->rgbgamma_data.flag) {
+	if (rgbgamma_data->flag) {
 		pr_debug("config rgb gamma\n");
-		isp_s_rgbgammapx(isp, &ins->rgbgamma_data);
-		isp_s_rgbgammaWriteData(isp, &ins->rgbgamma_data);
-		ins->rgbgamma_data.flag = false;
+		isp_s_rgbgammapx(isp, rgbgamma_data);
+		isp_s_rgbgammaWriteData(isp, rgbgamma_data);
+		rgbgamma_data->flag = false;
 	}
 
-	pr_debug("ins->wdr5_data.histogram_w_data_changed %d\n",
-			ins->wdr5_data.histogram_w_data_changed);
-	if (ins->wdr5_data.histogram_w_data_changed) {
-		isp_wdr5_histogram(isp, &(ins->wdr5_data));
-	}
+	pr_debug("wdr5_data->histogram_w_data_changed %d\n",
+			wdr5_data->histogram_w_data_changed);
+	if (wdr5_data->histogram_w_data_changed)
+		isp_wdr5_histogram(isp, wdr5_data);
 
-	if (ins->wdr5_data.gammapre_w_data_changed) {
-		isp_wdr5_gammapre(isp, &(ins->wdr5_data));
-	}
+	if (wdr5_data->gammapre_w_data_changed)
+		isp_wdr5_gammapre(isp, wdr5_data);
 
-	if (ins->wdr5_data.gammadown_w_data_changed) {
-		isp_wdr5_gammadown(isp, &(ins->wdr5_data));
-	}
-	if (ins->wdr5_data.entropy_w_data_changed) {
-		isp_wdr5_entropy(isp, &(ins->wdr5_data));
-	}
+	if (wdr5_data->gammadown_w_data_changed)
+		isp_wdr5_gammadown(isp, wdr5_data);
 
-	if (ins->wdr5_data.lut_shift_w_data_changed) {
-		isp_wdr5_lut_shift(isp, &(ins->wdr5_data));
-	}
-	if (ins->wdr5_data.lut_shift0_w_data_changed) {
-		isp_wdr5_lut_shift0(isp, &(ins->wdr5_data));
-	}
+	if (wdr5_data->entropy_w_data_changed)
+		isp_wdr5_entropy(isp, wdr5_data);
 
-	if (ins->wdr5_data.lut_distance_weight_w_data_changed) {
-		isp_wdr5_distance_weight(isp, &(ins->wdr5_data));
-	}
-	if (ins->wdr5_data.difference_weight_w_data_changed) {
-		isp_wdr5_difference_weight(isp, &(ins->wdr5_data));
-	}
+	if (wdr5_data->lut_shift_w_data_changed)
+		isp_wdr5_lut_shift(isp, wdr5_data);
 
-	if (ins->wdr5_data.flat_factor_w_data_changed) {
-		isp_wdr5_flat_factor(isp, &(ins->wdr5_data));
-	}
-	if (ins->wdr5_data.flat_level_w_data_changed) {
-		isp_wdr5_flat_level(isp, &(ins->wdr5_data));
-	}
+	if (wdr5_data->lut_shift0_w_data_changed)
+		isp_wdr5_lut_shift0(isp, wdr5_data);
 
-	if (ins->wdr5_data.sat_shift_w_data_changed) {
-		isp_wdr5_sat_shift(isp, &(ins->wdr5_data));
-	}
+	if (wdr5_data->lut_distance_weight_w_data_changed)
+		isp_wdr5_distance_weight(isp, wdr5_data);
+
+	if (wdr5_data->difference_weight_w_data_changed)
+		isp_wdr5_difference_weight(isp, wdr5_data);
+
+	if (wdr5_data->flat_factor_w_data_changed)
+		isp_wdr5_flat_factor(isp, wdr5_data);
+
+	if (wdr5_data->flat_level_w_data_changed)
+		isp_wdr5_flat_level(isp, wdr5_data);
+
+	if (wdr5_data->sat_shift_w_data_changed)
+		isp_wdr5_sat_shift(isp, wdr5_data);
 }
+
 irqreturn_t isp_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -1301,12 +1318,10 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			msg.irq.stat.isp_mis = isp_mis;
 			isp_post(isp, &msg, false);
 			if (isp_mis & BIT(1)) {
-				if (isp->mode != ISP_STRM_MODE) {
+				if (isp->mode != ISP_STRM_MODE)
 					isp_set_schedule(isp, &sch, 0, isp_mis, true);
-				} else {
-					// isp_update_none_shd_regs(isp, ins);
+				else
 					tasklet_schedule(&isp->update_lut_tbl);
-				}
 			}
 		}
 	} else {

@@ -1413,8 +1413,9 @@ int isp_open(struct isp_device *isp, u32 inst)
 		if (rc < 0)
 			goto _exit;
 		isp_post_clk_on_off(isp, true);
+		tasklet_init(&isp->update_lut_tbl, isp_update_none_shd_regs,
+			     (unsigned long)isp);
 	}
-	tasklet_init(&isp->update_lut_tbl, isp_update_none_shd_regs, (long unsigned int) &isp->insts[inst]);
 
 _exit:
 	mutex_unlock(&isp->open_lock);
@@ -1479,6 +1480,7 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 		goto _exit;
 	}
 
+	tasklet_kill(&isp->update_lut_tbl);
 	reset_job_queue(isp->jq);
 	isp_reset_schedule(isp, INVALID_INST, true);
 
@@ -1590,7 +1592,6 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 			list_add_tail(&isp->insts[i].src_bufs[j].entry,
 				      &isp->insts[i].src_buf_list1);
 		isp->insts[i].meta_inst = isp->num_insts;
-		isp->insts[i].pisp = (void*)isp;
 	}
 
 	for (i = 0; i < ISP_SINK_ONLINE_PATH_MAX; i++) {

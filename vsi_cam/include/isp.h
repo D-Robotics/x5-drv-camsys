@@ -82,11 +82,10 @@ struct isp_instance {
 	ktime_t last_frame_done, frame_interval;
 	u32 frame_count;
 	struct isp_gamma_febe_ctrl febe_ctrl;
-	struct isp_rgbgamma_data   rgbgamma_data;
-	struct isp_wdr5_data       wdr5_data;
+	struct isp_rgbgamma_data rgbgamma_data;
+	struct isp_wdr5_data wdr5_data;
 	u32 meta_inst;
 	void *prev;
-	void *pisp;
 };
 
 struct ibuf {
