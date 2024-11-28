@@ -145,6 +145,11 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			ret |= result;
 			pr_info("%s: msg isp_post failed (err=%d)!\n", __func__, ret);
 		}
+		ret = copy_to_user(data, msg.ctrl.ctrl_data, size);
+		if (ret) {
+			pr_info("%s: ctrl_data copy_to_user failed!\n", __func__);
+			return ret;
+		}
 	} else {
 		msg.id = CAM_MSG_CTRL_EXT_CHANGED;
 		msg.ctrl_ext.ctrl_id = cmd;
@@ -168,6 +173,13 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 		if (ret < 0 || result) {
 			ret |= result;
 			pr_info("%s: msg isp_post_ex failed (err=%d)!\n", __func__, ret);
+		}
+
+		ret = copy_to_user(data, buf_va, size);
+		if (ret) {
+			pr_info("%s: ctrl_data copy_to_user failed!\n", __func__);
+			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
+			return ret;
 		}
 
 		isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
