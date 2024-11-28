@@ -235,6 +235,13 @@ static struct entity_link links14[] = {
 	{ GDC_DEV_NAME "0-0", 0, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
 };
 
+/* sif0 & sif1 connect to isp0 device (2 to 1 case) */
+static struct entity_link links15[] = {
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-0", 1, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
 static struct entity_link *links[] = {
 	links0,
 	links1,
@@ -251,6 +258,7 @@ static struct entity_link *links[] = {
 	links12,
 	links13,
 	links14,
+	links15,
 };
 
 static u32 links_size[] = {
@@ -269,6 +277,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links12),
 	ARRAY_SIZE(links13),
 	ARRAY_SIZE(links14),
+	ARRAY_SIZE(links15),
 };
 
 #endif /* _VIDEO_LINK_H_ */

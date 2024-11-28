@@ -38,33 +38,6 @@ int cam_trigger(struct cam_ctx *ctx)
 	return 0;
 }
 
-bool cam_is_completed(struct cam_ctx *ctx)
-{
-	struct v4l2_subdev *sd;
-	struct media_pad *pad;
-	struct v4l2_buf_ctx *vctx = NULL;
-
-	if (!ctx || !ctx->pad)
-		return true;
-
-	pad = media_pad_remote_pad_first(ctx->pad);
-	if (!pad)
-		return true;
-
-	if (is_media_entity_v4l2_video_device(pad->entity)) {
-		return true;
-	} else if (is_media_entity_v4l2_subdev(pad->entity)) {
-		sd = media_entity_to_v4l2_subdev(pad->entity);
-		if (sd)
-			vctx = (struct v4l2_buf_ctx *)v4l2_get_subdevdata(sd);
-	}
-
-	if (!vctx || !(vctx->is_completed))
-		return true;
-
-	return vctx->is_completed(vctx);
-}
-
 int cam_ctx_init(struct cam_ctx *ctx, void *data, struct init_attr *attr)
 {
 	return cam_buf_ctx_init(ctx, data, attr);

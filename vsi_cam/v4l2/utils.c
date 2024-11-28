@@ -155,32 +155,6 @@ int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
 	return 0;
 }
 
-struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_pad **rpad)
-{
-	struct media_entity *ent;
-	struct media_pad *pad;
-	struct v4l2_subdev *rsd;
-	u16 i = 0;
-
-	if (unlikely(!sd || !sd->entity.pads))
-		return NULL;
-
-	ent = &sd->entity;
-	while (i < ent->num_pads) {
-		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity))
-				return NULL;
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
-			if (rpad)
-				*rpad = pad;
-			return rsd;
-		}
-		i++;
-	}
-	return NULL;
-}
-
 int subdev_open(struct v4l2_subdev *sd)
 {
 	struct media_entity *ent;
@@ -245,41 +219,29 @@ int subdev_close(struct v4l2_subdev *sd)
 	return 0;
 }
 
-int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid)
+int get_front_info(struct media_pad *pad, u32 *devid, u32 *insid)
 {
-	struct media_entity *ent;
-	struct media_pad *pad;
-	struct v4l2_subdev *rsd;
+	struct v4l2_subdev *sd;
 	struct v4l2_buf_ctx *ctx;
-	u16 i = 0;
 	int rc;
 
-	if (unlikely(!sd || !sd->entity.pads))
+	if (unlikely(!pad))
 		return -EINVAL;
 
-	ent = &sd->entity;
-	while (i < ent->num_pads) {
-		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
-				i++;
-				continue;
-			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
-			ctx = v4l2_get_subdevdata(rsd);
-			v4l2_subdev_ctx_mutex_lock(ctx);
-			if (is_v4l2_buf_ctx(ctx) && ctx->map_info) {
-				rc = ctx->map_info(ctx, devid, insid);
-				if (rc < 0) {
-					v4l2_subdev_ctx_mutex_unlock(ctx);
-					return rc;
-				}
-				pr_debug("%s get %s info, devid:%d, insid:%d\n",
-					 sd->name, rsd->name, *devid, *insid);
-			}
-			v4l2_subdev_ctx_mutex_unlock(ctx);
+	pad = media_pad_remote_pad_first(pad);
+	if (unlikely(!pad || !is_media_entity_v4l2_subdev(pad->entity)))
+		return -ENOLINK;
+
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	ctx = v4l2_get_subdevdata(sd);
+	if (ctx->map_info) {
+		rc = ctx->map_info(ctx, devid, insid);
+		if (rc < 0) {
+			pr_err("failed to call map_info (err=%d)\n", rc);
+			return rc;
 		}
-		i++;
+		pr_debug("get %s info, devid:%d, insid:%d\n",
+			 sd->name, *devid, *insid);
 	}
 	return 0;
 }

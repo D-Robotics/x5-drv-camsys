@@ -338,8 +338,8 @@ static s32 vse_video_streamon(struct vio_video_ctx *vctx)
 		}
 
 		memset(&ctx, 0, sizeof(ctx));
-		ctx.is_sink_online_mode = inst->online_mode ? true : false;
-		pr_info("%s ctx.is_sink_online_mode=%d\n", __func__, ctx.is_sink_online_mode);
+		ctx.sink_online_en = inst->online_mode ? true : false;
+		pr_info("%s ctx.sink_online_en=%d\n", __func__, ctx.sink_online_en);
 		ctx.sink_ctx = (struct cam_ctx *)vnode->ich_subdev[0];
 		ctx.stat_ctx = (struct cam_ctx *)vnode->ich_subdev[0];
 		for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
@@ -780,18 +780,6 @@ static int vse_trigger(struct cam_ctx *ctx)
 	return 0;
 }
 
-static bool vse_is_completed(struct cam_ctx *ctx)
-{
-	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
-	struct vse_nat_instance *inst;
-	bool rc = false;
-
-	inst = container_of(vdev, struct vse_nat_instance, vdev);
-	if (vdev)
-		rc = inst->dev->vse_dev.is_completed;
-	return rc;
-}
-
 static bool vse_osd_update(struct cam_ctx *ctx)
 {
 	struct vio_subdev *subdev = NULL;
@@ -942,7 +930,6 @@ static int vse_set_mode(struct cam_ctx *ctx, u32 mode)
 
 static const struct cam_ops vse_ops = {
 	.trigger = vse_trigger,
-	.is_completed = vse_is_completed,
 	.osd_update = vse_osd_update,
 	.osd_set_cfg = vse_set_osd_cfg,
 	.read_hist = vse_read_hist,

@@ -35,33 +35,6 @@ int cam_trigger(struct cam_ctx *ctx)
 	return -EBUSY;
 }
 
-bool cam_is_completed(struct cam_ctx *ctx)
-{
-	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
-	const struct cam_ops *ops = NULL;
-	struct vio_node *vnode;
-
-	if (unlikely(!vdev))
-		return -EINVAL;
-
-	if (vdev->next) {
-		vdev = vdev->next;
-		if (vdev->vnode->id < MODULE_NUM)
-			ops = get_ops(vdev->vnode->id);
-		if (ops && ops->is_completed)
-			return ops->is_completed((struct cam_ctx *)vdev);
-	} else if (vdev->vnode->next){
-		vnode = vdev->vnode->next;
-		if (vnode->id < MODULE_NUM)
-			ops = get_ops(vnode->id);
-		if (ops && ops->is_completed)
-			return ops->is_completed((struct cam_ctx *)vnode->ich_subdev[0]);
-	} else {
-		pr_err("cam_is_completed null\n");
-	}
-	return false;
-}
-
 void sif_set_frame_des(struct cam_ctx *ctx, void *data)
 {
 	struct vio_subdev *subdev = (struct vio_subdev *)ctx;

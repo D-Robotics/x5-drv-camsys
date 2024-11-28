@@ -32,7 +32,7 @@ struct vse_fps_rate {
 };
 
 struct vse_irq_ctx {
-	bool is_sink_online_mode;
+	bool sink_online_en;
 	struct vse_stitching stitches[VSE_OUT_CHNL_MAX];
 	struct cam_buf *sink_buf, *src_buf[VSE_OUT_CHNL_MAX];
 	struct cam_ctx *sink_ctx, *src_ctx[VSE_OUT_CHNL_MAX], *stat_ctx;
@@ -80,7 +80,6 @@ struct vse_device {
 	u32 next_irq_ctx;
 	enum cam_error error;
 	spinlock_t err_lock; /* lock for error var. */
-	bool is_completed;
 	struct mutex open_lock; /* lock for open_cnt */
 	refcount_t open_cnt;
 	enum vse_work_mode mode;

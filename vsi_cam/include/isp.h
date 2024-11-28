@@ -49,8 +49,8 @@ union u32_byte_map {
                             (((x).v >> 24) & 1) * 4 - 1)
 
 struct isp_irq_ctx {
-	bool is_sink_online_mode;
-	union u32_byte_map is_src_online_mode;
+	bool sink_online_en;
+	union u32_byte_map src_online_stat;
 	struct cam_buf *sink_buf, *src_buf;
 	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *stat_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
@@ -69,6 +69,7 @@ struct isp_instance {
 	struct ibuf *mcm_ib, *mcm_ib1, *prev_mcm_ib;
 	struct cam_list_node *shd_src_node, *src_node;
 	struct isp_format fmt;
+	struct cam_format sub_ifmt;
 	struct cam_input in;
 	enum cam_state state;
 	enum cam_error error;

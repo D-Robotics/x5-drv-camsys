@@ -59,14 +59,14 @@ static int gdc_link_setup(struct media_entity *entity,
 		lctx = &gdc->node.bctx;
 
 		if (local->flags & MEDIA_PAD_FL_SINK) {
-			if (lctx->is_sink_online_mode != rctx->is_src_online_mode)
+			if (sink_online_en(lctx) != rctx->src_online_en)
 				return -EBUSY;
-			if (lctx->is_sink_online_mode)
+			if (is_sink_online_en(lctx))
 				return -EBUSY;
 			p_attr = &attr;
 		} else {
-			lctx->is_src_online_mode = rctx->is_sink_online_mode;
-			if (lctx->is_src_online_mode)
+			lctx->src_online_en = sink_online_en(rctx);
+			if (lctx->src_online_en)
 				return -EBUSY;
 		}
 	} else if (local->flags & MEDIA_PAD_FL_SINK) {
@@ -109,7 +109,7 @@ static void gdc_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 	}
 }
 
-static int gdc_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int gdc_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
 
@@ -119,7 +119,7 @@ static int gdc_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return cam_drop(&gdc->sink_ctx, buf);
 }
 
-static int gdc_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int gdc_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
 	int rc;
@@ -127,7 +127,7 @@ static int gdc_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	if (!ctx || !buf)
 		return -EINVAL;
 
-	if (ctx->is_sink_online_mode)
+	if (is_sink_online_en(ctx))
 		return -EBUSY;
 
 	rc = cam_qbuf(&gdc->sink_ctx, buf);
@@ -137,27 +137,27 @@ static int gdc_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return gdc_add_job(gdc->dev, gdc->id);
 }
 
-static struct cam_buf *gdc_dqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *gdc_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
 
 	if (!ctx)
 		return NULL;
 
-	if (ctx->is_sink_online_mode)
+	if (is_sink_online_en(ctx))
 		return NULL;
 
 	return cam_dqbuf(&gdc->sink_ctx);
 }
 
-static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *gdc_acqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct gdc_v4l_instance *gdc = buf_ctx_to_gdc_v4l_instance(ctx);
 
 	if (!ctx)
 		return NULL;
 
-	if (ctx->is_sink_online_mode)
+	if (is_sink_online_en(ctx))
 		return NULL;
 
 	return cam_acqbuf(&gdc->sink_ctx);
@@ -202,15 +202,14 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
 	struct gdc_format f;
 	struct v4l2_format s_f = *format;
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	int rc;
 
-	if (!pad)
+	if (is_sink_pad(inst, pad))
 		return gdc_set_ctx_format_out(ctx, format, is_try);
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd && !inst->m2m_en)
 		return -EINVAL;
 
@@ -241,7 +240,8 @@ static int gdc_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 static int gdc_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32 *format)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	if (!pad)
+
+	if (is_sink_pad(inst, pad))
 		return gdc_enum_ctx_format_out(ctx, index, format);
 
 	if (index >= inst->fmt_cap_num)
@@ -255,18 +255,17 @@ static int gdc_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fse;
 	int rc;
 
-	if (!pad)
+	if (is_sink_pad(inst, pad))
 		return gdc_enum_ctx_framesize_out(ctx, fsize);
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	memcpy(&fse, fsize, sizeof(fse));
 	fse.pixel_format = inst->input_fmt;
@@ -284,15 +283,14 @@ static int gdc_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmivalenum fiv;
 	int rc;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	memcpy(&fiv, fival, sizeof(fiv));
 	fiv.pixel_format = inst->input_fmt;
@@ -317,7 +315,7 @@ static void gdc_set_default_input(struct gdc_v4l_instance *inst)
 static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct gdc_v4l_instance *inst = buf_ctx_to_gdc_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fsize;
 	bool sensor_support_default_size = false;
@@ -330,8 +328,7 @@ static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 	if (inst->m2m_en)
 		return;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
 		return;
 
@@ -359,8 +356,6 @@ static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 	if (!sensor_support_default_size && j > 0)
 		memcpy(&inst->input_res, &inst->input_res_cap[inst->input_res_cap_num - 1],
 			sizeof(struct cam_res_cap));
-
-	return;
 }
 
 static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
@@ -376,7 +371,8 @@ static int gdc_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
-	struct gdc_v4l_instance *ins = container_of(ctx, struct gdc_v4l_instance, sink_ctx);
+	struct gdc_v4l_instance *ins =
+			container_of(ctx, struct gdc_v4l_instance, sink_ctx);
 	struct gdc_instance *gdc;
 	unsigned int size = 0;
 
@@ -407,7 +403,7 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 	int rc;
 
 	if (enable) {
-		if (!gdc->node.bctx.is_sink_online_mode)
+		if (!is_sink_online_en(&gdc->node.bctx))
 			cam_reqbufs(&gdc->sink_ctx, 4, &gdc_buf_ops);
 
 		fill_irq_ctx(gdc, &ctx);
@@ -429,7 +425,7 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 		memset(&ctx, 0, sizeof(ctx));
 		gdc_set_ctx(gdc->dev, gdc->id, &ctx);
 
-		if (!gdc->node.bctx.is_sink_online_mode)
+		if (!is_sink_online_en(&gdc->node.bctx))
 			cam_reqbufs(&gdc->sink_ctx, 0, NULL);
 
 		rc = gdc_set_state(gdc->dev, gdc->id, enable);
@@ -442,12 +438,13 @@ static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 static int gdc_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(gdc), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 
@@ -457,12 +454,13 @@ static int gdc_g_frame_interval(struct v4l2_subdev *sd,
 static int gdc_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct gdc_v4l_instance *gdc = sd_to_gdc_v4l_instance(sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(gdc), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 
@@ -471,13 +469,12 @@ static int gdc_s_frame_interval(struct v4l2_subdev *sd,
 
 static int gdc_re_set_format(struct gdc_v4l_instance *inst, struct gdc_format *fmt)
 {
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_format format;
 	int rc;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd && !inst->m2m_en)
 		return -EINVAL;
 
@@ -801,7 +798,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 			return -ENOMEM;
 		}
 
-		n->pads[0].flags = MEDIA_PAD_FL_SINK;
+		sink_pad(inst)->flags = MEDIA_PAD_FL_SINK;
 		n->pads[1].flags =
 				MEDIA_PAD_FL_SOURCE | MEDIA_PAD_FL_MUST_CONNECT;
 

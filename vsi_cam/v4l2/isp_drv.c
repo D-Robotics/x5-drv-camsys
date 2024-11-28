@@ -10,6 +10,7 @@
 #include "cam_dev.h"
 #include "cam_uapi.h"
 #include "v4l2_usr_api.h"
+#include "video_fmt.h"
 #include "isp_drv.h"
 
 #define ISP_OFFLINE_IN_BUF_NUM (4)
@@ -31,6 +32,27 @@ module_param_string(input_fmt, input_fmt_str, 16, 0644);
 
 static char work_mode_str[16];
 module_param_string(work_mode, work_mode_str, 16, 0644);
+
+static bool hdr_en;
+module_param(hdr_en, bool, 0644);
+
+static bool metadata_en;
+module_param(metadata_en, bool, 0644);
+
+static ushort sub_chnl_width = 1920;
+module_param(sub_chnl_width, ushort, 0644);
+
+static ushort sub_chnl_height = 1080;
+module_param(sub_chnl_height, ushort, 0644);
+
+#define sub_sink_pad(i) (&(i)->node.pads[1])
+#define src_pad(i)      (&(i)->node.pads[2])
+
+#define is_sub_sink_pad(i, pad) \
+	(sub_sink_pad(i)->index == pad)
+
+#define sink_ctx(i)     (&(i)->sink_ctx[0])
+#define sub_sink_ctx(i) (&(i)->sink_ctx[1])
 
 static int get_src_pad_index(struct isp_v4l_instance *isp, u32 pad)
 {
@@ -74,23 +96,22 @@ static int isp_link_setup(struct media_entity *entity,
 		lctx = &isp->node.bctx;
 
 		if (local->flags & MEDIA_PAD_FL_SINK) {
-			if (lctx->is_sink_online_mode != rctx->is_src_online_mode)
+			if (sink_online_en(lctx) != rctx->src_online_en)
 				return -EBUSY;
-			if (lctx->is_sink_online_mode)
+			if (is_sink_online_en(lctx))
 				return 0;
-			if (!lctx->is_sink_online_mode)
-				p_attr = &attr;
-			online = lctx->is_sink_online_mode;
+			p_attr = &attr;
+			online = false;
 		} else {
-			lctx->is_src_online_mode = rctx->is_sink_online_mode;
-			online = rctx->is_sink_online_mode;
+			lctx->src_online_en = sink_online_en(rctx);
+			online = sink_online_en(rctx);
 		}
 	} else {
 		online = false;
 	}
 
 	if (local->flags & MEDIA_PAD_FL_SINK) {
-		buf_ctx = &isp->sink_ctx;
+		buf_ctx = &isp->sink_ctx[local->index];
 	} else {
 		index = get_src_pad_index(isp, local->index);
 		if (index < 0)
@@ -120,7 +141,7 @@ static void isp_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
 }
 
-static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int isp_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
 	int rc;
@@ -128,10 +149,13 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	if (!ctx || !buf)
 		return -EINVAL;
 
-	if (ctx->is_sink_online_mode)
+	if (is_sub_sink_pad(isp, pad) && isp->metadata_en)
+		return cam_qbuf(&isp->sink_ctx[pad], buf);
+
+	if (is_sink_online_en(ctx))
 		return -EBUSY;
 
-	rc = cam_qbuf(&isp->sink_ctx, buf);
+	rc = cam_qbuf(&isp->sink_ctx[pad], buf);
 	if (rc < 0)
 		return rc;
 
@@ -139,30 +163,36 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-static int isp_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int isp_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
 
 	if (!ctx || !buf)
 		return -EINVAL;
 
-	if (ctx->is_sink_online_mode)
+	if (is_sub_sink_pad(isp, pad) && isp->metadata_en)
+		return cam_drop(&isp->sink_ctx[pad], buf);
+
+	if (is_sink_online_en(ctx))
 		return -EBUSY;
 
-	return cam_drop(&isp->sink_ctx, buf);
+	return cam_drop(&isp->sink_ctx[pad], buf);
 }
 
-static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *isp_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct isp_v4l_instance *isp = buf_ctx_to_isp_v4l_instance(ctx);
 
 	if (!ctx)
 		return NULL;
 
-	if (ctx->is_sink_online_mode)
+	if (is_sub_sink_pad(isp, pad) && isp->metadata_en)
+		return cam_dqbuf(&isp->sink_ctx[pad]);
+
+	if (is_sink_online_en(ctx))
 		return NULL;
 
-	return cam_dqbuf(&isp->sink_ctx);
+	return cam_dqbuf(&isp->sink_ctx[pad]);
 }
 
 static bool is_support_fmt(u32 fmt)
@@ -224,8 +254,6 @@ static int check_work_mode_param(enum isp_work_mode *mode)
 
 	if (!strcmp(work_mode_str, "stream"))
 		*mode = ISP_STRM_MODE;
-	// else if (!strcmp(work_mode_str, "rdma"))
-	// 	*mode = ISP_RDMA_MODE;
 	else if (!strcmp(work_mode_str, "mcm"))
 		*mode = ISP_MCM_MODE;
 	else
@@ -237,6 +265,44 @@ static int check_work_mode_param(enum isp_work_mode *mode)
 static u32 isp_get_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_format *format)
 {
+	return 0;
+}
+
+static inline int isp_set_sub_chnl_format(struct isp_v4l_instance *ins,
+					  struct cam_format *f,
+					  struct v4l2_format *fmt,
+					  bool is_try)
+{
+	struct isp_instance *isp;
+	struct v4l2_subdev *sd;
+	struct media_pad *pad;
+	int rc;
+
+	if (!ins->hdr_en && !ins->metadata_en)
+		return 0;
+
+	isp = &ins->dev->insts[ins->id];
+	if (ins->metadata_en) {
+		if (sub_chnl_width < MIN_W || sub_chnl_height < MIN_H ||
+		    sub_chnl_width > MAX_W || sub_chnl_height > MAX_H) {
+			pr_err("invalid size (%dx%d) for sub channel.\n",
+			       sub_chnl_width, sub_chnl_height);
+			return -EINVAL;
+		}
+
+		fmt->fmt.pix.width = sub_chnl_width;
+		fmt->fmt.pix.height = sub_chnl_height;
+	}
+
+	pad = get_remote_pad_sd(sub_sink_pad(ins), &sd);
+	if (!sd)
+		return -ENOLINK;
+	rc = v4l2_subdev_ctx_call(sd, set_format, pad->index, fmt, is_try);
+	if (rc < 0) {
+		pr_err("%s v4l2_subdev_ctx_call failed (err=%d)\n", __func__, rc);
+		return rc;
+	}
+	isp->sub_ifmt = *f;
 	return 0;
 }
 
@@ -253,10 +319,18 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	struct media_pad *rpad;
 	int rc = 0;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
-	if (!rsd)
+	if (metadata_en && hdr_en) {
+		pr_err("currently, metadata and hdr cannot be both enabled.\n");
 		return -EINVAL;
+	}
+
+	inst->metadata_en = metadata_en;
+	inst->hdr_en = hdr_en;
+
+	sd = &inst->node.sd;
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
+	if (!rsd)
+		return -ENOLINK;
 
 	f.ofmt.format = pixelformat_to_cam_format(format->fmt.pix.pixelformat);
 	f.ifmt.width  = format->fmt.pix.width;
@@ -276,7 +350,7 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	s_f.fmt.pix.pixelformat = inst->input_fmt;
 	rc = v4l2_subdev_ctx_call(rsd, set_format, rpad->index, &s_f, is_try);
 	if (rc < 0) {
-		pr_err("%s v4l2_subdev_ctx_call failed\n", __func__);
+		pr_err("%s v4l2_subdev_ctx_call failed (err=%d)\n", __func__, rc);
 		goto _exit;
 	}
 
@@ -292,6 +366,10 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		break;
 	}
 
+	rc = isp_set_sub_chnl_format(inst, &f.ifmt, &s_f, is_try);
+	if (rc < 0)
+		goto _exit;
+
 	isp = &inst->dev->insts[inst->id];
 	rc = check_work_mode_param(&inst->dev->mode);
 	if (inst->dev->mode == ISP_MODE_INVALID) {
@@ -299,7 +377,7 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		inst->dev->mode = ISP_MCM_MODE;
 	}
 	if (inst->dev->mode != ISP_STRM_MODE) {
-		if (inst->node.bctx.is_sink_online_mode) {
+		if (is_sink_online_en(&inst->node.bctx)) {
 			isp->online_mcm = true;
 			isp_set_stream_idx(inst->dev, inst->id, inst->id);
 		} else {
@@ -312,9 +390,15 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		 inst->id, isp->online_mcm, inst->dev->mode, inst->id);
 
 	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED, V4L_GROUP);
-	rc = isp_set_format(inst->dev, inst->id, &f);
+
+	rc = isp_set_iformat(inst->dev, inst->id, &f.ifmt, &f.icrop, inst->hdr_en);
 	if (rc < 0) {
-		pr_err("%s isp_set_format failed\n", __func__);
+		pr_err("%s isp_set_iformat failed\n", __func__);
+		goto _exit;
+	}
+	rc = isp_set_oformat(inst->dev, inst->id, &f.ofmt);
+	if (rc < 0) {
+		pr_err("%s isp_set_oformat failed\n", __func__);
 		goto _exit;
 	}
 
@@ -360,15 +444,14 @@ static int isp_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
 	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fse;
 	int rc;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	memcpy(&fse, fsize, sizeof(fse));
 	fse.pixel_format = inst->input_fmt;
@@ -379,7 +462,6 @@ static int isp_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	fsize->type = fse.type;
 	fsize->discrete = fse.discrete;
 	fsize->stepwise = fse.stepwise;
-
 	return rc;
 }
 
@@ -387,15 +469,14 @@ static int isp_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
 	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmivalenum fiv;
 	int rc;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	memcpy(&fiv, fival, sizeof(fiv));
 	fiv.pixel_format = inst->input_fmt;
@@ -412,13 +493,12 @@ static int isp_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct isp_v4l_instance *inst = buf_ctx_to_isp_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
-	struct media_pad *pad;
+	struct v4l2_subdev *rsd;
+	struct media_pad *rpad;
 	int i, j = 0, rc;
 	u32 input_cam_fmt, pixelformat;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &pad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
 		return;
 
@@ -426,7 +506,7 @@ static void isp_set_cap(struct v4l2_buf_ctx *ctx)
 	memset(inst->input_fmt_cap, 0, sizeof(inst->input_fmt_cap));
 
 	for (i = 0; i < ARRAY_SIZE(inst->input_fmt_cap); i++) {
-		rc = v4l2_subdev_ctx_call(rsd, enum_format, pad->index, i, &pixelformat);
+		rc = v4l2_subdev_ctx_call(rsd, enum_format, rpad->index, i, &pixelformat);
 		if (rc < 0)
 			break;
 		if (!is_support_fmt(pixelformat))
@@ -486,14 +566,21 @@ static int isp_queue_setup(struct cam_ctx *ctx,
 			   unsigned int *num_buffers, unsigned int *num_planes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
-	struct isp_v4l_instance *ins = container_of(ctx, struct isp_v4l_instance, sink_ctx);
+	struct isp_v4l_instance *ins;
 	struct isp_instance *isp;
-	unsigned int size = 0;
+	unsigned int size = 0, index;
 
-	if (ins) {
-		isp = &ins->dev->insts[ins->id];
-		size = get_framebuf_size(&isp->fmt.ifmt);
-	}
+	if (!ctx)
+		return -EINVAL;
+
+	index = ctx->pad->index;
+	pr_debug("isp input channel: %d\n", index);
+	if (index >= ISP_IN_CHNL_MAX)
+		return -EINVAL;
+
+	ins = container_of(ctx, struct isp_v4l_instance, sink_ctx[index]);
+	isp = &ins->dev->insts[ins->id];
+	size = get_framebuf_size(&isp->fmt.ifmt);
 
 	if (!size)
 		return -ENOMEM;
@@ -508,6 +595,45 @@ static int isp_queue_setup(struct cam_ctx *ctx,
 
 static struct cam_buf_ops isp_buf_ops = {
 	.queue_setup = isp_queue_setup,
+};
+
+static int isp_sub_chnl_queue_setup(struct cam_ctx *ctx,
+				    unsigned int *num_buffers,
+				    unsigned int *num_planes,
+				    unsigned int sizes[],
+				    struct device *alloc_devs[])
+{
+	struct isp_v4l_instance *ins;
+	struct isp_instance *isp;
+	unsigned int size = 0, index;
+
+	if (!ctx)
+		return -EINVAL;
+
+	index = ctx->pad->index;
+	pr_debug("isp input channel: %d\n", index);
+	if (index >= ISP_IN_CHNL_MAX)
+		return -EINVAL;
+
+	ins = container_of(ctx, struct isp_v4l_instance, sink_ctx[index]);
+	if (ins) {
+		isp = &ins->dev->insts[ins->id];
+		size = get_framebuf_size(&isp->sub_ifmt);
+	}
+
+	if (!size)
+		return -ENOMEM;
+
+	if (!*num_buffers)
+		*num_buffers = 1;
+
+	*num_planes = 1;
+	sizes[0] = size;
+	return 0;
+}
+
+static struct cam_buf_ops isp_sub_chnl_buf_ops = {
+	.queue_setup = isp_sub_chnl_queue_setup,
 };
 
 static int isp_s_ctrl(struct isp_v4l_instance *isp, void *arg)
@@ -624,19 +750,19 @@ static long isp_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 static void fill_irq_ctx(struct isp_v4l_instance *isp, u32 i, int enable,
 			 struct isp_irq_ctx *ctx)
 {
-	ctx->is_sink_online_mode = isp->node.bctx.is_sink_online_mode;
-	if (isp->sink_ctx.pad)
-		ctx->sink_ctx = &isp->sink_ctx;
+	ctx->sink_online_en = sink_online_en(&isp->node.bctx);
+	if (sink_ctx(isp)->pad)
+		ctx->sink_ctx = sink_ctx(isp);
 	if (isp->src_ctx[i].pad) {
 		if (enable) {
 			ctx->src_ctx[i] = &isp->src_ctx[i];
 			if (isp->src_ctx[i].online)
-				set_online(ctx->is_src_online_mode, i);
+				set_online(ctx->src_online_stat, i);
 			else
-				set_offline(ctx->is_src_online_mode, i);
+				set_offline(ctx->src_online_stat, i);
 		} else {
 			ctx->src_ctx[i] = NULL;
-			set_online(ctx->is_src_online_mode, i); /* set back to default */
+			set_online(ctx->src_online_stat, i); /* set back to default */
 		}
 	}
 }
@@ -670,12 +796,15 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		refcount_inc(&isp->start_count);
 
-		if (!isp->node.bctx.is_sink_online_mode) {
-			cam_reqbufs(&isp->sink_ctx, ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
-		} else {
-			get_front_info(sd, &devid, &insid);
+		if (is_sink_online_en(&isp->node.bctx)) {
+			get_front_info(sink_pad(isp), &devid, &insid);
 			isp_set_input_select(isp->dev, isp->id, devid, insid);
+		} else {
+			cam_reqbufs(sink_ctx(isp), ISP_OFFLINE_IN_BUF_NUM, &isp_buf_ops);
 		}
+		if (isp->metadata_en)
+			cam_reqbufs(sub_sink_ctx(isp), ISP_OFFLINE_IN_BUF_NUM,
+				    &isp_sub_chnl_buf_ops);
 		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STARTED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
@@ -696,10 +825,12 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STOPPED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
-		if (!isp->node.bctx.is_sink_online_mode)
-			cam_reqbufs(&isp->sink_ctx, 0, NULL);
-		else
+		if (is_sink_online_en(&isp->node.bctx))
 			isp_set_stream_idx(isp->dev, isp->id, -1);
+		else
+			cam_reqbufs(sink_ctx(isp), 0, NULL);
+		if (isp->metadata_en)
+			cam_reqbufs(sub_sink_ctx(isp), 0, NULL);
 		isp->fmt_changed = false;
 	}
 	return 0;
@@ -708,12 +839,13 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 static int isp_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(isp), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 
@@ -723,12 +855,13 @@ static int isp_g_frame_interval(struct v4l2_subdev *sd,
 static int isp_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct isp_v4l_instance *isp = sd_to_isp_v4l_instance(sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(isp), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 
@@ -822,7 +955,8 @@ static int isp_async_bound(struct subdev_node *sn)
 
 	while (i < isp->dev->num_insts) {
 		ins = &v4l_dev->insts[i];
-		cam_ctx_release(&ins->sink_ctx);
+		for (j = 0; j < ISP_IN_CHNL_MAX; j++)
+			cam_ctx_release(&ins->sink_ctx[j]);
 		for (j = 0; j < ISP_OUT_CHNL_MAX; j++)
 			cam_ctx_release(&ins->src_ctx[j]);
 
@@ -901,9 +1035,9 @@ static int isp_v4l_probe(struct platform_device *pdev)
 
 		n->dev = dev;
 		if (i < ISP_SINK_ONLINE_PATH_MAX)
-			n->num_pads = 3;
+			n->num_pads = 4;
 		else
-			n->num_pads = 2;
+			n->num_pads = 3;
 		n->pads = devm_kzalloc
 				(dev, sizeof(*n->pads) * n->num_pads, GFP_KERNEL);
 		if (!n->pads) {
@@ -911,13 +1045,14 @@ static int isp_v4l_probe(struct platform_device *pdev)
 			return -ENOMEM;
 		}
 
-		n->pads[0].flags = MEDIA_PAD_FL_SINK;
-		n->pads[1].flags =
+		sink_pad(inst)->flags = MEDIA_PAD_FL_SINK;
+		sub_sink_pad(inst)->flags = MEDIA_PAD_FL_SINK;
+		src_pad(inst)->flags =
 				MEDIA_PAD_FL_SOURCE | MEDIA_PAD_FL_MUST_CONNECT;
-		inst->src_pads[0] = &n->pads[1];
+		inst->src_pads[0] = src_pad(inst);
 		if (i < ISP_SINK_ONLINE_PATH_MAX) {
-			n->pads[2].flags = MEDIA_PAD_FL_SOURCE;
-			inst->src_pads[1] = &n->pads[2];
+			n->pads[3].flags = MEDIA_PAD_FL_SOURCE;
+			inst->src_pads[1] = &n->pads[3];
 		}
 
 		rc = subdev_init(n, ISP_DEV_NAME, v4l_dev->isp_dev.id,
@@ -929,7 +1064,7 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		n->sd.internal_ops = &isp_internal_ops;
 
 		if (i < ISP_SINK_ONLINE_PATH_MAX)
-			n->bctx.is_sink_online_mode = true;
+			sink_online_en(&n->bctx) = true;
 	}
 
 	v4l_dev->insts = insts;
@@ -972,7 +1107,8 @@ static int isp_v4l_remove(struct platform_device *pdev)
 	v4l2_async_unregister_subdev(&v4l_dev->insts[0].node.sd);
 
 	for (i = 0; i < v4l_dev->isp_dev.num_insts; i++) {
-		cam_ctx_release(&v4l_dev->insts[i].sink_ctx);
+		for (j = 0; j < ISP_IN_CHNL_MAX; j++)
+			cam_ctx_release(&v4l_dev->insts[i].sink_ctx[j]);
 		for (j = 0; j < ISP_OUT_CHNL_MAX; j++)
 			cam_ctx_release(&v4l_dev->insts[i].src_ctx[j]);
 		subdev_deinit(&v4l_dev->insts[i].node);

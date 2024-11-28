@@ -31,7 +31,10 @@ struct vid_video_device {
 	struct list_head entry;
 };
 
-static int vid_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+#undef sink_pad
+#define sink_pad(v) (&(v)->pad)
+
+static int vid_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct vid_video_device *vdev =
 		container_of(ctx, struct vid_video_device, bctx);
@@ -47,7 +50,7 @@ static int vid_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-static int vid_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int vid_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct vid_video_device *vdev =
 		container_of(ctx, struct vid_video_device, bctx);
@@ -62,7 +65,7 @@ static int vid_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct vid_video_device *vdev =
 		container_of(ctx, struct vid_video_device, bctx);
@@ -78,7 +81,7 @@ static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
 	return buf;
 }
 
-static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct vid_video_device *vdev =
 		container_of(ctx, struct vid_video_device, bctx);
@@ -101,7 +104,7 @@ static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 	int rc;
 
 	if (!vdev->fmt.fmt.pix.sizeimage) {
-		rc = get_def_fmt(&vdev->pad, &vdev->fmt);
+		rc = get_def_fmt(sink_pad(vdev), &vdev->fmt);
 		if (rc < 0)
 			return rc;
 	}
@@ -126,7 +129,7 @@ static int vid_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 static inline void notify_buf_ready(struct vid_video_device *dev, int on)
 {
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&dev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(dev), &sd);
 
 	if (sd)
 		v4l2_subdev_ctx_call_no_return(sd, ready, pad->index, on);
@@ -167,7 +170,7 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
 	vdev->buf_sequence = 0;
@@ -182,7 +185,7 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 		return rc;
 	}
 
-//	rc = media_pipeline_start(&vdev->pad, &vdev->pipe);
+//	rc = media_pipeline_start(sink_pad(vdev), &vdev->pipe);
 //	if (rc < 0)
 //		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
 	return rc;
@@ -192,7 +195,7 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vq->drv_priv;
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
 	if (!sd)
@@ -206,7 +209,7 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 
 	notify_buf_ready(vdev, 0);
 
-//	media_pipeline_stop(&vdev->pad);
+//	media_pipeline_stop(sink_pad(vdev));
 
 	vid_return_all_buffers(vdev, VB2_BUF_STATE_ERROR);
 }
@@ -225,7 +228,7 @@ static int vid_enum_fmt(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
@@ -244,7 +247,7 @@ static int vid_g_fmt(struct file *file, void *fh, struct v4l2_format *f)
 		return -EINVAL;
 
 	if (!vdev->fmt.fmt.pix.pixelformat) {
-		rc = get_def_fmt(&vdev->pad, &vdev->fmt);
+		rc = get_def_fmt(sink_pad(vdev), &vdev->fmt);
 		if (rc < 0)
 			return rc;
 	}
@@ -257,7 +260,7 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 		     bool is_try)
 {
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	struct video_fmt *v_f;
 	int rc;
 
@@ -275,7 +278,7 @@ static int try_s_fmt(struct vid_video_device *vdev, struct v4l2_format *f,
 
 	if (f->fmt.pix.width < MIN_W || f->fmt.pix.height < MIN_H ||
 	    f->fmt.pix.width > MAX_W || f->fmt.pix.height > MAX_H) {
-		rc = get_def_fmt(&vdev->pad, f);
+		rc = get_def_fmt(sink_pad(vdev), f);
 		if (rc < 0) {
 			pr_err("%s get_def_fmt failed\n", __func__);
 			return rc;
@@ -297,11 +300,11 @@ static int vid_try_fmt(struct file *file, void *fh, struct v4l2_format *f)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	int rc;
 
-	rc = vid_check_pixelformat(&vdev->pad, f->fmt.pix.pixelformat);
+	rc = vid_check_pixelformat(sink_pad(vdev), f->fmt.pix.pixelformat);
 	if (rc < 0)
 		return rc;
 	if (rc) {
-		rc = get_def_fmt(&vdev->pad, f);
+		rc = get_def_fmt(sink_pad(vdev), f);
 		if (rc < 0)
 			return rc;
 	}
@@ -320,11 +323,11 @@ static int vid_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 		return -EBUSY;
 	}
 
-	rc = vid_check_pixelformat(&vdev->pad, f->fmt.pix.pixelformat);
+	rc = vid_check_pixelformat(sink_pad(vdev), f->fmt.pix.pixelformat);
 	if (rc < 0)
 		return rc;
 	if (rc) {
-		rc = get_def_fmt(&vdev->pad, f);
+		rc = get_def_fmt(sink_pad(vdev), f);
 		if (rc < 0)
 			return rc;
 	}
@@ -342,13 +345,13 @@ static int vid_enum_framesizes(struct file *file, void *fh,
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
 	if (fsize->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	rc = vid_check_pixelformat(&vdev->pad, fsize->pixel_format);
+	rc = vid_check_pixelformat(sink_pad(vdev), fsize->pixel_format);
 	if (rc)
 		return -EINVAL;
 
@@ -362,13 +365,13 @@ static int vid_enum_frameintervals(struct file *file, void *fh,
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(&vdev->pad, &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
 	if (fival->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	rc = vid_check_pixelformat(&vdev->pad, fival->pixel_format);
+	rc = vid_check_pixelformat(sink_pad(vdev), fival->pixel_format);
 	if (rc)
 		return -EINVAL;
 
@@ -421,7 +424,7 @@ static int vid_g_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (sd)
 		return v4l2_g_parm_cap(&vdev->video, sd, a);
 	return -ENOLINK;
@@ -435,7 +438,7 @@ static int vid_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (sd)
 		return v4l2_s_parm_cap(&vdev->video, sd, a);
 	return -ENOLINK;
@@ -472,7 +475,7 @@ static int vid_s_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 
 	ctrl.ctrl_id = a->id;
 	memcpy(&ctrl.ctrl_data, &a->value, sizeof(a->value));
-	pad = get_remote_pad_sd(&vdev->pad, &sd);
+	pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (sd)
 		return v4l2_subdev_call(sd, core, command, CAM_SET_CTRL, &ctrl);
 	return -ENOLINK;
@@ -487,7 +490,7 @@ static int vid_g_ctrl(struct file *file, void *fh, struct v4l2_control *a)
 	int rc = 0;
 
 	ctrl.ctrl_id = a->id;
-	pad = get_remote_pad_sd(&vdev->pad, &sd);
+	pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (!pad)
 		return -ENOLINK;
 
@@ -508,7 +511,7 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	bool sd_is_vse = false;
 	int rc = 0;
 
-	pad = get_remote_pad_sd(&vdev->pad, &sd);
+	pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (!pad)
 		return -ENOLINK;
 
@@ -523,7 +526,6 @@ static int vid_s_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 		if (rc < 0)
 			return rc;
 	}
-
 	return rc;
 }
 
@@ -536,7 +538,7 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 	bool sd_is_vse = false;
 	int rc = 0;
 
-	pad = get_remote_pad_sd(&vdev->pad, &sd);
+	pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (!pad)
 		return -ENOLINK;
 
@@ -553,7 +555,6 @@ static int vid_g_ext_ctrls(struct file *file, void *fh, struct v4l2_ext_controls
 		if (rc < 0)
 			return rc;
 	}
-
 	return rc;
 }
 
@@ -562,7 +563,7 @@ static int vid_queryctrl(struct file *file, void *fh, struct v4l2_queryctrl *a)
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
 
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (sd)
 		return v4l2_subdev_call(sd, core, command, CAM_QUERY_CTRL, a);
 	return -ENOLINK;
@@ -573,7 +574,7 @@ static int vid_query_ext_ctrl(struct file *file, void *fh, struct v4l2_query_ext
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
 
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (sd)
 		return v4l2_subdev_call(sd, core, command, CAM_QUERY_EXT_CTRL, a);
 	return -ENOLINK;
@@ -628,7 +629,7 @@ static int vid_open(struct file *file)
 		return 0;
 	}
 
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (!sd) {
 		v4l2_fh_release(file);
 		return -ENOLINK;
@@ -659,7 +660,7 @@ static int vid_release(struct file *file)
 		return rc;
 	}
 
-	(void)get_remote_pad_sd(&vdev->pad, &sd);
+	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
 	if (!sd)
 		return -ENOLINK;
 
@@ -745,7 +746,7 @@ static struct vid_video_device *create_video_device(struct vid_device *vdev,
 	v->fmt.fmt.pix.field = V4L2_FIELD_NONE;
 	v->fmt.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
-	v->pad.flags = MEDIA_PAD_FL_SINK | MEDIA_PAD_FL_MUST_CONNECT;
+	sink_pad(v)->flags = MEDIA_PAD_FL_SINK | MEDIA_PAD_FL_MUST_CONNECT;
 	rc = media_entity_pads_init(&v->video.entity, 1, &v->pad);
 	if (rc < 0) {
 		dev_err(dev, "failed to init media pads (err=%d).\n", rc);
@@ -1084,7 +1085,7 @@ int vid_subdev_set_cap(struct vid_device *vdev)
 	}
 
 	list_for_each_entry(v, &vdev->video_device_list, entry) {
-		(void)get_remote_pad_sd(&v->pad, &sd);
+		(void)get_remote_pad_sd(sink_pad(v), &sd);
 		if (sd)
 			v4l2_subdev_ctx_call_no_return(sd, set_cap);
 	}

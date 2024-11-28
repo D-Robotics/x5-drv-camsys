@@ -65,14 +65,14 @@ static int sif_link_setup(struct media_entity *entity,
 		if (local->flags & MEDIA_PAD_FL_SOURCE) {
 			update_en_post_status(sif, sd,
 					      flags & MEDIA_LNK_FL_ENABLED);
-			lctx->is_src_online_mode = rctx->is_sink_online_mode;
+			lctx->src_online_en = sink_online_en(rctx);
 			src_ctx = &sif->src_ctx;
 			if (src_ctx->pad)
 				return -EBUSY;
 			rc = cam_ctx_init(src_ctx, (void *)local, NULL);
 			if (rc < 0)
 				return rc;
-			if (rctx->is_sink_online_mode)
+			if (rctx->sink_online_en[remote->index])
 				return 0;
 		}
 	}
@@ -211,7 +211,6 @@ static int sif_enum_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad, u32 index, u32
 		return -EINVAL;
 
 	*format = inst->fmt_cap[index];
-
 	return 0;
 }
 
@@ -219,7 +218,7 @@ static int sif_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 				  struct v4l2_frmsizeenum *fsize)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_subdev_frame_size_enum fse = {
 		.index = fsize->index,
@@ -227,10 +226,9 @@ static int sif_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	};
 	int rc = 0;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fse.pad = rpad->index;
 	if (fsize->pixel_format == V4L2_PIX_FMT_NV12 && inst->conv_nv12)
@@ -245,7 +243,6 @@ static int sif_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
 	fsize->discrete.width = fse.min_width;
 	fsize->discrete.height = fse.min_height;
-
 	return rc;
 }
 
@@ -253,7 +250,7 @@ static int sif_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 				      struct v4l2_frmivalenum *fival)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_subdev_frame_interval_enum fie = {
 		.index = fival->index,
@@ -263,10 +260,9 @@ static int sif_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	};
 	int rc = 0;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fie.pad = rpad->index;
 	if (fival->pixel_format == V4L2_PIX_FMT_NV12 && inst->conv_nv12)
@@ -280,14 +276,13 @@ static int sif_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 
 	fival->type = V4L2_FRMIVAL_TYPE_DISCRETE;
 	fival->discrete = fie.interval;
-
 	return rc;
 }
 
 static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 {
 	struct sif_v4l_instance *inst = buf_ctx_to_sif_v4l_instance(ctx);
-	struct v4l2_subdev *sd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct v4l2_subdev_mbus_code_enum mbus_code;
 	struct media_pad *rpad;
 	int i, j = 0, rc;
@@ -295,8 +290,7 @@ static void sif_set_cap(struct v4l2_buf_ctx *ctx)
 	bool sensor_support_nv12 = false;
 	bool sensor_support_yuv422 = false;
 
-	sd = &inst->node.sd;
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
 		return;
 
@@ -337,7 +331,6 @@ static int sif_map_info(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid)
 
 	*devid = sif->dev->id;
 	*insid = sif->id;
-
 	return 0;
 }
 
@@ -390,7 +383,6 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 		if (rc)
 			return -EINVAL;
 	}
-
 	return rc;
 }
 
@@ -433,19 +425,19 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 	}
-
 	return 0;
 }
 
 static int sif_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 
@@ -455,12 +447,13 @@ static int sif_g_frame_interval(struct v4l2_subdev *sd,
 static int sif_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
+	struct sif_v4l_instance *inst = sd_to_sif_v4l_instance(sd);
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	rsd = get_remote_src_subdev(sd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 
@@ -642,7 +635,7 @@ static int sif_v4l_probe(struct platform_device *pdev)
 			return -ENOMEM;
 		}
 
-		n->pads[0].flags = MEDIA_PAD_FL_SINK;
+		sink_pad(inst)->flags = MEDIA_PAD_FL_SINK;
 		n->pads[1].flags = MEDIA_PAD_FL_SOURCE |
 				   MEDIA_PAD_FL_MUST_CONNECT;
 		n->pads[2].flags = MEDIA_PAD_FL_SOURCE;

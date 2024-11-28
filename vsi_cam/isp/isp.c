@@ -532,7 +532,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 				rc = -ENOMEM;
 				goto _exit;
 			} else {
-				if (has_offline(ctx->is_src_online_mode)) {
+				if (has_offline(ctx->src_online_stat)) {
 					node = list_first_entry_or_null(ctx->src_buf_list2,
 									struct cam_list_node, entry);
 					if (!node) {
@@ -571,7 +571,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 				rc = -ENOMEM;
 				goto _exit;
 			} else {
-				if (has_offline(ctx->is_src_online_mode)) {
+				if (has_offline(ctx->src_online_stat)) {
 					node = list_first_entry_or_null(ctx->src_buf_list2,
 									struct cam_list_node, entry);
 					if (!node) {
@@ -661,7 +661,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 		//trigger vse
 		if (isp->mode == ISP_STRM_MODE) {
 			for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
-				if (is_online(ins->ctx.is_src_online_mode, i)) {
+				if (is_online(ins->ctx.src_online_stat, i)) {
 					pr_debug("%s isp%d trigger vse...\n", __func__, inst);
 					cam_trigger(ins->ctx.src_ctx[i]);
 				}
@@ -713,7 +713,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 			}
 			ins->tile_count = 0;
 		} else {
-			if (has_offline(ctx->is_src_online_mode)) {
+			if (has_offline(ctx->src_online_stat)) {
 				if (ins->src_node)
 					isp_set_mp_buffer(isp, get_phys_addr(isp->dev, ins->src_node->data, 0),
 							  &ins->fmt.ofmt);
@@ -926,7 +926,7 @@ static int isp_set_schedule_online_stream(struct isp_device *isp, bool isp_irq_c
 	ctx = &ins->ctx;
 	rc = new_frame(ctx);
 	spin_unlock_irqrestore(&ins->lock, flags);
-	if (has_offline(ctx->is_src_online_mode)) {
+	if (has_offline(ctx->src_online_stat)) {
 		if (!rc)
 			ins->shd_src_node = ins->src_node;
 		// if shd_src_node failed to update (there is no more mp buffer), use
@@ -976,7 +976,7 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 	ctx = &ins->ctx;
 	mcm_ib = list_first_entry_or_null(&isp->ibm[inst].list2, struct ibuf, entry);
 	if (mcm_ib) {
-		if (has_offline(ctx->is_src_online_mode)) {
+		if (has_offline(ctx->src_online_stat)) {
 			node = list_first_entry_or_null(ctx->src_buf_list2, struct cam_list_node,
 							entry);
 			if (node) {
@@ -1012,7 +1012,7 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 	}
 
 	for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
-		if (is_online(ins->ctx.is_src_online_mode, i))
+		if (is_online(ins->ctx.src_online_stat, i))
 			cam_trigger(ins->ctx.src_ctx[i]);
 	}
 
@@ -1051,7 +1051,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 			return -1;
 	}
 
-	if (has_offline(ctx->is_src_online_mode)) {
+	if (has_offline(ctx->src_online_stat)) {
 		node = list_first_entry_or_null(ctx->src_buf_list2, struct cam_list_node,
 						entry);
 		if (!node)
@@ -1063,7 +1063,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 			pr_debug("%s: isp list_add_tail src_buf_list3\n", __func__);
 			list_del(&node->entry);
 			list_add_tail(&node->entry, ctx->src_buf_list3);
-		} else if (!has_offline(ctx->is_src_online_mode)) {
+		} else if (!has_offline(ctx->src_online_stat)) {
 			sch->mp_buf.mem.addr = 0;
 		} else {
 			pr_err("%s: invalid node!\n", __func__);
@@ -1081,7 +1081,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 		sch->online_mcm = ins->online_mcm;
 
 		for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
-			if (is_online(ctx->is_src_online_mode, i))
+			if (is_online(ctx->src_online_stat, i))
 				cam_trigger(ctx->src_ctx[i]);
 		}
 

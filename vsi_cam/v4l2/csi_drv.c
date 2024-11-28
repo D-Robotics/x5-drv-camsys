@@ -28,18 +28,29 @@ static long csi_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	return -ENOIOCTLCMD;
 }
 
+#undef sink_pad
+#define sink_pad(i) \
+({ \
+	struct csi_v4l_instance *_ins = (struct csi_v4l_instance *)(i); \
+	&((_ins) - (_ins)->id)->node.pads[0]; \
+})
+
+#undef to_sd
+#define to_sd(i) \
+({ \
+	struct csi_v4l_instance *_ins = (struct csi_v4l_instance *)(i); \
+	&((_ins) - (_ins)->id)->node.sd; \
+})
+
 static int csi_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *rsd;
 	int rc = 0;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	rsd = &v4l_dev->insts[0].node.sd;
+	sd = to_sd(csi);
 
 	if (!enable) {
-		rc = subdev_set_stream(rsd, enable);
+		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
 	}
@@ -49,7 +60,7 @@ static int csi_s_stream(struct v4l2_subdev *sd, int enable)
 
 	if (enable) {
 		csi_ipi_start(csi->dev, csi->id);
-		rc = subdev_set_stream(rsd, enable);
+		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
 	} else {
@@ -62,16 +73,12 @@ static int csi_g_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *lsd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	lsd = &v4l_dev->insts[0].node.sd;
-
-	rsd = get_remote_src_subdev(lsd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(csi), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 	return v4l2_subdev_call(rsd, video, g_frame_interval, fiv);
@@ -81,22 +88,19 @@ static int csi_s_frame_interval(struct v4l2_subdev *sd,
 				struct v4l2_subdev_frame_interval *fiv)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *lsd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	lsd = &v4l_dev->insts[0].node.sd;
-
-	rsd = get_remote_src_subdev(lsd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(csi), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fiv->pad = rpad->index;
 	return v4l2_subdev_call(rsd, video, s_frame_interval, fiv);
 }
 
-static void csi_subirq_callback(struct csi_device *csi_dev, u32 sub_val, const struct csi_irq_reg *err_reg, u32 reset_flag)
+static void csi_subirq_callback(struct csi_device *csi_dev, u32 sub_val,
+				const struct csi_irq_reg *err_reg, u32 reset_flag)
 {
 	int i = 0;
 
@@ -153,14 +157,11 @@ static int csi_set_fmt(struct v4l2_subdev *sd,
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
 	struct cam_format f;
 	struct csi_ipi_base_cfg ipi_cfg;
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *rsd;
 	int rc;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	rsd = &v4l_dev->insts[0].node.sd;
+	sd = to_sd(csi);
 
-	rc = subdev_set_fmt(rsd, state, fmt);
+	rc = subdev_set_fmt(sd, state, fmt);
 	if (rc < 0)
 		return rc;
 
@@ -180,7 +181,6 @@ static int csi_set_fmt(struct v4l2_subdev *sd,
 	csi->dev->subirq_func = csi_subirq_callback;
 	csi->dev->irq_done_func = NULL;
 	csi_irq_enable(csi->dev);
-
 	return 0;
 }
 
@@ -196,16 +196,12 @@ static int csi_enum_mbus_code(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_mbus_code_enum *code)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *lsd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	lsd = &v4l_dev->insts[0].node.sd;
-
-	rsd = get_remote_src_subdev(lsd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(csi), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	code->pad = rpad->index;
 	return v4l2_subdev_call(rsd, pad, enum_mbus_code, state, code);
@@ -216,16 +212,12 @@ static int csi_enum_frame_size(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *lsd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	lsd = &v4l_dev->insts[0].node.sd;
-
-	rsd = get_remote_src_subdev(lsd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(csi), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fse->pad = rpad->index;
 	return v4l2_subdev_call(rsd, pad, enum_frame_size, state, fse);
@@ -236,16 +228,12 @@ static int csi_enum_frame_interval(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_frame_interval_enum *fie)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *lsd, *rsd;
+	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	lsd = &v4l_dev->insts[0].node.sd;
-
-	rsd = get_remote_src_subdev(lsd, &rpad);
+	rpad = get_remote_pad_sd(sink_pad(csi), &rsd);
 	if (!rsd)
-		return -EINVAL;
+		return -ENOLINK;
 
 	fie->pad = rpad->index;
 	return v4l2_subdev_call(rsd, pad, enum_frame_interval, state, fie);
@@ -548,28 +536,25 @@ static int csi_query_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	struct csi_v4l_instance *csi = sd_to_csi_v4l_instance(sd);
-	struct csi_v4l_device *v4l_dev;
-	struct v4l2_subdev *rsd;
 	int rc = 0;
 
-	v4l_dev = container_of(csi->dev, struct csi_v4l_device, csi_dev);
-	rsd = &v4l_dev->insts[0].node.sd;
+	sd = to_sd(csi);
 
 	switch (cmd) {
 	case CAM_SET_CTRL:
-		rc = csi_s_sensor_ctrl(rsd, arg);
+		rc = csi_s_sensor_ctrl(sd, arg);
 		break;
 	case CAM_SET_EXT_CTRL:
-		rc = csi_s_sensor_ext_ctrl(rsd, arg);
+		rc = csi_s_sensor_ext_ctrl(sd, arg);
 		break;
 	case CAM_GET_CTRL:
-		rc = csi_g_sensor_ctrl(rsd, arg);
+		rc = csi_g_sensor_ctrl(sd, arg);
 		break;
 	case CAM_GET_EXT_CTRL:
-		rc = csi_g_sensor_ext_ctrl(rsd, arg);
+		rc = csi_g_sensor_ext_ctrl(sd, arg);
 		break;
 	case CAM_QUERY_CTRL:
-		rc = csi_query_sensor_ctrl(rsd, arg);
+		rc = csi_query_sensor_ctrl(sd, arg);
 		break;
 	default:
 		rc = -EINVAL;
@@ -791,7 +776,7 @@ static int csi_v4l_probe(struct platform_device *pdev)
 			return -ENOMEM;
 		}
 
-		n->pads[0].flags = MEDIA_PAD_FL_SINK;
+		sink_pad(inst)->flags = MEDIA_PAD_FL_SINK;
 		n->pads[1].flags =
 				MEDIA_PAD_FL_SOURCE | MEDIA_PAD_FL_MUST_CONNECT;
 

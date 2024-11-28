@@ -313,7 +313,6 @@ void vse_set_cmd(struct vse_device *vse, u32 inst)
 		return;
 
 	vse->error = 0;
-	vse->is_completed = false;
 	ins = &vse->insts[inst];
 	ctx = &ins->ctx;
 
@@ -681,7 +680,6 @@ int vse_close(struct vse_device *vse, u32 inst)
 	rc = dw_reset(vse->crc_dev, DW_MOD_VSE);
 	if (rc == -EBUSY)
 		dev_warn(vse->dev, "DW module is busy now and cannot be reset!\n");
-	vse->is_completed = true;
 	vse->error = 1;
 	rc = vse_runtime_suspend(vse->dev);
 
@@ -746,9 +744,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	mutex_init(&vse->open_lock);
 	refcount_set(&vse->open_cnt, REFCNT_INIT_VAL);
 	spin_lock_init(&vse->err_lock);
-
 	vse->error = 1;
-	vse->is_completed = true;
 
 	vse->insts = devm_kcalloc(dev, vse_dt.num_insts,
 				  sizeof(*vse->insts), GFP_KERNEL);

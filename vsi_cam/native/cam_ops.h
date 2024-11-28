@@ -7,7 +7,6 @@
 struct cam_ctx;
 struct cam_frame_info;
 struct cam_ops {
-	bool (*is_completed)(struct cam_ctx *ctx);
 	int (*trigger)(struct cam_ctx *ctx);
 	bool (*osd_update)(struct cam_ctx *ctx);
 	int (*osd_set_cfg)(struct cam_ctx *ctx, u32 ochn_id);

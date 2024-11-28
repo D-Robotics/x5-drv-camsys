@@ -7,13 +7,14 @@
 #include "isp.h"
 #include "utils.h"
 
+#define ISP_IN_CHNL_MAX (SINK_PADS_MAX)
 #define ISP_INPUT_FMT_MAX (15)
 #define ISP_FMT_MAX (3)
 
 struct isp_v4l_instance {
 	struct subdev_node node;
 	struct isp_device *dev;
-	struct cam_ctx sink_ctx, src_ctx[ISP_OUT_CHNL_MAX];
+	struct cam_ctx sink_ctx[ISP_IN_CHNL_MAX], src_ctx[ISP_OUT_CHNL_MAX];
 	struct media_pad *src_pads[ISP_OUT_CHNL_MAX];
 	struct mutex open_lock;
 	struct mutex fmt_lock;
@@ -28,6 +29,8 @@ struct isp_v4l_instance {
 	u32 input_fmt; /* pixelformat */
 	refcount_t start_count;
 	refcount_t open_count;
+	bool metadata_en;
+	bool hdr_en;
 };
 
 struct isp_v4l_device {

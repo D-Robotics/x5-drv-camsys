@@ -17,8 +17,6 @@ enum cam_frame_status {
 
 int cam_trigger(struct cam_ctx *ctx);
 
-bool cam_is_completed(struct cam_ctx *ctx);
-
 struct init_attr {
 	bool en_reqbufs;
 	struct device *dev;

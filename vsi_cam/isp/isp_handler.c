@@ -107,8 +107,8 @@ static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 
 	memset(&msg->frame_info, 0, sizeof(msg->frame_info));
 
-	if (has_offline(ins->ctx.is_src_online_mode)) {
-		i = get_offline(ins->ctx.is_src_online_mode);
+	if (has_offline(ins->ctx.src_online_stat)) {
+		i = get_offline(ins->ctx.src_online_stat);
 		isp_update_frame_info(&msg->frame_info, ins->ctx.src_ctx[i]);
 	}
 	return 0;
@@ -165,7 +165,7 @@ static s32 handle_get_metadata(struct isp_device *isp, struct isp_msg *msg)
 		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
 		ctx->sink_buf = NULL;
 	}
-	buf = cam_dqbuf_irq(ctx->sink_ctx, true);
+	buf = cam_dqbuf_irq(ctx->sink_ctx, false);
 	if (!buf)
 		return -ENOMEM;
 	ctx->sink_buf = buf;
@@ -309,15 +309,15 @@ void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout)
 	node = list_first_entry_or_null(ctx->src_buf_list3,
 					struct cam_list_node, entry);
 	if (node) {
-		if (has_offline(ctx->is_src_online_mode)) {
-			i = get_offline(ctx->is_src_online_mode);
+		if (has_offline(ctx->src_online_stat)) {
+			i = get_offline(ctx->src_online_stat);
 			src_ctx = ctx->src_ctx[i];
 		}
 
 		if (cam_get_frame_status(src_ctx) || timeout) {
 			cam_drop_irq(src_ctx, node->data);
 		} else {
-			if (ctx->is_sink_online_mode) {
+			if (ctx->sink_online_en) {
 				if (isp->mode == ISP_STRM_MODE)
 					sif_get_frame_des(src_ctx);
 				else
@@ -388,9 +388,9 @@ int new_frame(struct isp_irq_ctx *ctx)
 		}
 	}
 
-	if (has_offline(ctx->is_src_online_mode)) {
+	if (has_offline(ctx->src_online_stat)) {
 		struct cam_list_node *node;
-		u32 i = get_offline(ctx->is_src_online_mode);
+		u32 i = get_offline(ctx->src_online_stat);
 
 		buf = cam_dqbuf_irq(ctx->src_ctx[i], true);
 		if (!buf)
@@ -567,8 +567,8 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 		if (isp_mis & BIT(1))
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);
 		if (isp_mis & (BIT(2) | BIT(3))) {
-			if (isp_mis & BIT(3) && has_offline(ins->ctx.is_src_online_mode)) {
-				i = get_offline(ins->ctx.is_src_online_mode);
+			if (isp_mis & BIT(3) && has_offline(ins->ctx.src_online_stat)) {
+				i = get_offline(ins->ctx.src_online_stat);
 				cam_set_frame_status(ins->ctx.src_ctx[i], VSIZE_ERR);
 			}
 		}

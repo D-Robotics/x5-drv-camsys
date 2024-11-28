@@ -74,9 +74,7 @@ static s32 handle_set_error(struct vse_device *vse, struct vse_msg *msg)
 	if (!vse)
 		return -EINVAL;
 
-	vse->is_completed = true;
 	vse->error = 1;
-
 	return 0;
 }
 
@@ -165,7 +163,7 @@ int new_frame(struct vse_irq_ctx *ctx)
 		return -1;
 	}
 
-	if (!ctx->is_sink_online_mode && ctx->sink_ctx) {
+	if (!ctx->sink_online_en && ctx->sink_ctx) {
 		buf = cam_acqbuf_irq(ctx->sink_ctx, false);
 		if (!buf)
 			return -ENOMEM;
@@ -186,7 +184,7 @@ int new_frame(struct vse_irq_ctx *ctx)
 		ctx->src_buf[i] = cam_dqbuf_irq(ctx->src_ctx[i], true);
 		if (ctx->src_buf[i]) {
 			count++;
-			if (ctx->is_sink_online_mode)
+			if (ctx->sink_online_en)
 				sif_get_frame_des(ctx->src_ctx[i]);
 		}
 	}
@@ -252,7 +250,7 @@ struct vse_irq_ctx *get_next_irq_ctx(struct vse_device *vse)
 		ctx = &inst->ctx;
 		rc = new_frame(ctx);
 		spin_unlock_irqrestore(&inst->lock, flags);
-		if (rc == 1 && ctx->is_sink_online_mode) {
+		if (rc == 1 && ctx->sink_online_en) {
 			struct vse_msg msg = { .id = VSE_MSG_SKIP_FRAME };
 
 			msg.inst = -1;
@@ -327,7 +325,6 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		spin_lock_irqsave(&inst->state_lock, flags);
 		ctx = get_next_irq_ctx(vse);
 		if (!ctx) {
-			vse->is_completed = true;
 			vse->error = 1;
 		} else if (vse->mode == VSE_SCM_MODE) {
 			pre_ctrl = vse_read(vse, VSE_CTRL);

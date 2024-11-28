@@ -35,7 +35,8 @@ static struct video_fmt formats[] = {
 	{ V4L2_PIX_FMT_RGB32,   MEDIA_BUS_FMT_RGB888_1X32_PADHI, 32, 4 },
 };
 
-static struct video_fmt *get_fmt_by_pixelformat(u32 pixelformat)
+static inline __maybe_unused
+struct video_fmt *get_fmt_by_pixelformat(u32 pixelformat)
 {
 	u32 i;
 

@@ -79,7 +79,33 @@ do { \
 	} \
 } while (0)
 
-#define V4L2_MIN(x, y) ((x) > (y) ? (y) : (x))
+#define sink_pad(i) (&(i)->node.pads[0])
+
+#define is_sink_pad(i, pad) \
+	(sink_pad(i)->index == pad)
+
+#define sink_online_en(c) ((c)->sink_online_en[0])
+
+#define is_sink_online_en(c) \
+	(sink_online_en(c))
+
+#define SINK_PADS_MAX (2)
+
+static inline __maybe_unused
+struct media_pad *get_remote_pad_sd(struct media_pad *pad,
+				    struct v4l2_subdev **sd)
+{
+	if (sd)
+		*sd = NULL;
+	if (unlikely(!pad))
+		return NULL;
+	pad = media_pad_remote_pad_first(pad);
+	if (unlikely(!pad || !is_media_entity_v4l2_subdev(pad->entity)))
+		return NULL;
+	if (sd)
+		*sd = media_entity_to_v4l2_subdev(pad->entity);
+	return pad;
+}
 
 struct cam_buf {
 	union {
@@ -98,7 +124,7 @@ struct cam_ctx {
 
 struct v4l2_buf_ctx {
 	u32 magic;
-	bool is_sink_online_mode, is_src_online_mode;
+	bool sink_online_en[SINK_PADS_MAX], src_online_en;
 	u32 (*get_format)(struct v4l2_buf_ctx *ctx, u32 pad,
 			  struct v4l2_format *format);
 	int (*set_format)(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -111,12 +137,11 @@ struct v4l2_buf_ctx {
 				  struct v4l2_frmivalenum *fival);
 	int (*set_stream)(struct v4l2_buf_ctx *ctx, u32 pad, int enable);
 	void (*ready)(struct v4l2_buf_ctx *ctx, u32 pad, int on);
-	int (*qbuf)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
-	int (*drop)(struct v4l2_buf_ctx *ctx, struct cam_buf *buf);
-	struct cam_buf *(*dqbuf)(struct v4l2_buf_ctx *ctx);
-	struct cam_buf *(*acqbuf)(struct v4l2_buf_ctx *ctx);
+	int (*qbuf)(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf);
+	int (*drop)(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf);
+	struct cam_buf *(*dqbuf)(struct v4l2_buf_ctx *ctx, u32 pad);
+	struct cam_buf *(*acqbuf)(struct v4l2_buf_ctx *ctx, u32 pad);
 	void (*trigger)(struct v4l2_buf_ctx *ctx);
-	bool (*is_completed)(struct v4l2_buf_ctx *ctx);
 	void (*set_cap)(struct v4l2_buf_ctx *ctx);
 	int (*map_info)(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid);
 	int (*check_datapath)(struct v4l2_buf_ctx *ctx, bool *online);
@@ -190,6 +215,5 @@ u32 mbus_code_to_bayer_pattern(u32 code, bool isISI);
 int pixelformat_to_mbus_code(u32 format);
 u32 mbus_code_to_pixelformat(u32 code);
 int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg);
-int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid);
-struct v4l2_subdev *get_remote_src_subdev(struct v4l2_subdev *sd, struct media_pad **rpad);
+int get_front_info(struct media_pad *pad, u32 *devid, u32 *insid);
 #endif /* _UTILS_H_ */

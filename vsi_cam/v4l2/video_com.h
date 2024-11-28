@@ -33,21 +33,6 @@ static const struct media_entity_operations vid_media_ops = {
 	.link_validate = vid_link_validate,
 };
 
-static inline struct media_pad *get_remote_pad_sd(struct media_pad *pad,
-						  struct v4l2_subdev **sd)
-{
-	if (sd)
-		*sd = NULL;
-	if (unlikely(!pad))
-		return NULL;
-	pad = media_pad_remote_pad_first(pad);
-	if (unlikely(!pad || !is_media_entity_v4l2_subdev(pad->entity)))
-		return NULL;
-	if (sd)
-		*sd = media_entity_to_v4l2_subdev(pad->entity);
-	return pad;
-}
-
 static void init_fmt(struct v4l2_format *f)
 {
 	u32 bytesperline, sizeimage, bpp, bit_depth;

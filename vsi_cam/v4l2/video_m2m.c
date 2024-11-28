@@ -54,8 +54,10 @@ static inline struct vid_m2m_dev *file2dev(struct file *file)
 	return NULL;
 }
 
-#define sink_pad(v) (&v->pads[V4L2_M2M_SRC])
-#define src_pad(v)  (&v->pads[V4L2_M2M_DST])
+#undef sink_pad
+#define sink_pad(v) (&(v)->pads[V4L2_M2M_SRC])
+#undef src_pad
+#define src_pad(v)  (&(v)->pads[V4L2_M2M_DST])
 
 static struct v4l2_format *get_fmt(struct vid_m2m_dev *dev,
 				   enum v4l2_buf_type type)
@@ -96,7 +98,7 @@ static int vid_src_dqbuf(struct vid_m2m_dev *dev)
 	return 0;
 }
 
-static int vid_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int vid_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct vid_m2m_dev *dev = container_of(ctx, struct vid_m2m_dev, bctx);
 	struct v4l2_format *fmt;
@@ -118,7 +120,7 @@ static int vid_qbuf(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-static int vid_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
+static int vid_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 {
 	struct vid_m2m_dev *dev = container_of(ctx, struct vid_m2m_dev, bctx);
 
@@ -138,7 +140,7 @@ static int vid_drop(struct v4l2_buf_ctx *ctx, struct cam_buf *buf)
 	container_of(m2m, struct cam_buf, m2m); \
 })
 
-static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct vid_m2m_dev *dev = container_of(ctx, struct vid_m2m_dev, bctx);
 	struct vb2_v4l2_buffer *vb;
@@ -153,7 +155,7 @@ static struct cam_buf *vid_dqbuf(struct v4l2_buf_ctx *ctx)
 	return buf;
 }
 
-static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx)
+static struct cam_buf *vid_acqbuf(struct v4l2_buf_ctx *ctx, u32 pad)
 {
 	struct vid_m2m_dev *dev = container_of(ctx, struct vid_m2m_dev, bctx);
 	struct vb2_v4l2_buffer *vb;

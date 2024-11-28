@@ -196,7 +196,7 @@ static inline int cam_remote_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
 	if (!vctx || !vctx->qbuf)
 		return -EINVAL;
 
-	return vctx->qbuf(vctx, buf);
+	return vctx->qbuf(vctx, pad->index, buf);
 }
 
 static inline int cam_local_qbuf(struct cam_ctx *ctx, struct cam_buf *buf)
@@ -249,7 +249,7 @@ static inline struct cam_buf *cam_remote_dqbuf(struct cam_ctx *ctx)
 	if (!vctx || !vctx->dqbuf)
 		return NULL;
 
-	return vctx->dqbuf(vctx);
+	return vctx->dqbuf(vctx, pad->index);
 }
 
 static inline struct cam_buf *cam_local_dqbuf(struct cam_ctx *ctx)
@@ -305,7 +305,7 @@ static inline struct cam_buf *cam_remote_acqbuf(struct cam_ctx *ctx)
 	if (!vctx || !vctx->acqbuf)
 		return NULL;
 
-	return vctx->acqbuf(vctx);
+	return vctx->acqbuf(vctx, pad->index);
 }
 
 static inline struct cam_buf *cam_local_acqbuf(struct cam_ctx *ctx)
@@ -472,7 +472,7 @@ int cam_drop_irq(struct cam_ctx *ctx, struct cam_buf *buf)
 	if (!vctx || !vctx->drop)
 		return -EINVAL;
 
-	return vctx->drop(vctx, buf);
+	return vctx->drop(vctx, pad->index, buf);
 }
 
 int cam_drop_irq_ext(struct cam_ctx *ctx, struct cam_buf *buf)
