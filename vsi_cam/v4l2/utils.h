@@ -21,6 +21,9 @@
 
 #define STRIDE_ALIGN    (64)
 
+#define BCTX_MAGIC         (0x12345678)
+#define is_v4l2_buf_ctx(x) ((x) && (x)->magic == BCTX_MAGIC)
+
 #define vb2_buf_to_cam_buf(vb2) \
 ({ \
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb2); \
@@ -33,7 +36,7 @@
 	struct v4l2_buf_ctx *_ctx; \
 	if (sd) { \
     	_ctx = v4l2_get_subdevdata(sd); \
-		if (_ctx && _ctx->f) { \
+		if (is_v4l2_buf_ctx(_ctx) && _ctx->f) { \
 			_ret = _ctx->f(_ctx, ##args); \
 		} else { \
 			pr_err("%s: v4l2_subdev_ctx_call, \
@@ -50,9 +53,29 @@
 do { \
 	struct v4l2_buf_ctx *_ctx; \
 	if (sd) { \
-    	_ctx = v4l2_get_subdevdata(sd); \
-		if (_ctx && _ctx->f) \
+		_ctx = v4l2_get_subdevdata(sd); \
+		if (is_v4l2_buf_ctx(_ctx) && _ctx->f) \
 			_ctx->f(_ctx, ##args); \
+	} \
+} while (0)
+
+#define v4l2_subdev_ctx_mutex_lock(ctx) \
+do { \
+	struct subdev_node *_n; \
+	if (is_v4l2_buf_ctx(ctx)) { \
+		_n = container_of(ctx, struct subdev_node, bctx); \
+		if (_n) \
+			mutex_lock(&_n->node_mutex); \
+	} \
+} while (0)
+
+#define v4l2_subdev_ctx_mutex_unlock(ctx) \
+do { \
+	struct subdev_node *_n; \
+	if (is_v4l2_buf_ctx(ctx)) { \
+		_n = container_of(ctx, struct subdev_node, bctx); \
+		if (_n) \
+			mutex_unlock(&_n->node_mutex); \
 	} \
 } while (0)
 
@@ -106,6 +129,7 @@ struct subdev_node {
 	u32 num_pads;
 	struct media_pad *pads;
 	int (*async_bound)(struct subdev_node *sn);
+	struct mutex node_mutex; /* lock for node_mutex */
 };
 
 enum v4l_core_ctrl_cmd {

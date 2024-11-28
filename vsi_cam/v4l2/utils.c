@@ -9,9 +9,6 @@
 #include "sif.h"
 #include "sif_drv.h"
 
-#define BCTX_MAGIC         (0x12345678)
-#define is_v4l2_buf_ctx(x) ((x) && (x)->magic == BCTX_MAGIC)
-
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 		const struct v4l2_subdev_ops *ops,
 		const struct media_entity_operations *mops)
@@ -41,11 +38,13 @@ int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,
 
 	sd->fwnode = of_fwnode_handle(n->dev->of_node);
 	n->bctx.magic = BCTX_MAGIC;
+	mutex_init(&n->node_mutex);
 	return 0;
 }
 
 void subdev_deinit(struct subdev_node *n)
 {
+	mutex_destroy(&n->node_mutex);
 	media_entity_cleanup(&n->sd.entity);
 }
 
@@ -104,20 +103,23 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 			}
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			ctx = v4l2_get_subdevdata(rsd);
-
+			v4l2_subdev_ctx_mutex_lock(ctx);
 			if (enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream) {
 				pr_debug("%s call %s set_stream on\n", sd->name, rsd->name);
 				ctx->set_stream(ctx, pad->index, 1);
 			}
 			pr_debug("%s call %s s_stream, enable=%d\n", sd->name, rsd->name, enable);
 			rc = v4l2_subdev_call(rsd, video, s_stream, enable);
-			if (rc < 0)
+			if (rc < 0) {
+				v4l2_subdev_ctx_mutex_unlock(ctx);
 				return rc;
+			}
 
 			if (!enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream) {
 				pr_debug("%s call %s set_stream off\n", sd->name, rsd->name);
 				ctx->set_stream(ctx, pad->index, 0);
 			}
+			v4l2_subdev_ctx_mutex_unlock(ctx);
 		}
 		i++;
 	}
@@ -265,15 +267,17 @@ int get_front_info(struct v4l2_subdev *sd, u32 *devid, u32 *insid)
 			}
 			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			ctx = v4l2_get_subdevdata(rsd);
-
+			v4l2_subdev_ctx_mutex_lock(ctx);
 			if (is_v4l2_buf_ctx(ctx) && ctx->map_info) {
 				rc = ctx->map_info(ctx, devid, insid);
-				if (rc < 0)
+				if (rc < 0) {
+					v4l2_subdev_ctx_mutex_unlock(ctx);
 					return rc;
+				}
 				pr_debug("%s get %s info, devid:%d, insid:%d\n",
 					 sd->name, rsd->name, *devid, *insid);
-
 			}
+			v4l2_subdev_ctx_mutex_unlock(ctx);
 		}
 		i++;
 	}
