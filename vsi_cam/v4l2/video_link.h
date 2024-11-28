@@ -133,8 +133,8 @@ static struct entity_link links6[] = {
 /* 1v sif online isp gdc */
 /* + 1v sif offline isp gdc */
 static struct entity_link links7[] = {
-	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED }, // sif online isp
+	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED }, // sif offline isp
 	{ ISP_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-4", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
