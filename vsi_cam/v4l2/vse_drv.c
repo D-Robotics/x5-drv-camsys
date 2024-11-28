@@ -214,14 +214,10 @@ static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx,
 	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct cam_res_cap *res;
 
-	res = &inst->input_res_range;
+	res = &inst->input_res;
 	fsize->type = res->type;
-	fsize->stepwise.min_width = res->sw.min_width;
-	fsize->stepwise.max_width = res->sw.max_width;
-	fsize->stepwise.min_height = res->sw.min_height;
-	fsize->stepwise.max_height = res->sw.max_height;
-	fsize->stepwise.step_width = res->sw.step_width;
-	fsize->stepwise.step_height = res->sw.step_height;
+	fsize->discrete.width = res->dc.width;
+	fsize->discrete.height = res->dc.height;
 	return 0;
 }
 
@@ -333,18 +329,14 @@ static int vse_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 {
 	struct vse_v4l_instance *inst = buf_ctx_to_v4l_instance(vse, ctx);
 	struct cam_res_cap *res;
-	int channel = -1;
+
+	if(pad >= inst->node.num_pads || fsize->index != 0)
+		return -EINVAL;
 
 	if (is_sink_pad(inst, pad))
 		return vse_enum_ctx_framesize_out(ctx, fsize);
 
-	if (pad < inst->node.num_pads)
-		channel = pad - 1;
-
-	if (channel < 0 || fsize->index != 0)
-		return -EINVAL;
-
-	res = &inst->res_cap[channel];
+	res = &inst->res_cap[pad - 1];
 	fsize->type = res->type;
 	fsize->stepwise.min_width = res->sw.min_width;
 	fsize->stepwise.max_width = res->sw.max_width;
@@ -354,27 +346,6 @@ static int vse_enum_ctx_framesize(struct v4l2_buf_ctx *ctx, u32 pad,
 	fsize->stepwise.step_height = res->sw.step_height;
 
 	return 0;
-}
-
-static bool vse_check_res(struct cam_res_cap *res, u32 width, u32 height)
-{
-	int diff;
-
-	if (width > res->sw.max_width || width < res->sw.min_width)
-		return false;
-
-	if (height > res->sw.max_height || height < res->sw.min_height)
-		return false;
-
-	diff = width - res->sw.min_width;
-	if (diff % res->sw.step_width != 0)
-		return false;
-
-	diff = height - res->sw.min_height;
-	if (diff % res->sw.step_height != 0)
-		return false;
-
-	return true;
 }
 
 static int vse_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
@@ -393,7 +364,7 @@ static int vse_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 	if (channel < 0 || fival->index != 0)
 		return -EINVAL;
 
-	if (!vse_check_res(&inst->res_cap[channel], fival->width, fival->height))
+	if (!check_stepwise_res(&inst->res_cap[channel], fival->width, fival->height))
 		return -EINVAL;
 
 	rpad = get_remote_pad_sd(sink_pad(inst), &rsd);
@@ -417,7 +388,7 @@ static int vse_enum_ctx_frameinterval(struct v4l2_buf_ctx *ctx, u32 pad,
 
 static void vse_set_res_cap(struct vse_v4l_instance *inst)
 {
-	struct cam_res_cap *res, *input_res;
+	struct cam_res_cap *res;
 	int i;
 	u32 iwidth, iheight;
 
@@ -456,16 +427,6 @@ static void vse_set_res_cap(struct vse_v4l_instance *inst)
 			break;
 		}
 	}
-
-	//fixme
-	input_res = &inst->input_res_range;
-	input_res->type = V4L2_FRMSIZE_TYPE_STEPWISE;
-	input_res->sw.min_width = 1;
-	input_res->sw.min_height = 1;
-	input_res->sw.max_width = 5432;
-	input_res->sw.max_height = 3076;
-	input_res->sw.step_width = 1;
-	input_res->sw.step_height = 1;
 }
 
 static void vse_set_default_input(struct vse_v4l_instance *inst)
@@ -482,8 +443,8 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 	struct v4l2_subdev *rsd;
 	struct media_pad *rpad;
 	struct v4l2_frmsizeenum fsize;
+	bool subdev_support_default_size = false;
 	int i, j = 0, rc;
-	bool sensor_support_default_size = false;
 
 	inst->fmt_cap[0] = V4L2_PIX_FMT_NV12;
 	inst->fmt_cap_num = 1;
@@ -509,19 +470,33 @@ static void vse_set_cap(struct v4l2_buf_ctx *ctx)
 		rc = v4l2_subdev_ctx_call(rsd, enum_framesize, rpad->index, &fsize);
 		if (rc < 0)
 			break;
-		inst->input_res_cap[j].type = V4L2_FRMIVAL_TYPE_DISCRETE;
-		inst->input_res_cap[j].dc.width = fsize.discrete.width;
-		inst->input_res_cap[j].dc.height = fsize.discrete.height;
-		if (fsize.discrete.width == inst->input_res.dc.width &&
-			fsize.discrete.height == inst->input_res.dc.height)
-			sensor_support_default_size = true;
+		if (fsize.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+			inst->input_res_cap[j].type = V4L2_FRMIVAL_TYPE_DISCRETE;
+			inst->input_res_cap[j].dc.width = fsize.discrete.width;
+			inst->input_res_cap[j].dc.height = fsize.discrete.height;
+			if (fsize.discrete.width == inst->input_res.dc.width &&
+				fsize.discrete.height == inst->input_res.dc.height)
+				subdev_support_default_size = true;
+		} else if (fsize.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
+			inst->input_res_cap[j].type = V4L2_FRMIVAL_TYPE_STEPWISE;
+			inst->input_res_cap[j].sw.min_width = fsize.stepwise.min_width;
+			inst->input_res_cap[j].sw.max_width = fsize.stepwise.max_width;
+			inst->input_res_cap[j].sw.min_height = fsize.stepwise.min_height;
+			inst->input_res_cap[j].sw.max_height = fsize.stepwise.max_height;
+			inst->input_res_cap[j].sw.step_width = fsize.stepwise.step_width;
+			inst->input_res_cap[j].sw.step_height = fsize.stepwise.step_height;
+			if (check_stepwise_res(&inst->input_res_cap[j],
+				inst->input_res.dc.width, inst->input_res.dc.height))
+				subdev_support_default_size = true;
+		} else {
+			break;
+		}
 		j++;
 	}
-
 	inst->input_res_cap_num = j;
-	if (!sensor_support_default_size && j > 0)
-		memcpy(&inst->input_res, &inst->input_res_cap[inst->input_res_cap_num-1],
-			sizeof(inst->input_res_cap[0]));
+	if (!subdev_support_default_size && j > 0)
+		memcpy(&inst->input_res, &inst->input_res_cap[inst->input_res_cap_num - 1],
+		sizeof(struct cam_res_cap));
 
 set_cap:
 	vse_set_res_cap(inst);

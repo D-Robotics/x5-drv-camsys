@@ -278,13 +278,11 @@ static int csi_g_sensor_ext_ctrl(struct v4l2_subdev *sd, void *arg)
 
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
-
 			switch (ext_ctrl->id) {
 			case V4L2_CID_PIXEL_RATE:
 				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, ext_ctrl->id);
@@ -301,7 +299,7 @@ static int csi_g_sensor_ext_ctrl(struct v4l2_subdev *sd, void *arg)
 		}
 		i++;
 	}
-	return rc;
+	return -ENOLINK;
 }
 
 static int csi_get_sensor_bayer(struct v4l2_subdev *sd, uint32_t *bayerPattern)
@@ -338,12 +336,11 @@ static int csi_s_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			ctrl = (struct sen_ctrl *)arg;
 			if (v4l2_ctrl_sensor_need_off_auto(ctrl->ctrl_id, &auto_id, &auto_off)) {
 				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, auto_id);
@@ -371,7 +368,7 @@ static int csi_s_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 		}
 		i++;
 	}
-	return -EINVAL;
+	return -ENOLINK;
 }
 
 static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
@@ -392,12 +389,11 @@ static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			ctrl = (struct sen_ctrl *)arg;
 			switch (ctrl->ctrl_id) {
 			case V4L2_CID_FPS:
@@ -482,7 +478,7 @@ static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 		}
 		i++;
 	}
-	return rc;
+	return -ENOLINK;
 }
 
 static int csi_query_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
@@ -501,12 +497,11 @@ static int csi_query_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
 			qctrl = (struct v4l2_queryctrl *)arg;
 			vctrl = v4l2_ctrl_find(rsd->ctrl_handler, qctrl->id);
 			if (!vctrl) {
@@ -524,7 +519,7 @@ static int csi_query_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 		}
 		i++;
 	}
-	return 0;
+	return -ENOLINK;
 }
 
 static long csi_command(struct v4l2_subdev *sd, unsigned int cmd, void *arg)

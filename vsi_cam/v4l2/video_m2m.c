@@ -218,7 +218,7 @@ static int vid_enum_fmt_vid_cap(struct file *file, void *fh,
 {
 	struct vid_m2m_dev *dev = file2dev(file);
 	struct v4l2_subdev *sd;
-	struct media_pad *pad = get_remote_pad_sd(src_pad(dev), &sd);
+	struct media_pad *pad = get_remote_pad_sd(sink_pad(dev), &sd);
 
 	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
@@ -273,7 +273,7 @@ static int vid_g_fmt_vid_out(struct file *file, void *fh,
 
 	fmt = get_fmt(dev, V4L2_BUF_TYPE_VIDEO_OUTPUT);
 	if (!fmt->fmt.pix.pixelformat) {
-		rc = get_def_fmt(sink_pad(dev), fmt);
+		rc = get_def_fmt(src_pad(dev), fmt);
 		if (rc < 0)
 			return rc;
 	}
@@ -291,7 +291,7 @@ static int vid_g_fmt_vid_cap(struct file *file, void *fh,
 
 	fmt = get_fmt(dev, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	if (!fmt->fmt.pix.pixelformat) {
-		rc = get_def_fmt(src_pad(dev), fmt);
+		rc = get_def_fmt(sink_pad(dev), fmt);
 		if (rc < 0)
 			return rc;
 	}
@@ -335,7 +335,7 @@ static int vid_try_fmt_vid_cap(struct file *file, void *fh,
 	if (!IS_CAPTURE_V4L2_TYPE(f->type))
 		return -EINVAL;
 
-	return try_fmt_vid(src_pad(dev), f, true);
+	return try_fmt_vid(sink_pad(dev), f, true);
 }
 
 static int vid_try_fmt_vid_out(struct file *file, void *fh,
@@ -346,7 +346,7 @@ static int vid_try_fmt_vid_out(struct file *file, void *fh,
 	if (!IS_OUTPUT_V4L2_TYPE(f->type))
 		return -EINVAL;
 
-	return try_fmt_vid(sink_pad(dev), f, true);
+	return try_fmt_vid(src_pad(dev), f, true);
 }
 
 static int vid_s_fmt(struct vid_m2m_dev *dev, struct media_pad *pad,
@@ -564,10 +564,10 @@ static int vid_m2m_queue_setup(struct vb2_queue *vq, unsigned int *num_buffers,
 	int rc;
 
 	if (IS_OUTPUT_V4L2_TYPE(vq->type)) {
-		pad = sink_pad(dev);
+		pad = src_pad(dev);
 		fmt = &dev->fmt[V4L2_M2M_SRC];
 	} else if (IS_CAPTURE_V4L2_TYPE(vq->type)) {
-		pad = src_pad(dev);
+		pad = sink_pad(dev);
 		fmt = &dev->fmt[V4L2_M2M_DST];
 	} else {
 		return -EINVAL;

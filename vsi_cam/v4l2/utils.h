@@ -6,6 +6,7 @@
 #include <media/videobuf2-v4l2.h>
 
 #include "cam_ctx.h"
+#include "cam_uapi.h"
 
 #define CSI_DT_NAME     "snps,designware-csi"
 #define SIF_DT_NAME     "verisilicon,sif"
@@ -120,6 +121,28 @@ struct media_pad *get_remote_pad_sd(struct media_pad *pad,
 	if (sd)
 		*sd = media_entity_to_v4l2_subdev(pad->entity);
 	return pad;
+}
+
+static inline __maybe_unused
+bool check_stepwise_res(struct cam_res_cap *res, u32 width, u32 height)
+{
+	int diff;
+
+	if (width > res->sw.max_width || width < res->sw.min_width)
+		return false;
+
+	if (height > res->sw.max_height || height < res->sw.min_height)
+		return false;
+
+	diff = width - res->sw.min_width;
+	if (diff % res->sw.step_width != 0)
+		return false;
+
+	diff = height - res->sw.min_height;
+	if (diff % res->sw.step_height != 0)
+		return false;
+
+	return true;
 }
 
 struct cam_buf {

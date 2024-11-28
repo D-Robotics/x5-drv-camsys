@@ -348,9 +348,6 @@ static int vid_enum_framesizes(struct file *file, void *fh,
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
-	if (!IS_CAPTURE_V4L2_TYPE(fsize->type))
-		return -EINVAL;
-
 	rc = vid_check_pixelformat(sink_pad(vdev), fsize->pixel_format);
 	if (rc)
 		return -EINVAL;
@@ -367,9 +364,6 @@ static int vid_enum_frameintervals(struct file *file, void *fh,
 	struct v4l2_subdev *sd;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
-
-	if (!IS_CAPTURE_V4L2_TYPE(fival->type))
-		return -EINVAL;
 
 	rc = vid_check_pixelformat(sink_pad(vdev), fival->pixel_format);
 	if (rc)

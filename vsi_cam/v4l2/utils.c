@@ -54,6 +54,7 @@ int subdev_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 	struct media_entity *ent;
 	struct media_pad *pad;
 	struct v4l2_subdev *rsd;
+	bool linked = false;
 	u16 i = 0;
 	int rc;
 
@@ -64,12 +65,12 @@ int subdev_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			linked = true;
 			fmt->pad = pad->index;
 			pr_debug("%s call %s set_fmt\n", sd->name, rsd->name);
 			rc = v4l2_subdev_call(rsd, pad, set_fmt, state, fmt);
@@ -78,7 +79,7 @@ int subdev_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
 		}
 		i++;
 	}
-	return 0;
+	return linked ? 0 : -ENOLINK;
 }
 
 int subdev_set_stream(struct v4l2_subdev *sd, int enable)
@@ -87,6 +88,7 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 	struct media_pad *pad;
 	struct v4l2_subdev *rsd;
 	struct v4l2_buf_ctx *ctx;
+	bool linked = false;
 	u16 i = 0;
 	int rc;
 
@@ -96,12 +98,12 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 	ent = &sd->entity;
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			linked = true;
 			ctx = v4l2_get_subdevdata(rsd);
 			v4l2_subdev_ctx_mutex_lock(ctx);
 			if (enable && is_v4l2_buf_ctx(ctx) && ctx->set_stream) {
@@ -123,7 +125,7 @@ int subdev_set_stream(struct v4l2_subdev *sd, int enable)
 		}
 		i++;
 	}
-	return 0;
+	return linked ? 0 : -ENOLINK;
 }
 
 int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
@@ -131,6 +133,7 @@ int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
 	struct media_entity *ent;
 	struct v4l2_subdev *rsd;
 	struct media_pad *pad;
+	bool linked = false;
 	u16 i = 0;
 	int rc;
 
@@ -140,19 +143,19 @@ int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg)
 	ent = &sd->entity;
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			linked = true;
 			rc = v4l2_subdev_call(rsd, core, command, cmd, arg);
 			if (rc < 0)
 				return rc;
 		}
 		i++;
 	}
-	return 0;
+	return linked ? 0 : -ENOLINK;
 }
 
 int subdev_open(struct v4l2_subdev *sd)
@@ -160,6 +163,7 @@ int subdev_open(struct v4l2_subdev *sd)
 	struct media_entity *ent;
 	struct v4l2_subdev *rsd;
 	struct media_pad *pad;
+	bool linked = false;
 	u16 i = 0;
 	int rc;
 
@@ -169,12 +173,12 @@ int subdev_open(struct v4l2_subdev *sd)
 	ent = &sd->entity;
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			linked = true;
 			if (rsd->internal_ops && rsd->internal_ops->open) {
 				pr_debug("%s call %s open\n", sd->name, rsd->name);
 				rc = rsd->internal_ops->open(rsd, NULL/*subdev_fh*/);
@@ -184,7 +188,7 @@ int subdev_open(struct v4l2_subdev *sd)
 		}
 		i++;
 	}
-	return 0;
+	return linked ? 0 : -ENOLINK;
 }
 
 int subdev_close(struct v4l2_subdev *sd)
@@ -192,6 +196,7 @@ int subdev_close(struct v4l2_subdev *sd)
 	struct media_entity *ent;
 	struct v4l2_subdev *rsd;
 	struct media_pad *pad;
+	bool linked = false;
 	u16 i = 0;
 	int rc;
 
@@ -201,12 +206,12 @@ int subdev_close(struct v4l2_subdev *sd)
 	ent = &sd->entity;
 	while (i < ent->num_pads) {
 		if (ent->pads[i].flags & MEDIA_PAD_FL_SINK) {
-			pad = media_pad_remote_pad_first(&ent->pads[i]);
-			if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			pad = get_remote_pad_sd(&ent->pads[i], &rsd);
+			if (!rsd) {
 				i++;
 				continue;
 			}
-			rsd = media_entity_to_v4l2_subdev(pad->entity);
+			linked = true;
 			if (rsd->internal_ops && rsd->internal_ops->close) {
 				pr_debug("%s call %s close\n", sd->name, rsd->name);
 				rc = rsd->internal_ops->close(rsd, NULL/*subdev_fh*/);
@@ -216,7 +221,7 @@ int subdev_close(struct v4l2_subdev *sd)
 		}
 		i++;
 	}
-	return 0;
+	return linked ? 0 : -ENOLINK;
 }
 
 int get_front_info(struct media_pad *pad, u32 *devid, u32 *insid)
@@ -225,14 +230,10 @@ int get_front_info(struct media_pad *pad, u32 *devid, u32 *insid)
 	struct v4l2_buf_ctx *ctx;
 	int rc;
 
-	if (unlikely(!pad))
-		return -EINVAL;
-
-	pad = media_pad_remote_pad_first(pad);
-	if (unlikely(!pad || !is_media_entity_v4l2_subdev(pad->entity)))
+	pad = get_remote_pad_sd(pad, &sd);
+	if (!sd)
 		return -ENOLINK;
 
-	sd = media_entity_to_v4l2_subdev(pad->entity);
 	ctx = v4l2_get_subdevdata(sd);
 	if (ctx->map_info) {
 		rc = ctx->map_info(ctx, devid, insid);

@@ -24,7 +24,6 @@ struct vse_v4l_instance {
 	struct cam_res_cap res_cap[VSE_OUT_CHNL_MAX];
 	struct cam_res_cap input_res_cap[VSE_INPUT_RES_MAX];
 	struct cam_res_cap input_res;
-	struct cam_res_cap input_res_range;
 	u32 input_res_cap_num;
 	u32 fmt_cap[VSE_FMT_MAX]; /* pixelformat */
 	u32 fmt_cap_num;
