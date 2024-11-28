@@ -128,14 +128,10 @@ static struct entity_link links6[] = {
 };
 
 /* 1v sif online isp gdc */
-/* + 1v sif offline isp gdc */
 static struct entity_link links7[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED }, // sif online isp
-	{ SIF_DEV_NAME "0-0", 1, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED }, // sif offline isp
 	{ ISP_DEV_NAME "0-0", 0, GDC_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
-	{ ISP_DEV_NAME "0-4", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
 	{ GDC_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
-	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
 /* 2v sif yuv offline gdc */
@@ -240,8 +236,15 @@ static struct entity_link links15[] = {
 	{ ISP_DEV_NAME "0-5", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
 };
 
-/* sif0 & sif1 connect to isp0 device (2 to 1 case) */
+/* 1v sif offline isp gdc */
 static struct entity_link links16[] = {
+	{ SIF_DEV_NAME "0-0", 1, ISP_DEV_NAME "0-4", 0, MEDIA_LNK_FL_ENABLED }, // sif offline isp
+	{ ISP_DEV_NAME "0-4", 0, GDC_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ GDC_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* sif0 & sif1 connect to isp0 device (2 to 1 case) */
+static struct entity_link links17[] = {
 	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
 	{ SIF_DEV_NAME "0-1", 0, ISP_DEV_NAME "0-0", 1, MEDIA_LNK_FL_ENABLED },
 	{ ISP_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
@@ -265,6 +268,7 @@ static struct entity_link *links[] = {
 	links14,
 	links15,
 	links16,
+	links17,
 };
 
 static u32 links_size[] = {
@@ -285,6 +289,7 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links14),
 	ARRAY_SIZE(links15),
 	ARRAY_SIZE(links16),
+	ARRAY_SIZE(links17),
 };
 
 #endif /* _VIDEO_LINK_H_ */
