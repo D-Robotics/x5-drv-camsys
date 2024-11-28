@@ -789,6 +789,7 @@ static int vid_m2m_release(struct file *file)
 	struct v4l2_buf_ctx *bctx = video_drvdata(file);
 	struct vid_m2m_dev *dev = container_of(bctx, struct vid_m2m_dev, bctx);
 	struct vid_m2m_ctx *ctx = file2ctx(file);
+	struct vb2_queue *out_vq, *cap_vq;
 	struct v4l2_subdev *sd;
 
 	dev_dbg(ctx->dev->dev, "releasing instance %p\n", ctx);
@@ -800,6 +801,18 @@ static int vid_m2m_release(struct file *file)
 
 	if (sd->internal_ops && sd->internal_ops->close)
 		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+
+	/* video buffer is released here if it was not previously released */
+	cap_vq = v4l2_m2m_get_vq(dev->m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+	out_vq = v4l2_m2m_get_vq(dev->m2m_ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+	if (cap_vq && (file->private_data == cap_vq->owner)) {
+		vb2_queue_release(cap_vq);
+		cap_vq->owner = NULL;
+	}
+	if (out_vq && (file->private_data == out_vq->owner)) {
+		vb2_queue_release(out_vq);
+		out_vq->owner = NULL;
+	}
 
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
