@@ -4,7 +4,6 @@
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-dma-contig.h>
 
-#include "cam_uapi.h"
 #include "utils.h"
 #include "video_com.h"
 
@@ -689,7 +688,9 @@ static int vid_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 		if (!sd)
 			return -ENOLINK;
 
-		v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 1);
+		rc = v4l2_subdev_ctx_call(sd, set_stream, pad->index, 1);
+		if (rc < 0)
+			return rc;
 		rc = v4l2_subdev_call(sd, video, s_stream, 1);
 	}
 	return rc;
@@ -712,7 +713,9 @@ static void vid_m2m_stop_streaming(struct vb2_queue *q)
 		if (rc < 0)
 			return;
 
-		v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 0);
+		rc = v4l2_subdev_ctx_call(sd, set_stream, pad->index, 0);
+		if (rc < 0)
+			return;
 		notify_buf_ready(dev, 0);
 	}
 
@@ -804,7 +807,7 @@ static int vid_m2m_open(struct file *file)
 		return -ENOLINK;
 	}
 	if (sd->internal_ops && sd->internal_ops->open)
-		sd->internal_ops->open(sd, NULL/*subdev_fh*/);
+		rc = sd->internal_ops->open(sd, NULL/*subdev_fh*/);
 	return rc;
 }
 
@@ -815,6 +818,7 @@ static int vid_m2m_release(struct file *file)
 	struct vid_m2m_ctx *ctx = file2ctx(file);
 	struct vb2_queue *out_vq, *cap_vq;
 	struct v4l2_subdev *sd;
+	int rc = 0;
 
 	dev_dbg(ctx->dev->dev, "releasing instance %p\n", ctx);
 	(void)get_remote_pad_sd(sink_pad(dev), &sd);
@@ -823,8 +827,11 @@ static int vid_m2m_release(struct file *file)
 		return -ENOLINK;
 	}
 
-	if (sd->internal_ops && sd->internal_ops->close)
-		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+	if (sd->internal_ops && sd->internal_ops->close) {
+		rc = sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+		if (rc < 0)
+			return rc;
+	}
 
 	/* video buffer is released here if it was not previously released */
 	cap_vq = v4l2_m2m_get_vq(dev->m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);

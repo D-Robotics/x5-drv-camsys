@@ -4,7 +4,6 @@
 #include <linux/i2c.h>
 
 #include "cam_buf.h"
-#include "cam_uapi.h"
 #include "utils.h"
 #include "video.h"
 #include "video_com.h"
@@ -177,7 +176,11 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 	if (!sd)
 		return -ENOLINK;
 
-	v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 1);
+	rc = v4l2_subdev_ctx_call(sd, set_stream, pad->index, 1);
+	if (rc < 0) {
+		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
+		return rc;
+	}
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
 	if (rc < 0) {
@@ -205,7 +208,9 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 	if (rc < 0)
 		return;
 
-	v4l2_subdev_ctx_call_no_return(sd, set_stream, pad->index, 0);
+	rc = v4l2_subdev_ctx_call(sd, set_stream, pad->index, 0);
+	if (rc < 0)
+		return;
 
 	notify_buf_ready(vdev, 0);
 
@@ -609,10 +614,10 @@ static int vid_open(struct file *file)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
-	int rc;
+	int rc = 0;
 
 	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
-		return 0;
+		return rc;
 
 	rc = v4l2_fh_open(file);
 	if (rc < 0)
@@ -620,7 +625,7 @@ static int vid_open(struct file *file)
 
 	if (!vdev->opened) {
 		vdev->opened = true;
-		return 0;
+		return rc;
 	}
 
 	(void)get_remote_pad_sd(sink_pad(vdev), &sd);
@@ -630,22 +635,22 @@ static int vid_open(struct file *file)
 	}
 
 	if (sd->internal_ops && sd->internal_ops->open)
-		sd->internal_ops->open(sd, NULL/*subdev_fh*/);
-	return 0;
+		rc = sd->internal_ops->open(sd, NULL/*subdev_fh*/);
+	return rc;
 }
 
 static int vid_release(struct file *file)
 {
 	struct vid_video_device *vdev = file_to_video_device(file);
 	struct v4l2_subdev *sd;
-	int rc;
+	int rc = 0;
 
 	if (vdev->video.vfl_type != VFL_TYPE_VIDEO)
-		return 0;
+		return rc;
 
 	if (!vdev->closed) {
 		vdev->closed = true;
-		return 0;
+		return rc;
 	}
 
 	rc = vb2_fop_release(file);
@@ -659,14 +664,14 @@ static int vid_release(struct file *file)
 		return -ENOLINK;
 
 	if (sd->internal_ops && sd->internal_ops->close)
-		sd->internal_ops->close(sd, NULL/*subdev_fh*/);
+		rc = sd->internal_ops->close(sd, NULL/*subdev_fh*/);
 
 	INIT_LIST_HEAD(&vdev->queued_list);
 	memset(&vdev->fmt, 0, sizeof(vdev->fmt));
 	vdev->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	vdev->fmt.fmt.pix.field = V4L2_FIELD_NONE;
 	vdev->fmt.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
-	return 0;
+	return rc;
 }
 static const struct v4l2_file_operations video_ops = {
 	.owner = THIS_MODULE,

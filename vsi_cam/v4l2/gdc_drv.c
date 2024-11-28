@@ -9,7 +9,6 @@
 #include <media/v4l2-device.h>
 
 #include "cam_dev.h"
-#include "cam_uapi.h"
 #include "v4l2_usr_api.h"
 #include "gdc_drv.h"
 
@@ -382,13 +381,15 @@ static void gdc_set_cap(struct v4l2_buf_ctx *ctx)
 		sizeof(struct cam_res_cap));
 }
 
-static void fill_irq_ctx(struct gdc_v4l_instance *gdc, struct gdc_irq_ctx *ctx)
+static void fill_irq_ctx(struct gdc_v4l_instance *gdc, int enable, struct gdc_irq_ctx *ctx)
 {
 	memset(ctx, 0, sizeof(*ctx));
-	if (gdc->sink_ctx.pad)
-		ctx->sink_ctx = &gdc->sink_ctx;
-	if (gdc->src_ctx.pad)
-		ctx->src_ctx = &gdc->src_ctx;
+	if (enable) {
+		if (gdc->sink_ctx.pad)
+			ctx->sink_ctx = &gdc->sink_ctx;
+		if (gdc->src_ctx.pad)
+			ctx->src_ctx = &gdc->src_ctx;
+	}
 }
 
 static int gdc_queue_setup(struct cam_ctx *ctx,
@@ -420,43 +421,51 @@ static struct cam_buf_ops gdc_buf_ops = {
 	.queue_setup = gdc_queue_setup,
 };
 
+static int gdc_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
+{
+	struct gdc_v4l_instance *gdc = buf_ctx_to_v4l_instance(gdc, ctx);
+	struct gdc_irq_ctx irq_ctx;
+
+	if (pad >= gdc->node.num_pads)
+		return -EINVAL;
+
+	fill_irq_ctx(gdc, enable, &irq_ctx);
+	return gdc_set_ctx(gdc->dev, gdc->id, &irq_ctx);
+}
+
 static int gdc_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct gdc_v4l_instance *gdc = sd_to_v4l_instance(gdc, sd);
-	struct gdc_irq_ctx ctx;
-	int rc;
+	int rc = 0;
 
 	if (enable) {
-		if (!is_sink_online_en(&gdc->node.bctx))
-			cam_reqbufs(&gdc->sink_ctx, V4L2_SUBDEV_BUF_NUM, &gdc_buf_ops);
-
-		fill_irq_ctx(gdc, &ctx);
-		gdc_set_ctx(gdc->dev, gdc->id, &ctx);
-		rc = gdc_set_state(gdc->dev, gdc->id, enable);
-		if (rc < 0)
-			return rc;
-		if (!gdc->m2m_en) {
-			rc = subdev_set_stream(sd, enable);
+		if (!gdc->m2m_en && !is_sink_online_en(&gdc->node.bctx)) {
+			rc = cam_reqbufs(&gdc->sink_ctx, V4L2_SUBDEV_BUF_NUM, &gdc_buf_ops);
 			if (rc < 0)
 				return rc;
 		}
+
+		rc = gdc_set_state(gdc->dev, gdc->id, enable);
+		if (rc < 0)
+			return rc;
+		if (!gdc->m2m_en)
+			rc = subdev_set_stream(sd, enable);
 	} else {
 		if (!gdc->m2m_en) {
 			rc = subdev_set_stream(sd, enable);
 			if (rc < 0)
 				return rc;
 		}
-		memset(&ctx, 0, sizeof(ctx));
-		gdc_set_ctx(gdc->dev, gdc->id, &ctx);
 
-		if (!is_sink_online_en(&gdc->node.bctx))
-			cam_reqbufs(&gdc->sink_ctx, 0, NULL);
+		if (!gdc->m2m_en && !is_sink_online_en(&gdc->node.bctx)) {
+			rc = cam_reqbufs(&gdc->sink_ctx, 0, NULL);
+			if (rc < 0)
+				return rc;
+		}
 
 		rc = gdc_set_state(gdc->dev, gdc->id, enable);
-		if (rc < 0)
-			return rc;
 	}
-	return 0;
+	return rc;
 }
 
 static int gdc_g_frame_interval(struct v4l2_subdev *sd,
@@ -811,6 +820,7 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_format = gdc_enum_ctx_format;
 		n->bctx.enum_framesize = gdc_enum_ctx_framesize;
 		n->bctx.enum_frameinterval = gdc_enum_ctx_frameinterval;
+		n->bctx.set_stream = gdc_set_stream;
 		n->bctx.set_cap = gdc_set_cap;
 
 		n->dev = dev;

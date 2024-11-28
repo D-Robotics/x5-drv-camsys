@@ -8,7 +8,6 @@
 #include <media/v4l2-device.h>
 
 #include "cam_dev.h"
-#include "cam_uapi.h"
 
 #include "sif_drv.h"
 
@@ -322,15 +321,16 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 	struct sif_irq_ctx irq_ctx;
 	int rc = 0;
 	u32 set_dma = 0, set_isp = 0;
+	unsigned int refcnt;
 
 	if (pad >= sif->node.num_pads)
 		return -EINVAL;
 
-	memset(&irq_ctx, 0, sizeof(irq_ctx));
 	rc = sif_get_ctx(sif->dev, sif->id, &irq_ctx);
 	if (rc)
 		return -EINVAL;
 
+	refcnt = refcount_read(&sif->start_refcnt);
 	if (enable) {
 		if (!sif->buf_ctx.pad || sif->buf_ctx.pad->index != pad) {
 			irq_ctx.src_ctx = &sif->src_ctx;
@@ -341,29 +341,30 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 		}
 
 		rc = sif_set_ctx(sif->dev, sif->id, &irq_ctx, 1);
-		if (rc)
-			return -EINVAL;
+		if (rc < 0)
+			return rc;
 
-		if (refcount_read(&sif->start_refcnt) > REFCNT_INIT_VAL) {
+		if (refcnt > REFCNT_INIT_VAL) {
 			if (set_dma)
-				sif_set_dma(sif->dev, sif->id, 1);
+				rc = sif_set_dma(sif->dev, sif->id, 1);
 			if (set_isp)
 				sif_set_isp_ctrl(sif->dev, sif->id, 1, true);
 		}
 	} else {
 		if (!sif->buf_ctx.pad || sif->buf_ctx.pad->index != pad) {
-			if (refcount_read(&sif->start_refcnt) > REFCNT_INIT_VAL && irq_ctx.src_ctx)
+			if (refcnt > REFCNT_INIT_VAL && irq_ctx.src_ctx)
 				sif_set_isp_ctrl(sif->dev, sif->id, 0, true);
 			irq_ctx.src_ctx = NULL;
 		} else {
-			if (refcount_read(&sif->start_refcnt) > REFCNT_INIT_VAL && irq_ctx.buf_ctx)
-				sif_set_dma(sif->dev, sif->id, 0);
+			if (refcnt > REFCNT_INIT_VAL && irq_ctx.buf_ctx) {
+				rc = sif_set_dma(sif->dev, sif->id, 0);
+				if (rc < 0)
+					return rc;
+			}
 			irq_ctx.buf_ctx = NULL;
 		}
 
 		rc = sif_set_ctx(sif->dev, sif->id, &irq_ctx, 0);
-		if (rc)
-			return -EINVAL;
 	}
 	return rc;
 }
@@ -378,7 +379,9 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 
 	if (!enable) {
 		sif_set_isp_ctrl(inst->dev, inst->id, 0, true);
-		sif_set_dma(inst->dev, inst->id, 0);
+		rc = sif_set_dma(inst->dev, inst->id, 0);
+		if (rc < 0)
+			return rc;
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
 			return rc;
@@ -391,7 +394,9 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 		if (rc < 0)
 			return rc;
-		sif_set_dma(inst->dev, inst->id, 1);
+		rc = sif_set_dma(inst->dev, inst->id, 1);
+		if (rc < 0)
+			return rc;
 		sif_set_isp_ctrl(inst->dev, inst->id, 1, true);
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)

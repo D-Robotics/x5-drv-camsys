@@ -8,7 +8,6 @@
 #include <media/v4l2-device.h>
 
 #include "cam_dev.h"
-#include "cam_uapi.h"
 #include "v4l2_usr_api.h"
 #include "video_fmt.h"
 #include "isp_drv.h"
@@ -145,8 +144,7 @@ static int isp_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
 	if (rc < 0)
 		return rc;
 
-	isp_add_job(isp->dev, isp->id);
-	return 0;
+	return isp_add_job(isp->dev, isp->id);
 }
 
 static int isp_drop(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
@@ -358,6 +356,8 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 
 	isp = &inst->dev->insts[inst->id];
 	rc = check_work_mode_param(&inst->dev->mode);
+	if (rc < 0)
+		goto _exit;
 	if (inst->dev->mode == ISP_MODE_INVALID) {
 		pr_debug("set isp default input mode as MCM mode\n");
 		inst->dev->mode = ISP_MCM_MODE;
@@ -365,7 +365,9 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	if (inst->dev->mode != ISP_STRM_MODE) {
 		if (is_sink_online_en(&inst->node.bctx)) {
 			isp->online_mcm = true;
-			isp_set_stream_idx(inst->dev, inst->id, inst->id);
+			rc = isp_set_stream_idx(inst->dev, inst->id, inst->id);
+			if (rc < 0)
+				goto _exit;
 		} else {
 			isp->online_mcm = false;
 		}
@@ -375,7 +377,11 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	pr_debug("isp inst%d online_mcm=%d, mode=%d, stream_idx=%d\n",
 		 inst->id, isp->online_mcm, inst->dev->mode, inst->id);
 
-	isp_set_state(inst->dev, inst->id, CAM_STATE_INITED, V4L_GROUP);
+	rc = isp_set_state(inst->dev, inst->id, CAM_STATE_INITED, V4L_GROUP);
+	if (rc < 0) {
+		pr_err("%s isp_set_state failed\n", __func__);
+		goto _exit;
+	}
 
 	rc = isp_set_iformat(inst->dev, inst->id, &f.ifmt, &f.icrop, inst->hdr_en);
 	if (rc < 0) {
@@ -674,7 +680,7 @@ static int get_name_for_ext_ctrl(uint32_t id, char *name)
 	default:
 		return -1;
 	}
-	memcpy(name, source, strlen(source)+1);
+	memcpy(name, source, strlen(source) + 1);
 	return 0;
 }
 
@@ -758,42 +764,49 @@ static int isp_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
 	struct isp_irq_ctx irq_ctx;
 	int index = get_src_pad_index(isp, pad);
+	int rc;
 
 	if (pad >= isp->node.num_pads || index < 0)
 		return -EINVAL;
 
-	isp_get_ctx(isp->dev, isp->id, &irq_ctx);
+	rc = isp_get_ctx(isp->dev, isp->id, &irq_ctx);
+	if (rc < 0)
+		return rc;
 	fill_irq_ctx(isp, index, enable, &irq_ctx);
-	isp_set_ctx(isp->dev, isp->id, &irq_ctx);
-	return 0;
+	return isp_set_ctx(isp->dev, isp->id, &irq_ctx);
 }
 
 static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct isp_v4l_instance *isp = sd_to_v4l_instance(isp, sd);
 	u32 devid, insid;
-	int rc;
+	int rc = 0;
 
 	if (cam_refcount_check(&isp->start_count, enable))
-		return 0;
+		return rc;
 
 	if (enable) {
 		if (is_sink_online_en(&isp->node.bctx)) {
-			get_front_info(sink_pad(isp), &devid, &insid);
-			isp_set_input_select(isp->dev, isp->id, devid, insid);
+			rc = get_front_info(sink_pad(isp), &devid, &insid);
+			if (rc < 0)
+				return rc;
+			rc = isp_set_input_select(isp->dev, isp->id, devid, insid);
 		} else {
-			cam_reqbufs(sink_ctx(isp), V4L2_SUBDEV_BUF_NUM, &isp_buf_ops);
+			rc = cam_reqbufs(sink_ctx(isp), V4L2_SUBDEV_BUF_NUM, &isp_buf_ops);
 		}
-		if (isp->metadata_en)
-			cam_reqbufs(sub_sink_ctx(isp), V4L2_SUBDEV_BUF_NUM,
-				    &isp_sub_chnl_buf_ops);
+		if (rc < 0)
+			return rc;
+		if (isp->metadata_en) {
+			rc = cam_reqbufs(sub_sink_ctx(isp), V4L2_SUBDEV_BUF_NUM,
+					&isp_sub_chnl_buf_ops);
+			if (rc < 0)
+				return rc;
+		}
 		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STARTED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
 
 		rc = subdev_set_stream(sd, enable);
-		if (rc < 0)
-			return rc;
 	} else {
 		rc = subdev_set_stream(sd, enable);
 		if (rc < 0)
@@ -803,14 +816,16 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		if (rc < 0)
 			return rc;
 		if (is_sink_online_en(&isp->node.bctx))
-			isp_set_stream_idx(isp->dev, isp->id, -1);
+			rc = isp_set_stream_idx(isp->dev, isp->id, -1);
 		else
-			cam_reqbufs(sink_ctx(isp), 0, NULL);
+			rc = cam_reqbufs(sink_ctx(isp), 0, NULL);
+		if (rc < 0)
+			return rc;
 		if (isp->metadata_en)
-			cam_reqbufs(sub_sink_ctx(isp), 0, NULL);
+			rc = cam_reqbufs(sub_sink_ctx(isp), 0, NULL);
 		isp->fmt_changed = false;
 	}
-	return 0;
+	return rc;
 }
 
 static int isp_g_frame_interval(struct v4l2_subdev *sd,
@@ -863,7 +878,7 @@ static const struct v4l2_subdev_ops isp_subdev_ops = {
 static int isp_v4l_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct isp_v4l_instance *inst = sd_to_v4l_instance(isp, sd);
-	int rc;
+	int rc = 0;
 
 	mutex_lock(&inst->open_lock);
 	if (cam_refcount_check(&inst->open_count, true))

@@ -283,9 +283,19 @@ static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 		inst->fmt_changed = true;
 	}
 
-	cascade_en = is_sink_online_en(&inst->node.bctx) ? true : false;
-	get_front_info(sink_pad(inst), &devid, &insid);
-	vse_set_cascade(inst->dev, inst->id, insid, cascade_en);
+	if (!inst->m2m_en) {
+		rc = get_front_info(sink_pad(inst), &devid, &insid);
+		if (rc < 0) {
+			pr_err("%s get_front_info failed\n", __func__);
+			goto _exit;
+		}
+		cascade_en = is_sink_online_en(&inst->node.bctx) ? true : false;
+		rc = vse_set_cascade(inst->dev, inst->id, insid, cascade_en);
+		if (rc < 0) {
+			pr_err("%s vse_set_cascade failed\n", __func__);
+			goto _exit;
+		}
+	}
 
 	f.width = ALIGN_DOWN(format->fmt.pix.width / hfactor, 16);
 	f.height = format->fmt.pix.height / vfactor;
@@ -584,8 +594,13 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 			return rc;
 		}
 
-		if (!is_sink_online_en(&vse->node.bctx))
-			cam_reqbufs(&vse->sink_ctx, V4L2_SUBDEV_BUF_NUM, &vse_buf_ops);
+		if (!vse->m2m_en && !is_sink_online_en(&vse->node.bctx)) {
+			rc = cam_reqbufs(&vse->sink_ctx, V4L2_SUBDEV_BUF_NUM, &vse_buf_ops);
+			if (rc < 0) {
+				pr_err("vse%d failed to call cam_reqbufs (rc=%d)!\n", vse->id, rc);
+				return rc;
+			}
+		}
 
 		rc = vse_set_state(vse->dev, vse->id, enable);
 		if (rc < 0)
@@ -603,8 +618,12 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 				return rc;
 		}
 
-		if (!is_sink_online_en(&vse->node.bctx))
-			cam_reqbufs(&vse->sink_ctx, 0, NULL);
+		if (!vse->m2m_en && !is_sink_online_en(&vse->node.bctx)) {
+			rc = cam_reqbufs(&vse->sink_ctx, 0, NULL);
+			if (rc < 0) {
+				return rc;
+			}
+		}
 
 		rc = vse_set_state(vse->dev, vse->id, enable);
 		if (rc < 0)
@@ -658,7 +677,6 @@ static void vse_get_cur_attr(struct vse_instance *ins, int chnl, vse_ochn_attr_e
 	vse_attr->target_w = ins->ofmt[chnl].width;
 	vse_attr->target_h = ins->ofmt[chnl].height;
 }
-
 
 static int vse_s_attr(struct vse_v4l_instance *inst, void *arg)
 {

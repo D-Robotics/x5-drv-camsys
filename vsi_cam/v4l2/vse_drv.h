@@ -2,8 +2,6 @@
 #ifndef _VSE_DRV_H_
 #define _VSE_DRV_H_
 
-#include <linux/refcount.h>
-
 #include "utils.h"
 #include "vse.h"
 

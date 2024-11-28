@@ -2,8 +2,6 @@
 #ifndef _SIF_DRV_H_
 #define _SIF_DRV_H_
 
-#include <linux/refcount.h>
-
 #include "sif.h"
 #include "utils.h"
 

@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <media/videobuf2-dma-contig.h>
 
-#include "cam_uapi.h"
-
 #include "utils.h"
-#include "isp.h"
 #include "isp_drv.h"
-#include "sif.h"
 #include "sif_drv.h"
 
 int subdev_init(struct subdev_node *n, const char *name, u32 hwid, int inst,

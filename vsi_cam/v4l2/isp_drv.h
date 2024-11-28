@@ -2,8 +2,6 @@
 #ifndef _ISP_DRV_H_
 #define _ISP_DRV_H_
 
-#include <linux/refcount.h>
-
 #include "isp.h"
 #include "utils.h"
 
