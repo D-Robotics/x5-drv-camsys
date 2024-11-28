@@ -70,6 +70,11 @@ struct isi_sensor_awb_param_s {
         struct isi_sensor_awb_info_s isi_sensor_awb_info;
 };
 
+struct isi_sensor_pos_param_s {
+        uint32_t chn;
+        struct isi_sensor_pos_s isi_sensor_pos;
+};
+
 #define CALIB_NUM_LENGTH    100
 #define CALIBRATION_MAX_ID  4
 
@@ -125,6 +130,9 @@ typedef struct camera_calib_s {
 // 获取 cali name
 #define ISI_SENSOR_IOCTL_GET_LNAME _IOW(ISI_SENSOR_IOC_MAGIC, 13, camera_calib_t)
 
+// AF
+#define ISI_SENSOR_IOCTL_GET_POS _IOWR(ISI_SENSOR_IOC_MAGIC, 15, struct isi_sensor_pos_param_s)
+#define ISI_SENSOR_IOCTL_SET_POS _IOW(ISI_SENSOR_IOC_MAGIC, 16, struct isi_sensor_pos_param_s)
 
 
 /**

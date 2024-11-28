@@ -61,6 +61,7 @@ typedef struct sensor_priv {
 	uint32_t temper;
 	uint8_t  mode;
 	uint32_t id;
+	uint32_t pos;
 } sensor_priv_t;
 
 /**

@@ -57,6 +57,7 @@ void set_sensor_aexp_info(uint32_t chn, void *ptr)
 		ae_data->grgain = data->grgain;
 		ae_data->gbgain = data->gbgain;
 		ae_data->color_temper = data->temper;
+		ae_data->af_pos = data->pos;
 		ae_data->mode = data->mode;
 		ae_data->port = chn;
 		if (ae_data->id != 0U) {

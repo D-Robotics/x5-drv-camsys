@@ -23,8 +23,73 @@ struct isi_sensor_again_param_s g_sensor_again_param[FIRMWARE_CONTEXT_NUMBER];
 struct isi_sensor_dgain_param_s g_sensor_dgain_param[FIRMWARE_CONTEXT_NUMBER];
 struct isi_sensor_line_param_s g_sensor_line_param[FIRMWARE_CONTEXT_NUMBER];
 struct isi_sensor_awb_param_s g_sensor_awb_param[FIRMWARE_CONTEXT_NUMBER];
+struct isi_sensor_pos_param_s g_sensor_pos_param[FIRMWARE_CONTEXT_NUMBER];
 
 static bool g_base_info_updated = false;
+
+static int16_t isi_get_sensor_pos_param(uint32_t chn)
+{
+        int32_t ret = 0;
+        pr_debug("%s \n", __func__);
+
+        if (g_isi_sen == NULL)
+                return -EINVAL;
+
+        if (chn >= CAMERA_TOTAL_NUMBER || chn < 0) {
+                pr_err("%s chn %d is error \n", __func__, chn);
+                return -1;
+        }
+
+        if (g_isi_sen->isi_sensor_cops != NULL) {
+                ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_get_pos(chn, &g_sensor_pos_param[chn].isi_sensor_pos);
+                if (ret < 0) {
+                        pr_err("isi callback sensor_get_pos error \n");
+                        return -1;
+                }
+
+                g_sensor_pos_param[chn].chn = chn;
+
+        } else {
+                pr_err("isi_sensor_cops is NULL \n");
+                return -EINVAL;
+        }
+
+        return ret;
+}
+
+static void isi_set_sensor_pos_param(struct isi_sensor_pos_param_s *sensor_pos_param)
+{
+        int32_t ret = 0;
+        pr_debug("%s \n", __func__);
+
+        if (g_isi_sen == NULL)
+                return;
+
+        if (sensor_pos_param->chn >= CAMERA_TOTAL_NUMBER || sensor_pos_param->chn < 0) {
+                pr_err("%s chn %d is error \n", __func__, sensor_pos_param->chn);
+                return;
+        }
+
+        if (g_isi_sen->isi_sensor_cops != NULL) {
+                ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_set_pos(sensor_pos_param->chn, sensor_pos_param->isi_sensor_pos.pos);
+                if (ret < 0) {
+                        pr_err("isi callback sensor_set_pos error \n");
+                        return;
+                }
+        } else {
+                pr_err("isi_sensor_cops is NULL \n");
+        }
+
+	//X5 TODO FIXME
+	if (g_isi_sen->isi_sensor_cops != NULL) {
+		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_pos_param->chn, 1);
+		if (ret < 0) {
+			pr_err("isi callback sensor_update error \n");
+		}
+	} else {
+		pr_err("isi_sensor_cops is NULL \n");
+	}
+}
 
 static int16_t isi_get_sensor_again_param(uint32_t chn)
 {
@@ -406,6 +471,18 @@ static int32_t empty_sensor_set_cali_name(uint32_t chn, char *cali_name)
         return 0;
 }
 
+static int32_t empty_sensor_get_pos(uint32_t chn, struct isi_sensor_pos_s *user_pos)
+{
+	pr_debug("%s\n", __func__);
+	return 0;
+}
+
+static int32_t empty_sensor_set_pos(uint32_t chn, uint32_t pos)
+{
+	pr_debug("%s\n", __func__);
+	return 0;
+}
+
 struct sensor_isi_ops_s g_isi_sensor_cops = {
         .sensor_alloc_analog_gain = empty_common_alloc_analog_gain,
         .sensor_alloc_digital_gain = empty_common_alloc_digital_gain,
@@ -421,6 +498,8 @@ struct sensor_isi_ops_s g_isi_sensor_cops = {
         .sensor_awb_para = empty_common_awb_param,
         .sensor_get_awb_para = empty_sensor_get_awb_para,
 	.sensor_set_cali_name = empty_sensor_set_cali_name,
+	.sensor_get_pos = empty_sensor_get_pos,
+	.sensor_set_pos = empty_sensor_set_pos,
         .end_magic = SENSOR_OPS_END_MAGIC,
 };
 
@@ -597,6 +676,7 @@ static long isi_sensor_fop_ioctl(struct file *pfile, uint32_t cmd, unsigned long
         struct isi_sensor_dgain_param_s dgain_param = {0};
         struct isi_sensor_line_param_s line_param = {0};
         struct isi_sensor_awb_param_s awb_param = {0};
+	struct isi_sensor_pos_param_s pos_param = {0};
 
 	camera_calib_t calib_param = {0};
 
@@ -783,6 +863,31 @@ static long isi_sensor_fop_ioctl(struct file *pfile, uint32_t cmd, unsigned long
 				isi_set_sensor_cali_name(calib_param.port, calib_param.name);
 			}
 			break;
+		case ISI_SENSOR_IOCTL_GET_POS:
+                        if (copy_from_user((void *)&pos_param, (void __user *)arg, sizeof(struct isi_sensor_pos_param_s))) {
+                                pr_err("%s %d arg copy error \n",__func__, cmd);
+                                ret = -EIO;
+                        } else {
+                                ret = isi_get_sensor_pos_param(pos_param.chn);
+                                if (ret < 0) {
+                                    pr_err("%s %d arg handle error \n", __func__, cmd);
+                                    return -EIO;
+                                }
+                                if (copy_to_user((void __user *)arg, (void *)&g_sensor_pos_param[pos_param.chn],
+                                        sizeof(struct isi_sensor_pos_param_s))) {
+                                        pr_err("%s %d data send error \n", __func__, cmd);
+                                        ret = -EIO;
+                                }
+                        }
+                        break;
+                case ISI_SENSOR_IOCTL_SET_POS:
+                       if (copy_from_user((void *)&pos_param, (void __user *)arg, sizeof(struct isi_sensor_pos_param_s))) {
+                                pr_err("%s %d arg copy error \n",__func__, cmd);
+                                ret = -EIO;
+                        } else {
+                                isi_set_sensor_pos_param(&pos_param);
+                        }
+                        break;
                 default:
                     pr_err("ISI sensor ioctl cmd 0x%x not supported\n", cmd);
                     break;

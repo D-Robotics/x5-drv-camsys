@@ -764,6 +764,36 @@ static int32_t common_set_cali_name(uint32_t chn, char *cali_name)
         return 0;
 }
 
+static int32_t common_get_pos(uint32_t chn, struct isi_sensor_pos_s *user_pos)
+{
+	if (chn >= FIRMWARE_CONTEXT_NUMBER) {
+                pr_err("%s chn %d beyond 8\n", __func__, chn);
+                return -1;
+        }
+
+	if (user_pos == NULL)
+		return -1;
+
+        user_pos->pos = sensor_ctl[chn].pos;
+
+        return 0;
+}
+
+static int32_t common_set_pos(uint32_t chn, uint32_t pos)
+{
+	int32_t ret = 0;
+	struct os_dev* dev = sensor_osdev_get(chn);
+
+	if (chn < FIRMWARE_CONTEXT_NUMBER) {
+		sensor_ctl[chn].pos = pos;
+	} else {
+		sen_err(dev, "common subdev pointer is NULL");
+		ret = -1;
+	}
+
+	return ret;
+}
+
 struct sensor_isi_ops_s sensor_isi_ops = {
         .sensor_alloc_analog_gain = isi_alloc_analog_gain,
         .sensor_alloc_digital_gain = isi_alloc_digital_gain,
@@ -779,6 +809,8 @@ struct sensor_isi_ops_s sensor_isi_ops = {
         .sensor_awb_para = common_awb_param,
         .sensor_get_awb_para = common_get_awb_gain,
 	.sensor_set_cali_name = common_set_cali_name,
+	.sensor_get_pos = common_get_pos,
+	.sensor_set_pos = common_set_pos,
         .end_magic = SENSOR_OPS_END_MAGIC,
 };
 
