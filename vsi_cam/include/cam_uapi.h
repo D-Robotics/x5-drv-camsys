@@ -10,6 +10,8 @@ enum cam_state {
 	CAM_STATE_STOPPED,
 	CAM_STATE_STARTED,
 	CAM_STATE_CLOSED,
+	CAM_STATE_CLK_ON,
+	CAM_STATE_CLK_OFF,
 };
 
 enum cam_error {

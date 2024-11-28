@@ -1378,6 +1378,17 @@ static struct isc_notifier_ops isp_notifier_ops = {
 	.got = isp_msg_handler,
 };
 
+static inline int isp_post_clk_on_off(struct isp_device *isp, bool on)
+{
+	struct isp_msg msg;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.id = CAM_MSG_STATE_CHANGED;
+	msg.inst = 0;
+	msg.state = on ? CAM_STATE_CLK_ON : CAM_STATE_CLK_OFF;
+	return isp_post(isp, &msg, true);
+}
+
 int isp_open(struct isp_device *isp, u32 inst)
 {
 	bool en_clk = false;
@@ -1401,6 +1412,7 @@ int isp_open(struct isp_device *isp, u32 inst)
 		rc = isp_runtime_resume(isp->dev);
 		if (rc < 0)
 			goto _exit;
+		isp_post_clk_on_off(isp, true);
 	}
 
 _exit:
@@ -1469,6 +1481,7 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 	reset_job_queue(isp->jq);
 	isp_reset_schedule(isp, INVALID_INST, true);
 
+	isp_post_clk_on_off(isp, false);
 	isp_reset(isp);
 	rc = isp_runtime_suspend(isp->dev);
 	if (rc < 0)

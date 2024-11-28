@@ -605,6 +605,17 @@ static struct isc_notifier_ops vse_notifier_ops = {
 	.got = vse_msg_handler,
 };
 
+static inline int vse_post_clk_on_off(struct vse_device *vse, bool on)
+{
+	struct vse_msg msg;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.id = CAM_MSG_STATE_CHANGED;
+	msg.inst = 0;
+	msg.state = on ? CAM_STATE_CLK_ON : CAM_STATE_CLK_OFF;
+	return vse_post(vse, &msg, true);
+}
+
 int vse_open(struct vse_device *vse, u32 inst)
 {
 	bool en_clk = false;
@@ -618,8 +629,11 @@ int vse_open(struct vse_device *vse, u32 inst)
 		en_clk = true;
 	refcount_inc(&vse->open_cnt);
 
-	if (en_clk)
+	if (en_clk) {
 		rc = vse_runtime_resume(vse->dev);
+		if (!rc)
+			vse_post_clk_on_off(vse, true);
+	}
 
 	mutex_unlock(&vse->open_lock);
 	return rc;
@@ -677,6 +691,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	value = vse_read(vse, VSE_CTRL);
 	vse_write(vse, VSE_CTRL, value | BIT(15));
 
+	vse_post_clk_on_off(vse, false);
 	rc = dw_reset(vse->crc_dev, DW_MOD_VSE);
 	if (rc == -EBUSY)
 		dev_warn(vse->dev, "DW module is busy now and cannot be reset!\n");
