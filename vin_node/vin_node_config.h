@@ -491,7 +491,16 @@ typedef struct dynamic_fps_s{
 	uint32_t hw_extract_n;
 }dynamic_fps_t;
 
+enum lpwm_dynamic_enable {
+        LPWM_CHANGE_ATTR,
+        LPWM_ONLY_ENABLE,
+        LPWM_ONLY_DISABLE,
+        LPWM_DYNAMIC_MAX,
+};
+
 typedef struct  lpwm_dynamic_fps_s{
+	uint32_t lpwm_chn;
+	uint32_t enable;
 	uint32_t period;               //帧率改变的时候需要改这几个值
 	uint32_t offset;
 	uint32_t duty_time;

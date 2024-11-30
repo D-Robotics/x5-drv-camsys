@@ -561,13 +561,13 @@ int32_t lpwm_change_attr(struct vio_video_ctx *vctx, void *attr)
 	struct hobot_lpwm_ins *lpwm = NULL;
 	lpwm_dynamic_fps_t *dynamic_attr = NULL;
 
-	if (!vctx || !attr || !vctx->file) {
+	if (!vctx || !attr) {
 		lpwm_err(lpwm, "Config param null!\n");
 		return -EINVAL;
 	}
 
 	dynamic_attr = &((vin_attr_ex_t *)attr)->dynamic_fps_attr;
-	lpwm_channel_id = *(uint32_t *)vctx->file;
+	lpwm_channel_id = dynamic_attr->lpwm_chn;
 	i_id = INS_ID(lpwm_channel_id);
 	c_id = COR_ID(lpwm_channel_id);
 
@@ -576,7 +576,29 @@ int32_t lpwm_change_attr(struct vio_video_ctx *vctx, void *attr)
 		lpwm_err(NULL, "Instance %d has not been probed!\n", i_id);
 		return -EINVAL;
 	}
+
+	if (vctx->id == VNODE_ID_CAP) {
+		return ret;
+	}
+
 	lpwm_check_utype(lpwm, CAMSYS);
+
+	if (dynamic_attr->enable == LPWM_ONLY_ENABLE) {
+		lpwm_single_channel_stream(lpwm, c_id, LPWM_STREAM_ON);
+		return ret;
+	} else if (dynamic_attr->enable == LPWM_ONLY_DISABLE) {
+		lpwm_single_channel_stream(lpwm, c_id, LPWM_STREAM_OFF);
+		return ret;
+	}
+
+	if (dynamic_attr->duty_time == 0U)
+		dynamic_attr->duty_time = lpwm->lpwm_attr[c_id].duty_time;
+
+	if (dynamic_attr->offset == 0U)
+		dynamic_attr->offset = lpwm->lpwm_attr[c_id].offset;
+
+	if (dynamic_attr->period == 0U)
+		dynamic_attr->period = lpwm->lpwm_attr[c_id].period;
 
 	sy_on = lpwm->lpwm_attr[c_id].threshold > 0 ? 1 : 0;
 	ret = lpwm_dynamic_param_check(lpwm, c_id, dynamic_attr, sy_on);
@@ -584,20 +606,31 @@ int32_t lpwm_change_attr(struct vio_video_ctx *vctx, void *attr)
 		return ret;
 	}
 
-	lpwm_trigger_source_config(lpwm->base, dynamic_attr->trigger_source);
-	lpwm_trigger_mode_config(lpwm->base, dynamic_attr->trigger_mode);
-	lpwm_offset_config_single(lpwm->base, c_id, dynamic_attr->offset);
-	lpwm_cfg1_config_single(lpwm->base, c_id, dynamic_attr->period, dynamic_attr->duty_time);
+	if (osal_atomic_read(&lpwm->enable_cnt[c_id]) > 0) {
+		lpwm_offset_config_single(lpwm->base, c_id, dynamic_attr->offset);
+		lpwm_cfg1_config_single(lpwm->base, c_id, dynamic_attr->period, dynamic_attr->duty_time);
 
-	osal_mutex_lock(&lpwm->con_lock);
-	for (i = 0; i < LPWM_CNUM; i++) {
-		lpwm->lpwm_attr[i].trigger_mode = dynamic_attr->trigger_mode > 0 ? 1 : 0;
-		lpwm->lpwm_attr[i].trigger_source = dynamic_attr->trigger_source;
+		osal_mutex_lock(&lpwm->con_lock);
+		lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MAX;
+		lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MAX;
+		lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MAX;
+		osal_mutex_unlock(&lpwm->con_lock);
+	} else {
+		lpwm_trigger_source_config(lpwm->base, dynamic_attr->trigger_source);
+		lpwm_trigger_mode_config(lpwm->base, dynamic_attr->trigger_mode);
+		lpwm_offset_config_single(lpwm->base, c_id, dynamic_attr->offset);
+		lpwm_cfg1_config_single(lpwm->base, c_id, dynamic_attr->period, dynamic_attr->duty_time);
+
+		osal_mutex_lock(&lpwm->con_lock);
+		for (i = 0; i < LPWM_CNUM; i++) {
+			lpwm->lpwm_attr[i].trigger_mode = dynamic_attr->trigger_mode > 0u ? 1u : 0u;
+			lpwm->lpwm_attr[i].trigger_source = dynamic_attr->trigger_source;
+		}
+		lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MAX;
+		lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MAX;
+		lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MAX;
+		osal_mutex_unlock(&lpwm->con_lock);
 	}
-	lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MAX;
-	lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MAX;
-	lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MAX;
-	osal_mutex_unlock(&lpwm->con_lock);
 
 	return LPWM_RET_OK;
 }
