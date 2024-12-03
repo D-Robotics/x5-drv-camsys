@@ -795,8 +795,8 @@ static s32 vpf_dbg_get_fmgr_stats(struct vio_video_ctx *vctx, unsigned long arg)
 	flowid_mask = 1 << vctx->flow_id;
 	len = vio_fmgr_stats(&buf[offset], DEBUG_SIZE - offset, 0, flowid_mask);
 	offset += len;
-	if (offset > DEBUG_SIZE)
-		offset = DEBUG_SIZE;
+	if (offset >= DEBUG_SIZE)
+		offset = DEBUG_SIZE - 1;
 
 	buf[offset] = '\0';
 	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
@@ -817,8 +817,8 @@ static s32 vpf_dbg_get_vio_delay(struct vio_video_ctx *vctx, unsigned long arg)
 
 	offset = vio_print_delay_log(vctx->flow_id, buf, 1024);
 
-	if (offset > DEBUG_SIZE)
-		offset = DEBUG_SIZE;
+	if (offset >= DEBUG_SIZE)
+		offset = DEBUG_SIZE - 1;
 
 	buf[offset] = '\0';
 	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
@@ -841,8 +841,8 @@ static s32 vpf_dbg_get_fps_stats(struct vio_video_ctx *vctx, unsigned long arg)
 	flowid_mask = 1 << vctx->flow_id;
 	offset = vio_fps_stats(buf, 1024, flowid_mask);
 
-	if (offset > DEBUG_SIZE)
-		offset = DEBUG_SIZE;
+	if (offset >= DEBUG_SIZE)
+		offset = DEBUG_SIZE - 1;
 
 	buf[offset] = '\0';
 
@@ -866,8 +866,8 @@ static s32 vpf_dbg_get_delay_status(struct vio_video_ctx *vctx, unsigned long ar
 	flowid_mask = 1 << vctx->flow_id;
 	offset = vio_delay_stats(buf, 1024, flowid_mask);
 
-	if (offset > DEBUG_SIZE)
-		offset = DEBUG_SIZE;
+	if (offset >= DEBUG_SIZE)
+		offset = DEBUG_SIZE - 1;
 
 	buf[offset] = '\0';
 	copy_ret = osal_copy_to_app((void __user *)arg, (void *)buf, offset + 1);
