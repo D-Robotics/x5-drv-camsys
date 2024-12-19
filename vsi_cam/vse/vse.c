@@ -704,6 +704,10 @@ int vse_close(struct vse_device *vse, u32 inst)
 	vse_write(vse, VSE_IN_CTRL, 0x3ffff000);
 	value = vse_read(vse, VSE_CTRL);
 	vse_write(vse, VSE_CTRL, value | BIT(15));
+	/* disable interrupts */
+	vse_write(vse, VSE_MI_IMSC,  0);
+	vse_write(vse, VSE_MI_IMSC1, 0);
+	vse_write(vse, VSE_FE_IMSC,  0);
 
 	vse_post_clk_on_off(vse, false);
 	rc = dw_reset(vse->crc_dev, DW_MOD_VSE);

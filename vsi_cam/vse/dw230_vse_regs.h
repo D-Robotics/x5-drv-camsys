@@ -6,9 +6,11 @@
 #define VSE_IN_CTRL                     (0x0308)
 
 /* MI IRQ */
+#define VSE_FE_IMSC                     (0x010c)
 #define VSE_FE_MIS                      (0x0114)
 #define VSE_FE_ICR                      (0x0118)
 #define VSE_MI0_BUS_CFG                 (0x0d20)
+#define VSE_MI_IMSC                     (0x0d40)
 #define VSE_MI_IMSC1                    (0x0d44)
 #define VSE_MI_ISR                      (0x0d48)
 #define VSE_MI_MIS                      (0x0d50)
