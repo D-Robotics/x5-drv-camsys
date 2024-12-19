@@ -20,7 +20,7 @@ static s32 handle_set_state(struct vse_device *vse, struct vse_msg *msg)
 
 static s32 handle_reset_control(struct vse_device *vse, struct vse_msg *msg)
 {
-	return vse_reset(vse);
+	return dw_reset(vse->crc_dev, DW_MOD_VSE);
 }
 
 static s32 handle_alloc_cmd_buf(struct vse_device *vse, struct vse_msg *msg)
