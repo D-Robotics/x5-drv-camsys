@@ -577,8 +577,9 @@ int vse_reset(struct vse_device *vse)
 		reset_control_assert(vse->rst);
 		udelay(2);
 		reset_control_deassert(vse->rst);
+		return 0;
 	}
-	return 0;
+	return -EINVAL;
 }
 
 static void vse_bound(struct isc_handle *isc, void *arg)
@@ -738,7 +739,6 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		{},
 	};
 	struct rst_res vse_rsts[] = {
-		{"rst", NULL },
 		{},
 	};
 	struct cam_dt vse_dt = {
@@ -760,6 +760,13 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		return rc;
 	}
 
+	vse->rst = devm_reset_control_get(dev, "rst");
+	if (IS_ERR_OR_NULL(vse->rst)) {
+		vse->rst = NULL;
+		dev_info(dev, "cannot get reset control (err=%d)\n",
+			 IS_ERR(vse->rst) ? (int)PTR_ERR(vse->rst) : -ENXIO);
+	}
+
 	vse->dev = dev;
 	vse->id = vse_dt.id;
 	vse->num_insts = vse_dt.num_insts;
@@ -769,7 +776,6 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->ups = vse_dt.clks[2].clk;
 	vse->gdc_core = vse_dt.clks[3].clk;
 	vse->gdc_hclk = vse_dt.clks[4].clk;
-	vse->rst = vse_dt.rsts[0].rst;
 	spin_lock_init(&vse->isc_lock);
 	mutex_init(&vse->open_lock);
 	refcount_set(&vse->open_cnt, REFCNT_INIT_VAL);
