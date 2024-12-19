@@ -2,9 +2,11 @@
 #define pr_fmt(fmt) "[vse_drv]: %s: " fmt, __func__
 #include <linux/clk.h>
 #include <linux/debugfs.h>
+#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/reset.h>
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
@@ -568,6 +570,17 @@ _exit:
 	return rc;
 }
 
+// vse_reset reset without sending request. It is different from dw_reset.
+int vse_reset(struct vse_device *vse)
+{
+	if (vse->rst) {
+		reset_control_assert(vse->rst);
+		udelay(2);
+		reset_control_deassert(vse->rst);
+	}
+	return 0;
+}
+
 static void vse_bound(struct isc_handle *isc, void *arg)
 {
 	struct vse_device *vse = (struct vse_device *)arg;
@@ -725,6 +738,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		{},
 	};
 	struct rst_res vse_rsts[] = {
+		{"rst", NULL },
 		{},
 	};
 	struct cam_dt vse_dt = {
@@ -755,6 +769,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 	vse->ups = vse_dt.clks[2].clk;
 	vse->gdc_core = vse_dt.clks[3].clk;
 	vse->gdc_hclk = vse_dt.clks[4].clk;
+	vse->rst = vse_dt.rsts[0].rst;
 	spin_lock_init(&vse->isc_lock);
 	mutex_init(&vse->open_lock);
 	refcount_set(&vse->open_cnt, REFCNT_INIT_VAL);

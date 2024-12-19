@@ -70,6 +70,7 @@ struct vse_device {
 	u32 id, num_insts;
 	struct device *dev;
 	void __iomem *base;
+	struct reset_control *rst;
 	struct clk *core, *axi, *ups, *gdc_core, *gdc_hclk;
 	struct isc_handle *isc;
 	spinlock_t isc_lock; /* lock for sending msg */
@@ -117,6 +118,7 @@ int vse_get_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_set_ctx(struct vse_device *vse, u32 inst, struct vse_irq_ctx *ctx);
 int vse_add_job(struct vse_device *vse, u32 inst);
 int vse_wake_up(struct vse_device *vse, u32 inst);
+int vse_reset(struct vse_device *vse);
 int vse_open(struct vse_device *vse, u32 inst);
 int vse_close(struct vse_device *vse, u32 inst);
 int vse_probe(struct platform_device *pdev, struct vse_device *vse);
