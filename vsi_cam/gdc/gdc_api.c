@@ -229,7 +229,7 @@ void gdc_set_in_buffer(struct gdc_device *gdc, struct cam_format *fmt, struct ca
 {
 	phys_addr_t paddr;
 
-	paddr = get_phys_addr(gdc->dev, buf, 0);
+	paddr = get_phys_addr(gdc->cam_dev, buf, 0);
 	gdc_hw_set_rdma0_img_addr(gdc->base, paddr);
 	gdc_hw_set_rdma1_img_addr(gdc->base, paddr + fmt->stride * fmt->height);
 }
@@ -238,7 +238,7 @@ void gdc_set_out_buffer(struct gdc_device *gdc, struct cam_format *fmt, struct c
 {
 	phys_addr_t paddr;
 
-	paddr = get_phys_addr(gdc->dev, buf, 0);
+	paddr = get_phys_addr(gdc->cam_dev, buf, 0);
 	gdc_hw_set_wdma0_img_addr(gdc->base, paddr);
 	gdc_hw_set_wdma1_img_addr(gdc->base, paddr + fmt->stride * fmt->height);
 }

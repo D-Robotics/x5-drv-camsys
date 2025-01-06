@@ -338,7 +338,7 @@ int sif_set_dma(struct sif_device *dev, u32 inst, int enable, bool pd_path)
 	if (buf_ctx) {
 		*buf = cam_dqbuf_irq(buf_ctx, true);
 		if (*buf) {
-			p_addr = get_phys_addr(dev->dev, *buf, 0);
+			p_addr = get_phys_addr(dev->cam_dev, *buf, 0);
 			if (sif->fmt.format == CAM_FMT_NV12 || sif->fmt.format == CAM_FMT_NV16
 				|| (dev->ipi_channel_num > 1  && inst == sif->ipi_base))
 				p_uv_addr = p_addr + (sif->fmt.stride * sif->fmt.height);
@@ -705,6 +705,7 @@ int sif_close(struct sif_device *sif, u32 inst)
 	if (!dis_clk)
 		goto _exit;
 
+	cam_iommu_unmap(sif->cam_dev);
 	// sif_reset(sif);
 	rc = sif_runtime_suspend(sif->dev);
 

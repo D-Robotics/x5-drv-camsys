@@ -223,6 +223,7 @@ int gdc_close(struct gdc_device *gdc, u32 inst)
 
 	reset_job_queue(gdc->jq);
 	gdc_stop(gdc);
+	cam_iommu_unmap(gdc->cam_dev);
 
 _exit:
 	return rc;
@@ -282,7 +283,6 @@ int gdc_probe(struct platform_device *pdev, struct gdc_device *gdc)
 	spin_lock_init(&gdc->err_lock);
 	mutex_init(&gdc->open_lock);
 	refcount_set(&gdc->open_cnt, REFCNT_INIT_VAL);
-
 	gdc->error = 1;
 
 	gdc->insts = devm_kcalloc(dev, gdc_dt.num_insts,
@@ -315,6 +315,7 @@ int gdc_remove(struct platform_device *pdev, struct gdc_device *gdc)
 {
 	destroy_job_queue(gdc->jq);
 	put_cam_ctrl_device(gdc->ctrl_dev);
+	devm_kfree(&pdev->dev, gdc->insts);
 
 	dev_dbg(&pdev->dev, "ARM GDC driver (base) removed\n");
 	return 0;

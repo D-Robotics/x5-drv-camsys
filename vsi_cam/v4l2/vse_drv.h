@@ -40,6 +40,7 @@ struct vse_v4l_instance {
 struct vse_v4l_device {
 	struct vse_device vse_dev;
 	struct vse_v4l_instance *insts;
+	struct cam_dev cam_dev;
 };
 
 #endif /* _VSE_DRV_H_ */
