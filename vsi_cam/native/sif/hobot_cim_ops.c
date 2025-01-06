@@ -681,6 +681,7 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 	struct vio_node *vnode;
 	struct vio_subdev *vdev;
 	struct vin_node_subdev *subdev;
+	struct vio_subdev *out_vdev;
 	struct j6_vin_node_dev *vin_node_dev;
 	u8 ipi_index;
 	struct vin_cim_private_s *cim_priv_attr;
@@ -709,7 +710,11 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 
 	ctx.sink_ctx = (struct cam_ctx *)vnode->ich_subdev[VIN_MAIN_FRAME];
 	ctx.src_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
-	if (cim_priv_attr->ddr_en) {
+	out_vdev = vnode->och_subdev[VIN_MAIN_FRAME];
+
+	if (cim_priv_attr->ddr_en && (osal_test_bit((s32)VIO_SUBDEV_REQBUF, &out_vdev->state) != 0)) {
+		vio_info("[S%d][ipi%d]%s ddr_en and ochn request bufs\n",
+								vctx->ctx_id, ipi_index, __func__);
 		ctx.buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_MAIN_FRAME];
 		ctx.buf = NULL;
 		ctx.next_buf = NULL;
