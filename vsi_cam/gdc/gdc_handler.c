@@ -71,6 +71,8 @@ struct gdc_irq_ctx *get_next_irq_ctx(struct gdc_device *gdc)
 		}
 
 		inst = &gdc->insts[job.irq_ctx_index];
+		inst->job_count--;
+		pr_debug("%s gdc%d:job_count=%d\n", __func__, job.irq_ctx_index, inst->job_count);
 		if (inst->state != CAM_STATE_STARTED)
 			continue;
 		spin_lock_irqsave(&inst->lock, flags);
@@ -101,13 +103,13 @@ irqreturn_t gdc_irq_handler(int irq, void *arg)
 		frame_done(&ins->ctx);
 		spin_unlock_irqrestore(&ins->lock, flags);
 
+		spin_lock_irqsave(&gdc->err_lock, flags);
 		ctx = get_next_irq_ctx(gdc);
-		if (!ctx) {
+		if (!ctx)
 			gdc->error = 1;
-		} else {
-			pr_debug("gdc%d set cmd\n", gdc->next_irq_ctx);
+		else
 			gdc_set_cmd(gdc, gdc->next_irq_ctx);
-		}
+		spin_unlock_irqrestore(&gdc->err_lock, flags);
 	}
 	return IRQ_HANDLED;
 }
