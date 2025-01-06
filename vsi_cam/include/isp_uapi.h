@@ -146,6 +146,7 @@ struct isp_func {
 			__u16 stream_idx;
 		} mcm;
 	};
+	__u8 hdr_sram;
 };
 
 struct isp_buf {
