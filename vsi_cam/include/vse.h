@@ -44,6 +44,20 @@ struct vse_hist_num {
     __u16  range_num[VSE_HIST_MAX][BIN_LEVEL_NUM + 1];
 };
 
+struct vse_cfg {
+	u32 addr;
+	u32 val;
+};
+
+#define CFG_AUTO_NUM_MAX (0x1000)
+struct vse_upd_cfg {
+	spinlock_t cfg_lock;
+	bool is_need_upd;
+	u32 cfg_num;
+	struct vse_cfg cfg[CFG_AUTO_NUM_MAX];
+	struct vse_cfg cfg_shd[CFG_AUTO_NUM_MAX];
+};
+
 struct vse_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	spinlock_t state_lock; /* lock for handling state */
@@ -65,6 +79,7 @@ struct vse_instance {
 	u32 frame_count[VSE_OUT_CHNL_MAX];
 	bool is_need_read_hist;
 	bool is_hist_num_updated;
+	struct vse_upd_cfg upd_cfg;
 };
 
 struct vse_device {

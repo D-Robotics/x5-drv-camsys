@@ -817,6 +817,7 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 		spin_lock_init(&vse->insts[i].lock);
 		spin_lock_init(&vse->insts[i].state_lock);
 		spin_lock_init(&vse->insts[i].hist_lock);
+		spin_lock_init(&vse->insts[i].upd_cfg.cfg_lock);
 	}
 
 	dev_dbg(dev, "VS VSE driver (base) probed done\n");
