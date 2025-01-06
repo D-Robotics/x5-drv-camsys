@@ -89,15 +89,9 @@ int gdc_set_state(struct gdc_device *gdc, u32 inst, int enable)
 		return -EINVAL;
 
 	ins = &gdc->insts[inst];
+	ins->state = enable ? CAM_STATE_STARTED : CAM_STATE_STOPPED;
 
-	if (enable) {
-		ins->state = CAM_STATE_STARTED;
-	 	gdc_start(gdc);
-	} else {
-		ins->state = CAM_STATE_STOPPED;
-	 	gdc_stop(gdc);
-	}
-	return 0;
+	return dw_set_state(gdc->crc_dev, DW_MOD_GDC, ins->state);
 }
 
 int gdc_set_ctx(struct gdc_device *gdc, u32 inst, struct gdc_irq_ctx *ctx)
