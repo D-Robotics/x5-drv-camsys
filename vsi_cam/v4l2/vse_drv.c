@@ -582,7 +582,10 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 	struct vse_v4l_instance *vse = sd_to_v4l_instance(vse, sd);
 	int rc, vse_src_type;
 
-	if (cam_refcount_check(&vse->state_count, enable))
+	mutex_lock(&vse->state_lock);
+	rc = cam_refcount_check(&vse->state_count, enable);
+	mutex_unlock(&vse->state_lock);
+	if (rc)
 		return 0;
 
 	if (enable) {
@@ -867,14 +870,14 @@ static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (!inst->m2m_en) {
 		rc = subdev_close(sd);
 		if (rc < 0) {
-			pr_err("%s failed to call subdev_close (err=%d)\n", __func__, rc);
+			pr_err("failed to close subdev (err=%d)\n", rc);
 			goto _exit;
 		}
 	}
 	inst->fmt_changed = false;
 	rc = vse_close(inst->dev, inst->id);
 	if (rc < 0) {
-		pr_err("%s failed to call vse_close (err=%d)\n", __func__, rc);
+		pr_err("failed to close vse%d (err=%d)\n", inst->id, rc);
 		goto _exit;
 	}
 	memset(&inst->ifmt, 0, sizeof(inst->ifmt));
@@ -973,6 +976,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		mutex_init(&inst->open_lock);
 		mutex_init(&inst->fmt_lock);
 		mutex_init(&inst->ctx_lock);
+		mutex_init(&inst->state_lock);
 		refcount_set(&inst->state_count, REFCNT_INIT_VAL);
 		refcount_set(&inst->open_count, REFCNT_INIT_VAL);
 
@@ -1062,6 +1066,7 @@ static int vse_v4l_remove(struct platform_device *pdev)
 		mutex_destroy(&v4l_dev->insts[i].open_lock);
 		mutex_destroy(&v4l_dev->insts[i].fmt_lock);
 		mutex_destroy(&v4l_dev->insts[i].ctx_lock);
+		mutex_destroy(&v4l_dev->insts[i].state_lock);
 	}
 	devm_kfree(dev, v4l_dev->insts);
 
