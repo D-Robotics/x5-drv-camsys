@@ -434,19 +434,21 @@ int sif_reset_ipi(struct sif_device *sif, u32 inst)
 	for (i = inst; i < sif->ipi_channel_num; i++)
 		reset_val |= BIT(i);
 
-	sif_write(sif, SIF_IPI_RESET, reset_val);
-	do {
-		val = sif_read(sif, SIF_IPI_RESET);
-	} while (!(val & (reset_val << 4)) && (--retrycnt));
+	if (reset_val) {
+		sif_write(sif, SIF_IPI_RESET, reset_val);
+		do {
+			val = sif_read(sif, SIF_IPI_RESET);
+		} while (!(val & (reset_val << 4)) && (--retrycnt));
 
-	if (retrycnt > 0) {
-		dev_info(sif->dev, "sif%d reset done\n", sif->id);
-		return 0;
-	}
+		if (retrycnt > 0) {
+			dev_info(sif->dev, "sif%d reset done\n", sif->id);
+			return 0;
+		}
 
-	if (retrycnt == 0 && !(val & (reset_val << 4))) {
-		dev_err(sif->dev, "sif%d reset failed\n", sif->id);
-		return -1;
+		if (retrycnt == 0 && !(val & (reset_val << 4))) {
+			dev_err(sif->dev, "sif%d reset failed\n", sif->id);
+			return -1;
+		}
 	}
 
 	return 0;
