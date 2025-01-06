@@ -930,18 +930,18 @@ s32 vin_node_device_node_init(u8 hw_id)
 		vnode[i].och_subdev[VIN_MAIN_FRAME] = &vin_node_dev->cap_subdev[i].vdev; // frame cap
 		//vnode[i].och_subdev[1] = &vin_node->subdev[i][2].vdev;   // online
 		vnode[i].och_subdev[VIN_EMB] = &vin_node_dev->emb_subdev[i].vdev;    //emb                       // 聚合
-		vnode[i].och_subdev[VIN_ROI] = &vin_node_dev->roi_subdev[i].vdev;   // roi
+		vnode[i].och_subdev[VIN_PDAF] = &vin_node_dev->pdaf_subdev[i].vdev;   // pdaf
 		vnode[i].active_och |= 1 << VIN_MAIN_FRAME;
 		vnode[i].active_och |= 1 << VIN_EMB;
-		vnode[i].active_och |= 1 << VIN_ROI;
+		vnode[i].active_och |= 1 << VIN_PDAF;
 		vin_node_dev->src_subdev[i].vdev.vnode = &vnode[i];
 		vin_node_dev->src_subdev[i].vin_node_dev = vin_node_dev;
 		vin_node_dev->cap_subdev[i].vdev.vnode = &vnode[i];
 		vin_node_dev->cap_subdev[i].vin_node_dev = vin_node_dev;
 		vin_node_dev->emb_subdev[i].vdev.vnode = &vnode[i];
 		vin_node_dev->emb_subdev[i].vin_node_dev = vin_node_dev;
-		vin_node_dev->roi_subdev[i].vdev.vnode = &vnode[i];
-		vin_node_dev->roi_subdev[i].vin_node_dev = vin_node_dev;
+		vin_node_dev->pdaf_subdev[i].vdev.vnode = &vnode[i];
+		vin_node_dev->pdaf_subdev[i].vin_node_dev = vin_node_dev;
 		vnode[i].gtask = &vin_node_dev->gtask;
 		vnode[i].allow_bind = vin_allow_bind;
 	}
@@ -985,16 +985,15 @@ s32 vin_node_device_node_init(u8 hw_id)
 	snprintf(name, sizeof(name), "vin%d_emb", vin_node_dev->hw_id);
 	vio_register_device_node(name, &vin_node_dev->vps_device[3]);
 
-	vin_node_dev->vps_device[ROI_INDEX].vps_ops = &vin_node_vops;
-	vin_node_dev->vps_device[ROI_INDEX].ip_dev = vin_node_dev;
-	vin_node_dev->vps_device[ROI_INDEX].vid = VNODE_ID_CAP + VIN_ROI;
-	vin_node_dev->vps_device[ROI_INDEX].vnode = vnode;
-	vin_node_dev->vps_device[ROI_INDEX].max_ctx = VIO_MAX_STREAM;
+	vin_node_dev->vps_device[PDAF_INDEX].vps_ops = &vin_node_vops;
+	vin_node_dev->vps_device[PDAF_INDEX].ip_dev = vin_node_dev;
+	vin_node_dev->vps_device[PDAF_INDEX].vid = VNODE_ID_CAP + VIN_PDAF;
+	vin_node_dev->vps_device[PDAF_INDEX].vnode = vnode;
+	vin_node_dev->vps_device[PDAF_INDEX].max_ctx = VIO_MAX_STREAM;
 	#ifndef HOBOT_MCU_CAMSYS
-	//vin_node_dev->vps_device[ROI_INDEX].iommu_dev = &vin_node_dev->pdev->dev;
-	vin_node_dev->vps_device[ROI_INDEX].iommu_dev = &vin_node_dev->cim_dev->pdev->dev;
+	vin_node_dev->vps_device[PDAF_INDEX].iommu_dev = &vin_node_dev->cim_dev->pdev->dev;
 	#endif
-	snprintf(name, sizeof(name), "vin%d_roi", vin_node_dev->hw_id);
+	snprintf(name, sizeof(name), "vin%d_pdaf", vin_node_dev->hw_id);
 	vio_register_device_node(name, &vin_node_dev->vps_device[4]);
 
 	vio_info("[S%d]%s hw_id %d done\n", vin_node_dev->flow_id, __func__, vin_node_dev->hw_id);
@@ -1016,8 +1015,8 @@ void vin_node_device_node_deinit(u8 hw_id)
 	memset(&vin_node_dev->vps_device[CAP_INDEX], 0, sizeof(struct vpf_device));
 	vio_unregister_device_node(&vin_node_dev->vps_device[EMB_INDEX]);
 	memset(&vin_node_dev->vps_device[EMB_INDEX], 0, sizeof(struct vpf_device));
-	vio_unregister_device_node(&vin_node_dev->vps_device[ROI_INDEX]);
-	memset(&vin_node_dev->vps_device[ROI_INDEX], 0, sizeof(struct vpf_device));
+	vio_unregister_device_node(&vin_node_dev->vps_device[PDAF_INDEX]);
+	memset(&vin_node_dev->vps_device[PDAF_INDEX], 0, sizeof(struct vpf_device));
 
 	vio_info("hw_id %d %s done\n", hw_id, __func__);
 }

@@ -33,7 +33,7 @@ static s32 handle_set_format(struct sif_device *sif, struct sif_msg *msg)
 {
 	int rc;
 
-	rc = sif_set_format(sif, msg->inst, &msg->fmt, false, BOTH_CHANNEL);
+	rc = sif_set_format(sif, msg->inst, &msg->fmt, false, ALL_CHANNEL);
 	if (rc < 0) {
 		pr_info("failed to call sif_set_format (rc=%d).\n", rc);
 		return rc;
@@ -143,19 +143,23 @@ static void sif_handle_pps_irq(struct sif_device *sif, u32 inst)
 	// TODO:add pps timestamp to vio framework.
 }
 
-static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
+static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst, bool pd_path)
 {
 	struct sif_instance *ins;
 	struct sif_frame_des sif_frame = {0};
 	u32 val = 0;
 	u32 fs_l = 0, fs_h = 0, trigger_l = 0, trigger_h = 0;
-	struct sif_irq_ctx *ctx;
 	phys_addr_t p_addr = 0;
 	phys_addr_t p_uv_addr = 0;
 	unsigned long flags;
 	ktime_t now_time = ktime_get_boottime();
+	struct cam_ctx *buf_ctx;
+	struct cam_buf **buf, **next_buf;
 
-	ins = &sif->insts[inst];
+	if (pd_path)
+		ins = &sif->insts[sif->ipi_base];
+	else
+		ins = &sif->insts[inst];
 	if (ins->last_frame_done)
 		ins->frame_interval += ktime_to_ms
 				(ktime_sub(now_time, ins->last_frame_done));
@@ -191,31 +195,40 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	sif_frame.fs_ts = (sif_frame.fs_ts << 32) | fs_l;
 	sif_set_frame_des(ins->ctx.sink_ctx, (void *)&sif_frame);
 	cam_set_stat_info(ins->ctx.sink_ctx, CAM_STAT_FS);
-	sif_set_frame_event(ins->ctx.sink_ctx, CAM_STAT_FS);
+	if (!pd_path)
+		sif_set_frame_event(ins->ctx.sink_ctx, CAM_STAT_FS);
 
 	spin_lock_irqsave(&ins->lock, flags);
 	ins->prev_irq_stat = START_STATUS;
-	ctx = &ins->ctx;
-	if (ctx->buf_ctx)
+	if (pd_path) {
+		buf_ctx  = ins->ctx.pd_buf_ctx;
+		buf      = &ins->ctx.pd_buf;
+		next_buf = &ins->ctx.next_pd_buf;
+	} else {
+		buf_ctx  = ins->ctx.buf_ctx;
+		buf      = &ins->ctx.buf;
+		next_buf = &ins->ctx.next_buf;
+	}
+	if (buf_ctx && !pd_path)
 		ins->frame_start_cnt++;
 	dev_dbg(sif->dev, "sif(%d-%d), FS sink ctx %p buf ctx %p buf %p\n",
-		sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
+		sif->id, inst, &ins->ctx.sink_ctx, buf_ctx, *buf);
 	if (ins->state == CAM_STATE_STARTED) {
-		if (ctx->buf_ctx) {
-			if (ctx->next_buf) {
-				cam_drop_irq(ctx->buf_ctx, ctx->buf);
-				ctx->buf = ctx->next_buf;
+		if (buf_ctx) {
+			if (*next_buf) {
+				cam_drop_irq(buf_ctx, *buf);
+				*buf = *next_buf;
 			}
-			ctx->next_buf = cam_dqbuf_irq(ctx->buf_ctx, true);
-			if (ctx->next_buf) {
-				if (cam_get_frame_status(ctx->buf_ctx) == DQ_FAIL)
-					cam_set_frame_status(ctx->buf_ctx, NO_ERR);
-				p_addr = get_phys_addr(sif->dev, ctx->next_buf, 0);
+			*next_buf = cam_dqbuf_irq(buf_ctx, true);
+			if (*next_buf) {
+				if (cam_get_frame_status(buf_ctx) == DQ_FAIL)
+					cam_set_frame_status(buf_ctx, NO_ERR);
+				p_addr = get_phys_addr(sif->dev, *next_buf, 0);
 				if (ins->fmt.format == CAM_FMT_NV12 || ins->fmt.format == CAM_FMT_NV16
-					|| (sif->ipi_channel_num != 1 && inst == sif->ipi_base))
+					|| (sif->ipi_channel_num > 1 && inst == sif->ipi_base))
 					p_uv_addr = p_addr + (ins->fmt.stride * ins->fmt.height);
 			} else {
-				cam_set_frame_status(ctx->buf_ctx, DQ_FAIL);
+				cam_set_frame_status(buf_ctx, DQ_FAIL);
 				dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail\n",
 						sif->id, inst, __func__);
 			}
@@ -228,7 +241,7 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 			sif_write(sif, SIF_IPI_BADDR_Y(inst), p_addr);
 			if (p_uv_addr)
 				sif_write(sif, SIF_IPI_BADDR_UV(inst), p_uv_addr);
-		} else if (sif->ipi_channel_num != 1 && inst == sif->ipi_base) {
+		} else if (sif->ipi_channel_num > 1 && inst == sif->ipi_base) {
 			sif_write(sif, SIF_IPI_BADDR_Y(inst), p_addr);
 			if (p_uv_addr)
 				sif_write(sif, SIF_IPI_BADDR_Y(inst + 1), p_uv_addr);
@@ -243,44 +256,60 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst)
 	spin_unlock_irqrestore(&sif->cfg_reg_lock, flags);
 }
 
-static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst)
+static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst, bool pd_path)
 {
 	unsigned long flags;
-	struct sif_irq_ctx *ctx;
 	struct sif_instance *ins;
+	struct cam_ctx *buf_ctx;
+	struct cam_buf **buf, **next_buf;
 	u8 frame_status = 0;
 
-	ins = &sif->insts[inst];
+	if (pd_path)
+		ins = &sif->insts[sif->ipi_base];
+	else
+		ins = &sif->insts[inst];
 	spin_lock_irqsave(&ins->lock, flags);
 	ins->prev_irq_stat = DONE_STATUS;
-	ctx = &ins->ctx;
-	if (ctx->buf_ctx) {
-		ins->frame_start_cnt--;
-		dev_dbg(sif->dev, "sif(%d-%d), FE sink ctx %p buf ctx %p buf %p \n",
-			sif->id, inst, ctx->sink_ctx, ctx->buf_ctx, ctx->buf);
 
-		frame_status = cam_get_frame_status(ctx->buf_ctx);
+	if (pd_path) {
+		buf_ctx  = ins->ctx.pd_buf_ctx;
+		buf      = &ins->ctx.pd_buf;
+		next_buf = &ins->ctx.next_pd_buf;
+	} else {
+		buf_ctx  = ins->ctx.buf_ctx;
+		buf      = &ins->ctx.buf;
+		next_buf = &ins->ctx.next_buf;
+	}
+
+	if (buf_ctx) {
+		if (!pd_path)
+			ins->frame_start_cnt--;
+		dev_dbg(sif->dev, "sif(%d-%d), FE sink ctx %p buf ctx %p buf %p \n",
+			sif->id, inst, &ins->ctx.sink_ctx, buf_ctx, *buf);
+
+		frame_status = cam_get_frame_status(buf_ctx);
 		if (frame_status == DQ_FAIL) {
-			cam_set_frame_status(ctx->buf_ctx, NO_ERR);
-			cam_drop_irq_ext(ctx->buf_ctx, ctx->buf);
+			cam_set_frame_status(buf_ctx, NO_ERR);
+			cam_drop_irq_ext(buf_ctx, *buf);
 			dev_dbg(sif->dev, "sif(%d-%d), %s request buffer fail, skip peek PROCESS\n",
 				sif->id, inst, __func__);
 		} else if (ins->frame_start_cnt < 0) {
-			cam_drop_irq_ext(ctx->buf_ctx, ctx->buf);
+			cam_drop_irq_ext(buf_ctx, *buf);
 			dev_dbg(sif->dev, "sif(%d-%d), %s meet continue frame done skip it\n",
 				sif->id, inst, __func__);
 		} else {
 			if (frame_status) {
-				cam_drop_irq(ctx->buf_ctx, ctx->buf);
-				cam_dec_frame_status(ctx->buf_ctx);
+				cam_drop_irq(buf_ctx, *buf);
+				cam_dec_frame_status(buf_ctx);
 			} else {
-				cam_qbuf_irq(ctx->buf_ctx, ctx->buf, true);
+				cam_qbuf_irq(buf_ctx, *buf, true);
 			}
 		}
 
-		ctx->buf = ctx->next_buf;
-		ctx->next_buf = NULL;
-		ins->frame_start_cnt = 0;
+		*buf = *next_buf;
+		*next_buf = NULL;
+		if (!pd_path)
+			ins->frame_start_cnt = 0;
 	}
 	spin_unlock_irqrestore(&ins->lock, flags);
 }
@@ -314,6 +343,11 @@ static void sif_handle_emb_done(struct sif_device *sif, u32 inst)
 		sif_write(sif, SIF_IPI_EBD_BADDR_POST(inst), p_addr);
 }
 
+static bool inline check_pd_path(struct sif_device *sif, u32 inst)
+{
+	return (sif->pd_en && inst == sif->pd_ipi_channel) ? true : false;
+}
+
 irqreturn_t sif_irq_handler(int irq, void *arg)
 {
 	struct sif_device *sif = (struct sif_device *)arg;
@@ -322,7 +356,7 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 	pr_debug("+\n");
 	for (i = 0; i < sif->num_insts; i++) {
 		pps_status = sif_read(sif, SIF_PPS_IRQ_STATUS);
-		if (pps_status & PPS1_TRIG_IRQ || pps_status & PPS2_TRIG_IRQ) {
+		if (pps_status & (PPS1_TRIG_IRQ | PPS2_TRIG_IRQ)) {
 			sif_handle_pps_irq(sif, i);
 		}
 		status = sif_read(sif, SIF_IPI_IRQ_STATUS(i));
@@ -349,23 +383,24 @@ irqreturn_t sif_irq_handler(int irq, void *arg)
 		}
 
 		if ((status & SIF_IRQ_FS) && (sif->insts[i].overlap == 0))
-			sif_handle_frame_start(sif, i);
+			sif_handle_frame_start(sif, i, check_pd_path(sif, i));
 
 		if (status & SIF_IPI_FRAME_END_EN) {
 			cam_set_stat_info(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
-			sif_set_frame_event(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
+			if (!check_pd_path(sif, i))
+				sif_set_frame_event(sif->insts[i].ctx.sink_ctx, CAM_STAT_FE);
 			if (sif->insts[i].wait_fe)
 				wake_up(&sif->insts[i].fe_wq);
 		}
 
 		if (status & SIF_IRQ_DONE)
-			sif_handle_frame_done(sif, i);
+			sif_handle_frame_done(sif, i, check_pd_path(sif, i));
 
 		if (status & SIF_IRQ_EBD_DMA_DONE)
 			sif_handle_emb_done(sif, i);
 
 		if ((status & SIF_IRQ_FS) && (sif->insts[i].overlap == 1))
-			sif_handle_frame_start(sif, i);
+			sif_handle_frame_start(sif, i, check_pd_path(sif, i));
 	}
 	pr_debug("-\n");
 	return IRQ_HANDLED;

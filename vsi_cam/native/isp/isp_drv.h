@@ -7,12 +7,14 @@
 
 #include "isp.h"
 
-#define ISP_NODE_MAX_DEVICE  2
+#define ISP_NODE_MAX_DEVICE  3
 #define SRC_INDEX 0
 #define CAP_INDEX 1
+#define PD_INDEX  2
 
 enum isp_chn_type {
 	ISP_MAIN_FRAME,
+	ISP_PDAF_DATA,
 	ISP_TYPE_INVALID,
 };
 
@@ -25,6 +27,7 @@ enum isp_ichn_type {
 struct isp_nat_instance {
 	u32 id;
 	struct vio_subdev vdev;
+	struct vio_subdev pddev;
 	struct vio_subdev *prev;
 	struct isp_nat_device *dev;
 	struct isp_irq_ctx ctx;
@@ -33,7 +36,6 @@ struct isp_nat_instance {
 	isp_ochn_attr_t ochn_attr;
 	u8 online_mode;
 	int stream_idx;
-	bool metadata_en;
 };
 
 struct isp_nat_device {

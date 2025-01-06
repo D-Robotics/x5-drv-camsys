@@ -408,29 +408,27 @@ static s32 handle_get_sensor_ctrl(struct isp_device *isp, struct isp_msg *msg)
 
 static s32 handle_get_metadata(struct isp_device *isp, struct isp_msg *msg)
 {
-	struct isp_instance *ins, *ins_meta;
+	struct isp_instance *ins;
 	struct cam_buf *buf;
 	struct isp_irq_ctx *ctx;
 
-	if (msg->inst >= isp->num_insts)
-		return -EINVAL;
-
 	ins = &isp->insts[msg->inst];
-	ins_meta = &isp->insts[ins->meta_inst];
-	ctx = &ins_meta->ctx;
+	ctx = &ins->ctx;
 
-	if (ctx->sink_buf) {
-		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
-		ctx->sink_buf = NULL;
+	if (ctx->pd_buf) {
+		cam_qbuf_irq(ctx->pd_ctx, ctx->pd_buf, false);
+		ctx->pd_buf = NULL;
 	}
-	buf = cam_dqbuf_irq(ctx->sink_ctx, false);
+
+	buf = cam_dqbuf_irq(ctx->pd_ctx, false);
 	if (!buf)
 		return -ENOMEM;
-	ctx->sink_buf = buf;
+	ctx->pd_buf = buf;
 	msg->meta.buf.addr = get_phys_addr(NULL, buf, 0);
 	msg->meta.buf.size = get_buf_size(buf, 0);
 	pr_debug("%s buf_addr: 0x%x, buff_size:%d\n", __func__,
 		 (u32)msg->meta.buf.addr, (u32)msg->meta.buf.size);
+
 	return 0;
 }
 
@@ -442,7 +440,9 @@ static s32 handle_query_metadata(struct isp_device *isp, struct isp_msg *msg)
 		return -EINVAL;
 
 	ins = &isp->insts[msg->inst];
-	msg->meta_enabled = ins->meta_inst < isp->num_insts ? 1 : 0;
+
+	if (ins->af_mode)
+		msg->meta_enabled = true;
 
 	return 0;
 }

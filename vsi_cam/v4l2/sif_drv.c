@@ -170,7 +170,7 @@ static int sif_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	if (format->fmt.pix.pixelformat == V4L2_PIX_FMT_NV12 && inst->conv_nv12)
 		sif->sif_cfg.yuv_conv = 1;
 
-	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post, BOTH_CHANNEL);
+	rc = sif_set_format(inst->dev, inst->id, &f, inst->en_post, ALL_CHANNEL);
 	if (rc < 0) {
 		pr_err("%s sif_set_format failed\n", __func__);
 		goto _exit;
@@ -346,7 +346,7 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 
 		if (refcnt > REFCNT_INIT_VAL) {
 			if (set_dma)
-				rc = sif_set_dma(sif->dev, sif->id, 1);
+				rc = sif_set_dma(sif->dev, sif->id, 1, false);
 			if (set_isp)
 				sif_set_isp_ctrl(sif->dev, sif->id, 1, true);
 		}
@@ -357,7 +357,7 @@ static int sif_set_stream(struct v4l2_buf_ctx *ctx, u32 pad, int enable)
 			irq_ctx.src_ctx = NULL;
 		} else {
 			if (refcnt > REFCNT_INIT_VAL && irq_ctx.buf_ctx) {
-				rc = sif_set_dma(sif->dev, sif->id, 0);
+				rc = sif_set_dma(sif->dev, sif->id, 0, false);
 				if (rc < 0)
 					return rc;
 			}
@@ -379,7 +379,7 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 
 	if (!enable) {
 		sif_set_isp_ctrl(inst->dev, inst->id, 0, true);
-		rc = sif_set_dma(inst->dev, inst->id, 0);
+		rc = sif_set_dma(inst->dev, inst->id, 0, false);
 		if (rc < 0)
 			return rc;
 		rc = subdev_set_stream(sd, enable);
@@ -392,7 +392,7 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 		if (rc < 0)
 			return rc;
-		rc = sif_set_dma(inst->dev, inst->id, 1);
+		rc = sif_set_dma(inst->dev, inst->id, 1, false);
 		if (rc < 0)
 			return rc;
 		sif_set_isp_ctrl(inst->dev, inst->id, 1, true);

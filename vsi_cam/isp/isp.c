@@ -1509,7 +1509,6 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 		isp->hdr_bufs[inst].size = 0;
 	}
 
-	ins->meta_inst = isp->num_insts;
 	rc = isp_set_state(isp, inst, CAM_STATE_CLOSED, type);
 	if (rc < 0)
 		dev_err(isp->dev, "failed to call isp_set_state (err=%d)\n", rc);
@@ -1637,7 +1636,6 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 		for (j = 0; j < ARRAY_SIZE(isp->insts[i].src_bufs); j++)
 			list_add_tail(&isp->insts[i].src_bufs[j].entry,
 				      &isp->insts[i].src_buf_list1);
-		isp->insts[i].meta_inst = isp->num_insts;
 	}
 
 	for (i = 0; i < ISP_SINK_ONLINE_PATH_MAX; i++) {

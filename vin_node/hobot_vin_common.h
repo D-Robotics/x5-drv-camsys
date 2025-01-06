@@ -84,7 +84,7 @@ typedef enum _vin_ochn_type_e {
 	VIN_ONLINE,
 	VIN_FRAME_TOGHER,
 	VIN_EMB,
-	VIN_ROI,
+	VIN_PDAF,
 	VIN_TYPE_INVALID,
 } vin_ochn_type_e;
 

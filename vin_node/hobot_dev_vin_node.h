@@ -41,11 +41,11 @@
  */
 #define EMB_INDEX 3
 /**
- * @def ROI_INDEX
- * Index of roi node
+ * @def PDAF_INDEX
+ * Index of pdaf node
  * @NO{S10E01C01}
  */
-#define ROI_INDEX 4
+#define PDAF_INDEX 4
 
 
 /**
@@ -172,6 +172,12 @@ struct j6_vin_node_dev {
 	 * range:N/A; default: N/A
 	 */
 	struct vin_node_subdev emb_subdev[VIO_MAX_STREAM];
+	/**
+	 * @var j6_vin_node_dev::pdaf_subdev
+	 * Abstraction of pdaf nodes
+	 * range:N/A; default: N/A
+	 */
+	struct vin_node_subdev pdaf_subdev[VIO_MAX_STREAM];
 	/**
 	 * @var j6_vin_node_dev::roi_subdev
 	 * Abstraction of roi nodes

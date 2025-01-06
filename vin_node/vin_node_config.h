@@ -557,17 +557,18 @@ typedef struct vin_rawds_attr_s{
 	uint32_t	rawds_mode;
 }vin_rawds_attr_t;  // 对Rawds功能的抽象
 
-struct vin_roi_attr_s {
-	uint32_t       roi_x;    // 起点坐标X
-	uint32_t       roi_y;    // 起点坐标Y
-	uint32_t       roi_width;   // roi输出的宽
-	uint32_t       roi_height;  // roi输出的高
-}; //通用的output channel 属性结构体
+typedef struct vin_pdaf_attr_s {
+	uint32_t       pdaf_en;
+	uint32_t       pd_ipi_channel;
+	uint32_t       pd_width;
+	uint32_t       pd_height;
+        uint32_t       pd_format;
+} vin_pdaf_attr_t;
 
 typedef enum vin_ochn_attr_type_s{
 	VIN_BASIC_ATTR,
 	VIN_EMB_ATTR,
-	VIN_ROI_ATTR,
+	VIN_PDAF_ATTR,
 	VIN_RAWDS_ATTR,
 	VIN_DYNAMIC_INVALID,
 }vin_ochn_attr_type_e;
@@ -581,13 +582,13 @@ typedef struct vin_basic_attr_s{
 
 typedef struct vin_ochn_attr_s{
 	uint32_t		ddr_en;
-	uint32_t		roi_en;			// roi使能  ，根据type来决定是否使能
+	uint32_t		pdaf_en;		// pdaf使能  ，根据type来决定是否使能
 	uint32_t		emb_en;			// 使能emb
 	uint32_t		rawds_en;		// rawds功能使能
 	vin_ochn_attr_type_e	ochn_attr_type;		// 基本属性类型
 	vin_basic_attr_t	vin_basic_attr;		// 基本属性,必须要配置的
 	vin_rawds_attr_t	rawds_attr;		// rawds属性
-	struct vin_roi_attr_s	roi_attr;		// ROI属性 公共定义
+	vin_pdaf_attr_t 	pdaf_attr;		// PDAF属性 公共定义
 	vin_emb_attr_t		emb_attr;		// emb属性
 }vin_ochn_attr_t;
 
@@ -622,6 +623,7 @@ typedef struct vin_cim_private_s{
 	u8 yuv_format;
 	u8 ddr_en;
 	u8 embeded_en;
+        u8 pdaf_en;
 	u8 embeded_dependence;
 	u8 embeded_start_cnt;
 	u8 pack_mode[VIN_TYPE_INVALID];
