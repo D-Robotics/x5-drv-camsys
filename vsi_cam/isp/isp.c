@@ -1342,8 +1342,8 @@ _frame_done:
 			spin_unlock_irqrestore(&ins->lock, flags2);
 		}
 	} else {
-		if (!ins)
-			pr_err("fail to get currect isp instance id!\n");
+		if (!ins && !isp->sch.mi_idle)
+			pr_err("fail to get correct isp instance id!\n");
 	}
 
 	spin_unlock_irqrestore(&isp->sch.lock, flags);
