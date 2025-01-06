@@ -29,6 +29,7 @@ struct sif_v4l_instance {
 struct sif_v4l_device {
 	struct sif_device sif_dev;
 	struct sif_v4l_instance *insts;
+	struct cam_dev cam_dev;
 };
 
 #endif /* _SIF_DRV_H_ */

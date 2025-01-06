@@ -132,6 +132,7 @@ struct sif_device {
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_fps_file;
 #endif
+	struct cam_dev *cam_dev;
 };
 
 struct sif_frame_des {

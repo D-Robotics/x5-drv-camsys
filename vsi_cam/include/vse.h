@@ -8,6 +8,7 @@
 #include <linux/spinlock.h>
 #include <linux/timekeeping.h>
 
+#include "cam_buf.h"
 #include "cam_uapi.h"
 #include "job_queue.h"
 #include "vse_uapi.h"
@@ -89,6 +90,7 @@ struct vse_device {
 	struct dentry *debugfs_log_file;
 	struct dentry *debugfs_fps_file;
 #endif
+	struct cam_dev *cam_dev;
 };
 
 void vse_set_rdma_buffer(struct vse_device *vse, phys_addr_t phys_addr, struct cam_format *fmt);

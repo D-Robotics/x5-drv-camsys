@@ -8,6 +8,7 @@
 #include <linux/refcount.h>
 #include <linux/timekeeping.h>
 
+#include "cam_buf.h"
 #include "isp_uapi.h"
 #include "job_queue.h"
 #include "mem_helper.h"
@@ -143,6 +144,7 @@ struct isp_device {
 	struct dentry *debugfs_fps_file;
 #endif
 	struct tasklet_struct update_lut_tbl;
+	struct cam_dev *cam_dev;
 };
 
 bool isp_get_hdr_sram_enabled(struct isp_device *isp, u32 inst);

@@ -332,7 +332,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 			vse_ctrl &= ~0x3f;
 			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 				if (ctx->src_buf[i]) {
-					phys_addr_t phys_addr = get_phys_addr(vse->dev, ctx->src_buf[i], 0);
+					phys_addr_t phys_addr = get_phys_addr(vse->cam_dev, ctx->src_buf[i], 0);
 
 					vse_set_mi_buffer(vse, i, phys_addr, &inst->ofmt[i]);
 					vse_ctrl |= BIT(i);

@@ -145,11 +145,27 @@ bool check_stepwise_res(struct cam_res_cap *res, u32 width, u32 height)
 	return true;
 }
 
+struct cam_iova {
+	phys_addr_t addr;
+	u32 size;
+};
+
+struct cam_dev {
+	struct device *dev;
+	spinlock_t lock; /* lock for list */
+	struct cam_iova *list;
+	u32 size, index;
+};
+
 struct cam_buf {
 	union {
 		struct vb2_v4l2_buffer vb;
 		struct v4l2_m2m_buffer m2m;
 	};
+	struct {
+		struct device *dev;
+		phys_addr_t addr[VB2_MAX_PLANES];
+	} iova[2];
 	struct list_head entry;
 };
 
@@ -255,4 +271,6 @@ int pixelformat_to_mbus_code(u32 format);
 u32 mbus_code_to_pixelformat(u32 code);
 int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg);
 int get_front_info(struct media_pad *pad, u32 *devid, u32 *insid);
+int cam_dev_init(struct device *dev, struct cam_dev *cdev, u32 iova_sz);
+void cam_dev_deinit(struct cam_dev *cdev);
 #endif /* _UTILS_H_ */
