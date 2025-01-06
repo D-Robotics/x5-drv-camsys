@@ -375,6 +375,13 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	pr_debug("isp inst%d online_mcm=%d, mode=%d, stream_idx=%d\n",
 		 inst->id, isp->online_mcm, inst->dev->mode, inst->id);
 
+	(void)get_remote_pad_sd(src_pad(inst), &rsd);
+	if (rsd) {
+		if (inst->node.bctx.src_online_en && inst->dev->mode == ISP_STRM_MODE)
+			v4l2_subdev_ctx_call_no_return(rsd, set_mode, CAM_SIMPLEX_MODE);
+		else
+			v4l2_subdev_ctx_call_no_return(rsd, set_mode, CAM_MULTIPLEX_MODE);
+	}
 	rc = isp_set_state(inst->dev, inst->id, CAM_STATE_INITED, V4L_GROUP);
 	if (rc < 0) {
 		pr_err("%s isp_set_state failed\n", __func__);
