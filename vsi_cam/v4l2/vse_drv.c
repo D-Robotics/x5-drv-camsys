@@ -628,7 +628,6 @@ static int vse_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = vse_set_state(vse->dev, vse->id, enable);
 		if (rc < 0)
 			return rc;
-		vse->fmt_changed = false;
 	}
 	return 0;
 }
@@ -872,12 +871,12 @@ static int vse_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 			goto _exit;
 		}
 	}
+	inst->fmt_changed = false;
 	rc = vse_close(inst->dev, inst->id);
 	if (rc < 0) {
 		pr_err("%s failed to call vse_close (err=%d)\n", __func__, rc);
 		goto _exit;
 	}
-
 	memset(&inst->ifmt, 0, sizeof(inst->ifmt));
 	vse_set_default_input(inst);
 	vse_set_res_cap(inst);

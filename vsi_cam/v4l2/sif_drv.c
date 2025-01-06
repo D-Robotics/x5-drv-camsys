@@ -388,8 +388,6 @@ static int sif_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 		if (rc < 0)
 			return rc;
-
-		inst->fmt_changed = false;
 	} else {
 		rc = sif_set_state(inst->dev, inst->id, enable, inst->en_post);
 		if (rc < 0)
@@ -490,6 +488,7 @@ static int sif_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	if (rc < 0)
 		goto _exit;
 
+	inst->fmt_changed = false;
 	rc = sif_close(inst->dev, inst->id);
 
 _exit:
