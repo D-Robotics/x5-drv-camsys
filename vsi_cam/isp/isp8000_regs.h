@@ -150,10 +150,12 @@
 #define ISP_FE_AHB_WRITE_SHIFT (1)
 
 /* n = 0, 1 for long, short exposure path */
-#define MI_HDR_RAW_ADDR(n) (0x00005740 + (n) * 0x40)
-#define MI_HDR_RAW_SIZE(n) (0x00005744 + (n) * 0x40)
-#define MI_HDR_RAW_OFFS(n) (0x00005748 + (n) * 0x40)
-#define MI_HDR_DMA_ADDR(n) (0x00005820 + (n) * 0x30)
+#define MI_HDR_RAW_ADDR(n)      (0x00005740 + (n) * 0x40)
+#define MI_HDR_RAW_SIZE(n)      (0x00005744 + (n) * 0x40)
+#define MI_HDR_RAW_OFFS(n)      (0x00005748 + (n) * 0x40)
+#define MI_HDR_DMA_ADDR(n)      (0x00005820 + (n) * 0x30)
+#define MI_HDR_DMA_SIZE(n)      (0x00005824 + (n) * 0x30)
+#define MI_HDR_DMA_BUF_SIZE(n)  (0x00005838 + (n) * 0x30)
 
 #define MP_RAW_BASE_AD_MASK (0xFFFFFFF0)
 #define MP_RAW_SIZE_MASK (0x1FFFFFF0)

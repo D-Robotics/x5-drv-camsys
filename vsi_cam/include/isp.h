@@ -125,6 +125,8 @@ struct isp_device {
 	int stream_idx_mapping[ISP_SINK_ONLINE_PATH_MAX];
 	struct mem_list hdr_buf_list;
 	struct mem_buf hdr_bufs[HDR_BUF_NUM];
+	u32 hdr_sram[2];
+	bool hdr_sram_rsvd;
 	u32 cur_mi_irq_ctx, next_mi_irq_ctx;
 	refcount_t set_state_refcnt;
 	enum cam_error error;
@@ -143,6 +145,7 @@ struct isp_device {
 	struct tasklet_struct update_lut_tbl;
 };
 
+bool isp_get_hdr_sram_enabled(struct isp_device *isp, u32 inst);
 void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr);
 void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam_format *fmt);
 int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync);

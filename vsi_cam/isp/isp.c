@@ -18,6 +18,9 @@
 #include "isp.h"
 #include "isp8000_regs.h"
 
+bool hdr_sram_en;
+module_param(hdr_sram_en, bool, 0644);
+
 #ifdef EN_CHK_FMT
 static bool check_format(struct isp_instance *ins, struct cam_format *fmt)
 {
@@ -345,13 +348,18 @@ static int alloc_mcm_buf(struct isp_device *isp, u32 id, struct cam_format *fmt)
 	return 0;
 }
 
+static inline u32 get_hdr_stride(struct cam_format *fmt)
+{
+	/* for hdr buffer, bit12 unaligned is fixed */
+	return fmt->width * 3 / 2;
+}
+
 static int alloc_hdr_buf(struct isp_device *isp, u32 id, struct cam_format *fmt)
 {
-	u32 size;
 	struct mem_buf *buf;
+	u32 size = get_hdr_stride(fmt) * fmt->height;
 	int rc;
 
-	size = fmt->stride * fmt->height;
 	if (!size)
 		return -EINVAL;
 
@@ -371,7 +379,13 @@ static int alloc_hdr_buf(struct isp_device *isp, u32 id, struct cam_format *fmt)
 			return rc;
 		}
 	}
+	pr_debug("alloc_hdr_buf addr %llx, size %llx\n", buf->addr, buf->size);
 	return 0;
+}
+
+bool isp_get_hdr_sram_enabled(struct isp_device *isp, u32 inst)
+{
+	return hdr_sram_en && isp->hdr_sram_rsvd;
 }
 
 int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt)
@@ -393,7 +407,7 @@ int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt)
 		return -EINVAL;
 #endif
 
-	if (ins->hdr_en) {
+	if (ins->hdr_en && !isp_get_hdr_sram_enabled(isp, inst)) {
 		int i;
 
 		for (i = 0; i < HDR_BUF_NUM; i++) {
@@ -458,14 +472,41 @@ static inline void isp_set_mcm_raw_buffer(struct isp_device *isp, u32 path,
 	isp_write(isp, MI_MCMn_RAW_OFFS(base), 0x0);
 }
 
-static inline void isp_set_hdr_raw_buffer(struct isp_device *isp, u32 n,
-					  phys_addr_t phys_addr, struct cam_format *fmt)
+static inline void isp_set_hdr_raw_buffer_sram(struct isp_device *isp, struct cam_format *fmt)
 {
-	if (n < HDR_BUF_NUM) {
+	u32 stride = get_hdr_stride(fmt);
+	u32 addr, size;
+
+	if (!stride)
+		return;
+
+	addr = isp->hdr_sram[0];
+	size = isp->hdr_sram[1] & (~(stride - 1));
+	pr_debug("for hdr_l sram buffer: addr=%x, size=%x\n", addr, size);
+	isp_write(isp, MI_HDR_RAW_ADDR(0), addr & MP_RAW_BASE_AD_MASK);
+	isp_write(isp, MI_HDR_RAW_SIZE(0), size & MP_RAW_SIZE_MASK);
+	isp_write(isp, MI_HDR_RAW_OFFS(0), 0);
+	isp_write(isp, MI_HDR_DMA_ADDR(0), addr & MP_RAW_BASE_AD_MASK);
+	isp_write(isp, MI_HDR_DMA_SIZE(0), stride * fmt->height & MP_RAW_SIZE_MASK);
+	isp_write(isp, MI_HDR_DMA_BUF_SIZE(0), size & MP_RAW_SIZE_MASK);
+}
+
+static inline void isp_set_hdr_raw_buffer(struct isp_device *isp,
+					  struct cam_format *fmt)
+{
+	phys_addr_t phys_addr;
+	u32 size;
+
+	for (u32 n = 0; n < HDR_BUF_NUM; n++) {
+		phys_addr = isp->hdr_bufs[n].addr;
+		size = isp->hdr_bufs[n].size;
+		pr_debug("for hdr%d ddr buffer: addr=%llx, size=%x\n", n, phys_addr, size);
 		isp_write(isp, MI_HDR_RAW_ADDR(n), phys_addr & MP_RAW_BASE_AD_MASK);
-		isp_write(isp, MI_HDR_RAW_SIZE(n), (fmt->stride * fmt->height) & MP_RAW_SIZE_MASK);
+		isp_write(isp, MI_HDR_RAW_SIZE(n), size & MP_RAW_SIZE_MASK);
 		isp_write(isp, MI_HDR_RAW_OFFS(n), 0);
 		isp_write(isp, MI_HDR_DMA_ADDR(n), phys_addr & MP_RAW_BASE_AD_MASK);
+		isp_write(isp, MI_HDR_DMA_SIZE(n), size & MP_RAW_SIZE_MASK);
+		isp_write(isp, MI_HDR_DMA_BUF_SIZE(n), size & MP_RAW_SIZE_MASK);
 	}
 }
 
@@ -586,7 +627,6 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 {
 	struct isp_msg msg;
 	struct isp_instance *ins;
-	phys_addr_t phys_addr;
 	struct isp_mcm_sch sch;
 	int rc, i;
 	u32 value;
@@ -619,10 +659,10 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 		break;
 	case CAM_STATE_STARTED:
 		if (ins->hdr_en) {
-			for (i = 0; i < HDR_BUF_NUM; i++) {
-				phys_addr = isp->hdr_bufs[i].addr;
-				isp_set_hdr_raw_buffer(isp, i, phys_addr, &ins->fmt.ifmt);
-			}
+			if (isp_get_hdr_sram_enabled(isp, inst))
+				isp_set_hdr_raw_buffer_sram(isp, &ins->fmt.ifmt);
+			else
+				isp_set_hdr_raw_buffer(isp, &ins->fmt.ifmt);
 		}
 
 		if (isp->mode == ISP_STRM_MODE) {
@@ -1487,7 +1527,6 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 	ins = &isp->insts[inst];
 	memset(&ins->fmt, 0, sizeof(ins->fmt));
 	memset(&ins->in, 0, sizeof(ins->in));
-	ins->hdr_en = false;
 	INIT_LIST_HEAD(&ins->src_buf_list1);
 	INIT_LIST_HEAD(&ins->src_buf_list2);
 	INIT_LIST_HEAD(&ins->src_buf_list3);
@@ -1504,10 +1543,15 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 			}
 		}
 	}
-	if (inst < HDR_BUF_NUM && isp->hdr_bufs[inst].size > 0) {
-		mem_free(isp->dev, &isp->hdr_buf_list, &isp->hdr_bufs[inst]);
-		isp->hdr_bufs[inst].size = 0;
+	if (ins->hdr_en) {
+		for (i = 0; i < HDR_BUF_NUM; i++) {
+			if (isp->hdr_bufs[i].size > 0) {
+				mem_free(isp->dev, &isp->hdr_buf_list, &isp->hdr_bufs[i]);
+				isp->hdr_bufs[i].size = 0;
+			}
+		}
 	}
+	ins->hdr_en = false;
 
 	rc = isp_set_state(isp, inst, CAM_STATE_CLOSED, type);
 	if (rc < 0)
@@ -1614,6 +1658,10 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 	isp->ctrl_dev = get_cam_ctrl_device(pdev);
 	if (IS_ERR(isp->ctrl_dev))
 		return PTR_ERR(isp->ctrl_dev);
+
+	rc = of_property_read_u32_array(dev->of_node, "hdr-sram",
+					isp->hdr_sram, 2);
+	isp->hdr_sram_rsvd = rc < 0 ? false : true;
 
 	isp->jq = create_job_queue(ISP_SINK_PATH_MAX * SRC_BUF_NUM);
 	if (!isp->jq) {

@@ -77,6 +77,7 @@ static s32 handle_get_func(struct isp_device *isp, struct isp_msg *msg)
 		msg->func.mcm.online = ins->online_mcm ? 1 : 0;
 		msg->func.mcm.stream_idx = ins->stream_idx;
 	}
+	msg->func.hdr_sram = isp_get_hdr_sram_enabled(isp, msg->inst);
 	return 0;
 }
 
