@@ -219,7 +219,7 @@ void lpwm_offset_config_single(void __iomem *base_reg, uint32_t c_id, uint32_t o
 
 	offset = LPWM_0_CFG0 + c_id * LPWM_REG_CFG_OFF;
 	field_offset = LPWMF_0_OFFSET + c_id * LPWM_FILED_CFG_OFF;
-	val = ofs & LPWM_OFFSET_MAX;
+	val = ofs & LPWM_OFFSET_MASK;
 
 	vio_hw_set_field(base_reg, &lpwm_regs[offset], &lpwm_fields[field_offset], val);
 }
@@ -250,7 +250,7 @@ void lpwm_cfg1_config_single(void __iomem *base_reg, uint32_t c_id, uint32_t per
 
 	offset = LPWM_0_CFG1 + c_id * LPWM_REG_CFG_OFF;
 	field_offset = LPWMF_0_CFG1 + c_id * LPWM_FILED_CFG_OFF;
-	val = (duty_time << LPWM_DUTY_TIME_SHIFT) | (period & LPWM_PERIOD_MAX);
+	val = (duty_time << LPWM_DUTY_TIME_SHIFT) | (period & LPWM_PERIOD_MASK);
 
 	vio_hw_set_field(base_reg, &lpwm_regs[offset], &lpwm_fields[field_offset], val);
 }
