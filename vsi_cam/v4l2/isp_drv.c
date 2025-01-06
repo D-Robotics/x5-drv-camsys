@@ -356,9 +356,7 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 
 	isp = &inst->dev->insts[inst->id];
 	rc = check_work_mode_param(&inst->dev->mode);
-	if (rc < 0)
-		goto _exit;
-	if (inst->dev->mode == ISP_MODE_INVALID) {
+	if (rc < 0 || inst->dev->mode == ISP_MODE_INVALID) {
 		pr_debug("set isp default input mode as MCM mode\n");
 		inst->dev->mode = ISP_MCM_MODE;
 	}
