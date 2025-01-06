@@ -30,6 +30,7 @@ struct gdc_instance {
 	struct gdc_format fmt;
 	enum cam_state state;
 	enum cam_error error;
+	u32 job_count;
 };
 
 struct gdc_device {

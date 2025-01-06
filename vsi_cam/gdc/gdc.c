@@ -137,6 +137,7 @@ int gdc_add_job(struct gdc_device *gdc, u32 inst)
 {
 	struct irq_job job = { inst };
 	struct gdc_irq_ctx *ctx;
+	struct gdc_instance *ins;
 	unsigned long flags;
 	int rc;
 
@@ -145,14 +146,14 @@ int gdc_add_job(struct gdc_device *gdc, u32 inst)
 		dev_err(gdc->dev, "failed to push a job(err=%d)\n", rc);
 		return rc;
 	}
+	ins = &gdc->insts[inst];
+	ins->job_count++;
 
 	spin_lock_irqsave(&gdc->err_lock, flags);
 	if (gdc->error) {
 		ctx = get_next_irq_ctx(gdc);
-		if (ctx) {
-			pr_debug("gdc%d set cmd\n", gdc->next_irq_ctx);
+		if (ctx)
 			gdc_set_cmd(gdc, gdc->next_irq_ctx);
-		}
 	}
 	spin_unlock_irqrestore(&gdc->err_lock, flags);
 	return 0;
@@ -162,20 +163,25 @@ int gdc_wake_up(struct gdc_device *gdc, u32 inst)
 {
 	struct irq_job job = { inst };
 	struct gdc_irq_ctx *ctx;
+	struct gdc_instance *ins;
 	unsigned long flags;
 	int rc = 0;
 
+	ins = &gdc->insts[inst];
 	spin_lock_irqsave(&gdc->err_lock, flags);
-	if (gdc->error) {
+
+	if (gdc->error || !ins->job_count) {
 		rc = push_job(gdc->jq, &job);
 		if (rc < 0)
+			goto _exit;
+		ins->job_count++;
+		if (!gdc->error)
 			goto _exit;
 
 		ctx = get_next_irq_ctx(gdc);
 		if (ctx)
 			gdc_set_cmd(gdc, gdc->next_irq_ctx);
 	}
-
 _exit:
 	spin_unlock_irqrestore(&gdc->err_lock, flags);
 	return rc;
