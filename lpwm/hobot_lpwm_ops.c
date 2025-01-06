@@ -232,15 +232,15 @@ static int32_t lpwm_dynamic_param_check(struct hobot_lpwm_ins *lpwm, uint32_t c_
 	}
 
 	if ((config->duty_time > config->period) ||
-	    (config->duty_time > LPWM_HIGH_MAX)) {
-		lpwm_err(lpwm, "Duty_time value %u set to core-%d should not exceed 0xFFF and period!\n",
+	    (config->duty_time > LPWM_HIGH_MAX) || (config->duty_time < LPWM_HIGH_MIN)) {
+		lpwm_err(lpwm, "Duty_time value %u set to core-%d should be in [0, 4,000|period] us!\n",
 			 config->duty_time, c_id);
 		return -EINVAL;
 	}
 
 	if ((config->period > LPWM_PERIOD_MAX) ||
 	    (config->period < LPWM_PERIOD_MIN)) {
-		lpwm_err(lpwm, "Period value %u set to core-%d should be in [2, 1000000) us!\n",
+		lpwm_err(lpwm, "Period value %u set to core-%d should be in [1, 1000000) us!\n",
 			 config->period, c_id);
 		return -EINVAL;
 	}
@@ -356,9 +356,9 @@ static int32_t lpwm_single_channel_config(struct hobot_lpwm_ins *lpwm, uint32_t 
 		lpwm->lpwm_attr[i].trigger_mode = config->trigger_mode > 0 ? 1 : 0;
 		lpwm->lpwm_attr[i].trigger_source = config->trigger_source;
 	}
-	lpwm->lpwm_attr[c_id].offset = config->offset & LPWM_OFFSET_MAX;
-	lpwm->lpwm_attr[c_id].duty_time = config->duty_time & LPWM_HIGH_MAX;
-	lpwm->lpwm_attr[c_id].period = config->period & LPWM_PERIOD_MAX;
+	lpwm->lpwm_attr[c_id].offset = config->offset & LPWM_OFFSET_MASK;
+	lpwm->lpwm_attr[c_id].duty_time = config->duty_time & LPWM_HIGH_MASK;
+	lpwm->lpwm_attr[c_id].period = config->period & LPWM_PERIOD_MASK;
 	lpwm->lpwm_attr[c_id].threshold = config->threshold & LPWM_THRESHOLD_MAX;
 	lpwm->lpwm_attr[c_id].adjust_step = config->adjust_step & LPWM_STEP_MAX;
 	osal_mutex_unlock(&lpwm->con_lock);
@@ -611,9 +611,9 @@ int32_t lpwm_change_attr(struct vio_video_ctx *vctx, void *attr)
 		lpwm_cfg1_config_single(lpwm->base, c_id, dynamic_attr->period, dynamic_attr->duty_time);
 
 		osal_mutex_lock(&lpwm->con_lock);
-		lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MAX;
-		lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MAX;
-		lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MAX;
+		lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MASK;
+		lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MASK;
+		lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MASK;
 		osal_mutex_unlock(&lpwm->con_lock);
 	} else {
 		lpwm_trigger_source_config(lpwm->base, dynamic_attr->trigger_source);
@@ -626,9 +626,9 @@ int32_t lpwm_change_attr(struct vio_video_ctx *vctx, void *attr)
 			lpwm->lpwm_attr[i].trigger_mode = dynamic_attr->trigger_mode > 0u ? 1u : 0u;
 			lpwm->lpwm_attr[i].trigger_source = dynamic_attr->trigger_source;
 		}
-		lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MAX;
-		lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MAX;
-		lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MAX;
+		lpwm->lpwm_attr[c_id].offset = dynamic_attr->offset & LPWM_OFFSET_MASK;
+		lpwm->lpwm_attr[c_id].duty_time = dynamic_attr->duty_time & LPWM_HIGH_MASK;
+		lpwm->lpwm_attr[c_id].period = dynamic_attr->period & LPWM_PERIOD_MASK;
 		osal_mutex_unlock(&lpwm->con_lock);
 	}
 
@@ -850,12 +850,12 @@ int32_t hobot_lpwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	}
 
 	if (period == 0 || period > LPWM_PERIOD_MAX) {
-		lpwm_err(lpwm, "Channel-%d apply fail, period_ns should in (0, 1,000,000,000]ns!\n", c_id);
+		lpwm_err(lpwm, "Channel-%d apply fail, period_ns should in (1, 1,000,000,000]ns!\n", c_id);
 		return -ERANGE;
 	}
 
 	if (duty > period || duty > LPWM_HIGH_MAX) {
-		lpwm_err(lpwm, "Channel-%d apply fail, duty_ns should in [0, 4,095,000|period]ns!\n", c_id);
+		lpwm_err(lpwm, "Channel-%d apply fail, duty_ns should in [0, 4,000,000|period]ns!\n", c_id);
 		return -ERANGE;
 	}
 
