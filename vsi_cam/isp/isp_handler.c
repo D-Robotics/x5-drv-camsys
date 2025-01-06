@@ -455,6 +455,28 @@ static s32 handle_isp_reset_schedule(struct isp_device *isp, struct isp_msg *msg
 	return 0;
 }
 
+static s32 handle_ack_ctrl(struct isp_device *isp, struct isp_msg *msg)
+{
+	mutex_lock(&isp->ctrl_lock);
+	isp->ctrl_msg.rc = (int)msg->group;
+	memcpy(&isp->ctrl_msg.ctrl, &msg->ctrl, sizeof(msg->ctrl));
+	isp->ctrl_cond = true;
+	wake_up_all(&isp->ctrl_waitq);
+	mutex_unlock(&isp->ctrl_lock);
+	return 0;
+}
+
+static s32 handle_ack_ctrl_ext(struct isp_device *isp, struct isp_msg *msg)
+{
+	mutex_lock(&isp->ctrl_lock);
+	isp->ctrl_msg.rc = (int)msg->group;
+	memcpy(&isp->ctrl_msg.ctrl_ext, &msg->ctrl_ext, sizeof(msg->ctrl_ext));
+	isp->ctrl_cond = true;
+	wake_up_all(&isp->ctrl_waitq);
+	mutex_unlock(&isp->ctrl_lock);
+	return 0;
+}
+
 static s32 handle_iommu_map(struct isp_device *isp, struct isp_msg *msg)
 {
 	return mem_iommu_map(isp->dev, msg->map_buf.phys,
@@ -563,6 +585,12 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case ISP_MSG_RESET_SCH:
 		rc = handle_isp_reset_schedule(isp, m);
+		break;
+	case ISP_MSG_ACK_CTRL:
+		rc = handle_ack_ctrl(isp, m);
+		break;
+	case ISP_MSG_ACK_CTRL_EXT:
+		rc = handle_ack_ctrl_ext(isp, m);
 		break;
 	case CAM_MSG_IOMMU_MAP:
 		rc = handle_iommu_map(isp, m);
