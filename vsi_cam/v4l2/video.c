@@ -169,6 +169,7 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vb2_get_drv_priv(vq);
 	struct v4l2_subdev *sd;
+	struct v4l2_buf_ctx *ctx;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
@@ -176,17 +177,22 @@ static int vid_start_streaming(struct vb2_queue *vq, unsigned int count)
 	if (!sd)
 		return -ENOLINK;
 
+	ctx = v4l2_get_subdevdata(sd);
+	v4l2_subdev_ctx_mutex_lock(ctx);
 	rc = v4l2_subdev_ctx_call(sd, set_stream, pad->index, 1);
 	if (rc < 0) {
 		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
+		v4l2_subdev_ctx_mutex_unlock(ctx);
 		return rc;
 	}
 
 	rc = v4l2_subdev_call(sd, video, s_stream, 1);
 	if (rc < 0) {
 		vid_return_all_buffers(vdev, VB2_BUF_STATE_QUEUED);
+		v4l2_subdev_ctx_mutex_unlock(ctx);
 		return rc;
 	}
+	v4l2_subdev_ctx_mutex_unlock(ctx);
 
 //	rc = media_pipeline_start(sink_pad(vdev), &vdev->pipe);
 //	if (rc < 0)
@@ -198,20 +204,27 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 {
 	struct vid_video_device *vdev = (struct vid_video_device *)vb2_get_drv_priv(vq);
 	struct v4l2_subdev *sd;
+	struct v4l2_buf_ctx *ctx;
 	struct media_pad *pad = get_remote_pad_sd(sink_pad(vdev), &sd);
 	int rc;
 
 	if (!sd)
 		return;
 
+	ctx = v4l2_get_subdevdata(sd);
+	v4l2_subdev_ctx_mutex_lock(ctx);
 	rc = v4l2_subdev_call(sd, video, s_stream, 0);
-	if (rc < 0)
+	if (rc < 0) {
+		v4l2_subdev_ctx_mutex_unlock(ctx);
 		return;
+	}
 
 	rc = v4l2_subdev_ctx_call(sd, set_stream, pad->index, 0);
-	if (rc < 0)
+	if (rc < 0) {
+		v4l2_subdev_ctx_mutex_unlock(ctx);
 		return;
-
+	}
+	v4l2_subdev_ctx_mutex_unlock(ctx);
 	notify_buf_ready(vdev, 0);
 
 //	media_pipeline_stop(sink_pad(vdev));

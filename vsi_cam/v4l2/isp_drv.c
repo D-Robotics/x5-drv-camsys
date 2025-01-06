@@ -815,15 +815,13 @@ static int isp_s_stream(struct v4l2_subdev *sd, int enable)
 		rc = isp_set_state(isp->dev, isp->id, CAM_STATE_STOPPED, V4L_GROUP);
 		if (rc < 0)
 			return rc;
-		if (is_sink_online_en(&isp->node.bctx))
-			rc = isp_set_stream_idx(isp->dev, isp->id, -1);
-		else
+		if (!is_sink_online_en(&isp->node.bctx)) {
 			rc = cam_reqbufs(sink_ctx(isp), 0, NULL);
-		if (rc < 0)
-			return rc;
+			if (rc < 0)
+				return rc;
+		}
 		if (isp->metadata_en)
 			rc = cam_reqbufs(sub_sink_ctx(isp), 0, NULL);
-		isp->fmt_changed = false;
 	}
 	return rc;
 }
@@ -906,6 +904,13 @@ static int isp_v4l_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	rc = subdev_close(sd);
 	if (rc < 0)
 		goto _exit;
+
+	if (is_sink_online_en(&inst->node.bctx)) {
+		rc = isp_set_stream_idx(inst->dev, inst->id, -1);
+		if (rc < 0)
+			goto _exit;
+	}
+	inst->fmt_changed = false;
 	rc = isp_close(inst->dev, inst->id, V4L_GROUP);
 
 _exit:
