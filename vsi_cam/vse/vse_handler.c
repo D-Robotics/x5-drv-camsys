@@ -78,6 +78,62 @@ static s32 handle_set_error(struct vse_device *vse, struct vse_msg *msg)
 	return 0;
 }
 
+static s32 handle_upd_cfg(struct vse_device *vse, struct vse_msg *msg)
+{
+	struct vse_instance *ins;
+	unsigned long flags;
+
+	if (msg->inst >= vse->num_insts)
+		return -EINVAL;
+	ins = &vse->insts[msg->inst];
+	if (msg) {
+		u32 i = 0;
+		u32 cfg_num = msg->vse_auto_cfg.vse_cfg_num;
+		u32 offset_num = msg->vse_auto_cfg.vse_cfg_part_start_num;
+		if ( cfg_num + offset_num > CFG_AUTO_NUM_MAX)
+			return -EINVAL;
+		for (; i < cfg_num; i++) {
+			ins->upd_cfg.cfg_shd[i + offset_num].addr = msg->vse_auto_cfg.addr[i];
+			ins->upd_cfg.cfg_shd[i + offset_num].val = msg->vse_auto_cfg.val[i];
+		}
+		if (msg->vse_auto_cfg.vse_is_full_cfg) {
+			spin_lock_irqsave(&ins->upd_cfg.cfg_lock, flags);
+			if (!ins->upd_cfg.is_need_upd) {
+				ins->upd_cfg.cfg_num = cfg_num + offset_num;
+				for (i = 0; i < ins->upd_cfg.cfg_num; i++) {
+					ins->upd_cfg.cfg[i].addr = ins->upd_cfg.cfg_shd[i].addr;
+					ins->upd_cfg.cfg[i].val = ins->upd_cfg.cfg_shd[i].val;
+				}
+				ins->upd_cfg.is_need_upd = true;
+			}
+			spin_unlock_irqrestore(&ins->upd_cfg.cfg_lock, flags);
+		}
+	} else {
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static s32 vse_upd_cfg(struct vse_device *vse){
+
+	struct vse_instance *ins;
+	unsigned long flags;
+	u32 i;
+
+	ins = &vse->insts[0];
+	spin_lock_irqsave(&ins->upd_cfg.cfg_lock, flags);
+	if (ins->upd_cfg.is_need_upd) {
+		for (i = 0; i < ins->upd_cfg.cfg_num; i++) {
+			u32 addr = ins->upd_cfg.cfg[i].addr;
+			u32 val = ins->upd_cfg.cfg[i].val;
+			vse_write(vse, addr, val);
+		}
+		ins->upd_cfg.is_need_upd = false;
+	}
+	spin_unlock_irqrestore(&ins->upd_cfg.cfg_lock, flags);
+	return 0;
+}
+
 s32 vse_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct vse_device *vse = (struct vse_device *)arg;
@@ -114,6 +170,9 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case VSE_MSG_SET_ERROR:
 		rc = handle_set_error(vse, m);
+		break;
+	case VSE_MSG_SET_CFG_AUTO:
+		rc = handle_upd_cfg(vse, m);
 		break;
 	default:
 		return -EINVAL;
@@ -327,6 +386,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		if (!ctx) {
 			vse->error = 1;
 		} else if (vse->mode == VSE_SCM_MODE) {
+			vse_upd_cfg(vse);
 			pre_ctrl = vse_read(vse, VSE_CTRL);
 			vse_ctrl = pre_ctrl;
 			vse_ctrl &= ~0x3f;

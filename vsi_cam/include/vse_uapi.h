@@ -8,6 +8,7 @@
 #include "cam_uapi.h"
 #include "mem_helper_uapi.h"
 
+#define CFG_MAX_QTY 64
 #define LUT_NUM 64
 #ifndef BIN_LEVEL_NUM
 #define BIN_LEVEL_NUM (3)
@@ -20,6 +21,7 @@
 #define VSE_MSG_ALLOC_CMD_BUF (0x1)
 #define VSE_MSG_SET_OSD_BUF   (0x2)
 #define VSE_MSG_SET_ERROR     (0x3)
+#define VSE_MSG_SET_CFG_AUTO  (0x4)
 
 #define VSE_MSG_IRQ_STAT         (0x1 << 8)
 #define VSE_MSG_SRC_ALT          (0x2 << 8)
@@ -128,6 +130,18 @@ enum vse_work_mode {
 	VSE_SCM_MODE,
 };
 
+struct vse_set_auto_upd_cfg {
+	__u32 vse_is_full_cfg;
+	__u32 vse_cfg_part_start_num;
+	__u32 vse_cfg_num;
+	/**
+	 * in order to adapt to the transmisson effciency,
+	 * it is necessary to limit the max value of each transmisson data.
+	 */
+	__u32 addr[CFG_MAX_QTY];
+	__u32 val[CFG_MAX_QTY];
+};
+
 struct vse_msg {
 	__u32 id;
 	__u32 inst;
@@ -155,6 +169,7 @@ struct vse_msg {
 		struct cam_clk clk;
 		struct cam_log log;
 		struct iommu_map_buf map_buf;
+		struct vse_set_auto_upd_cfg vse_auto_cfg;
 	};
 };
 
