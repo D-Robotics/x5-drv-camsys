@@ -55,7 +55,6 @@
 #define GDC_HW_AXI_SETTING_TILE_WRITER     0x00b0
 
 #define INT_GDC_BUSY                ((u32)1 << 0)
-#define INT_GDC_BUSY                ((u32)1 << 0)
 #define INT_GDC_ERROR               ((u32)1 << 1)
 #define INT_GDC_CONF_ERROR          ((u32)1 << 8)
 #define INT_GDC_USER_ABORT          ((u32)1 << 9)
