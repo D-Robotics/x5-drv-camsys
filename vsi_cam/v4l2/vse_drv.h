@@ -31,6 +31,7 @@ struct vse_v4l_instance {
 	struct mutex open_lock;
 	struct mutex fmt_lock;
 	struct mutex ctx_lock;
+	struct mutex state_lock;
 	refcount_t state_count;
 	refcount_t open_count;
 	bool m2m_en;
