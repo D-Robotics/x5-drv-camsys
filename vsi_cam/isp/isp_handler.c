@@ -575,9 +575,10 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout)
+void frame_done(struct isp_device *isp, u32 inst, bool timeout)
 {
-	struct isp_irq_ctx *ctx = &inst->ctx;
+	struct isp_instance *ins;
+	struct isp_irq_ctx *ctx;
 	struct cam_list_node *node;
 	ktime_t now_time = ktime_get_boottime();
 	struct cam_frame_info *info = NULL;
@@ -585,7 +586,9 @@ void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout)
 	struct cam_ctx *src_ctx = NULL;
 	u32 i;
 
-	if (inst->online_mcm) {
+	ins = &isp->insts[inst];
+	ctx = &ins->ctx;
+	if (ins->online_mcm) {
 		ib = list_first_entry_or_null(&isp->ibm[isp->cur_mi_irq_ctx].list3, struct ibuf,
 				      entry);
 		if (ib) {
@@ -600,8 +603,7 @@ void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout)
 		ctx->sink_buf = NULL;
 	}
 
-	node = list_first_entry_or_null(ctx->src_buf_list3,
-					struct cam_list_node, entry);
+	node = list_first_entry_or_null(ctx->src_buf_list3, struct cam_list_node, entry);
 	if (node) {
 		if (has_offline(ctx->src_online_stat)) {
 			i = get_offline(ctx->src_online_stat);
@@ -617,18 +619,28 @@ void frame_done(struct isp_device *isp, struct isp_instance *inst, bool timeout)
 				else
 					cam_update_frame_info(src_ctx, info);
 			}
-			cam_qbuf_irq(src_ctx, node->data, true);
+			if (isp->mode == ISP_STRM_MODE && ctx->src_buf &&
+			    ctx->src_buf == ctx->next_src_buf)
+				pr_debug("isp inst: %d, src_buf is the same with next_src_buf! skip "
+					 "dequeueing mp buf!\n", inst);
+			else
+				cam_qbuf_irq(src_ctx, node->data, true);
 		}
 		cam_set_frame_status(src_ctx, NO_ERR);
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list1);
+
+		if (isp->mode == ISP_STRM_MODE) {
+			ctx->src_buf = ctx->next_src_buf;
+			ctx->next_src_buf = NULL;
+		}
 	}
 
-	if (inst->last_frame_done)
-		inst->frame_interval += ktime_to_ms(ktime_sub(now_time, inst->last_frame_done));
+	if (ins->last_frame_done)
+		ins->frame_interval += ktime_to_ms(ktime_sub(now_time, ins->last_frame_done));
 
-	inst->last_frame_done = now_time;
-	inst->frame_count++;
+	ins->last_frame_done = now_time;
+	ins->frame_count++;
 }
 
 struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
