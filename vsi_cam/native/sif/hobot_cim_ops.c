@@ -307,6 +307,72 @@ static void cim_config_embeded_data(struct vin_node_subdev *subdev,
 /**
  * @NO{S10E04C01}
  * @ASIL{B}
+ * @brief: Configuration of pdaf_data
+ * @retval 0: success
+ * @retval <0: fail
+ * @param[in] subdev: VIN_NODE sub-device definition.
+ * @param[out] None
+ * @data_read None
+ * @data_updated None
+ * @compatibility None
+ * @callgraph
+ * @callergraph
+ * @design
+ */
+static void cim_config_pdaf_data(struct vin_node_subdev *subdev,
+				    const vin_ochn_attr_t *vin_ochn_attr)
+{
+	u8 ipi_channel;
+	struct j6_cim_dev *cim;
+	struct vin_pdaf_attr_s *pdaf_attr;
+	struct vin_cim_private_s *cim_priv_attr;
+	struct sif_device *sif;
+	struct sif_instance *ins;
+	struct cam_format fmt;
+	int i;
+
+	cim_priv_attr = cim_get_priv_by_subdev(subdev);
+	ipi_channel = cim_priv_attr->ipi_index;
+	cim = cim_get_dev(subdev->vin_node_dev->hw_id);
+	pdaf_attr = (struct vin_pdaf_attr_s *)&vin_ochn_attr->pdaf_attr;
+
+	if (!vin_ochn_attr->pdaf_en)
+		return;
+
+	sif = &cim->sif;
+	sif->pd_en = vin_ochn_attr->pdaf_en;
+	sif->pd_ipi_channel = pdaf_attr->pd_ipi_channel;
+	ins = &sif->insts[ipi_channel + i];
+	switch (pdaf_attr->pd_format) {
+	case DATA_TYPE_RGB888:
+		fmt.format = CAM_FMT_RGB888X;
+		break;
+	case DATA_TYPE_RAW8:
+		fmt.format = CAM_FMT_RAW8;
+		break;
+	case DATA_TYPE_RAW10:
+		fmt.format = CAM_FMT_RAW10;
+		break;
+	case DATA_TYPE_RAW12:
+		fmt.format = CAM_FMT_RAW12;
+		break;
+	default:
+		vio_err("unsupported pdaf format:0x%x\n", pdaf_attr->pd_format);
+		break;
+	}
+
+	fmt.width = pdaf_attr->pd_width;
+	fmt.height = pdaf_attr->pd_height;
+
+	sif_set_format(sif, pdaf_attr->pd_ipi_channel, &fmt, false, OUT_CHANNEL_PDAF);
+
+	cim_priv_attr->pdaf_en = (u8)vin_ochn_attr->pdaf_en;
+	vio_info("%s pdaf_en %d \n", __func__, cim_priv_attr->pdaf_en);
+}
+
+/**
+ * @NO{S10E04C01}
+ * @ASIL{B}
  * @brief: Set ochn attributes
  * @retval 0: success
  * @retval <0: fail
@@ -340,7 +406,8 @@ s32 cim_set_ochn_attr(struct vio_video_ctx *vctx,
 	cim = cim_get_dev(subdev->vin_node_dev->hw_id);
 	ochn_id = vctx->id - VNODE_ID_CAP;
 
-	cim_priv_attr->ddr_en = cim_ochn_attr->ddr_en;
+	if (ochn_id == VIN_MAIN_FRAME)
+		cim_priv_attr->ddr_en = cim_ochn_attr->ddr_en;
 
 	// cim_config_common_ochn(subdev, ochn_id, &cim_ochn_attr->vin_basic_attr);
 
@@ -348,6 +415,8 @@ s32 cim_set_ochn_attr(struct vio_video_ctx *vctx,
 		cim_config_main_frame(subdev, cim_ochn_attr);
 	} else if (ochn_id == VIN_EMB) {
 		cim_config_embeded_data(subdev, cim_ochn_attr);
+	} else if (ochn_id == VIN_PDAF) {
+		cim_config_pdaf_data(subdev, cim_ochn_attr);
 	} else {
 		vio_err(" %s err invalid ochn_id", __func__);
 		return -EINVAL;
@@ -649,16 +718,14 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 		ctx.emb_buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_EMB];
 		ctx.emb_buf = NULL;
 	}
+	if (cim_priv_attr->pdaf_en) {
+		ctx.pd_buf_ctx = (struct cam_ctx *)vnode->och_subdev[VIN_PDAF];
+		ctx.pd_buf = NULL;
+	}
 	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx, 1);
 	if (rc < 0)
 		vio_err("[S%d][ipi%d]%s failed to call sif_set_ctx\n",
 			vctx->ctx_id, ipi_index, __func__);
-
-	//	if (cim_priv_attr->ddr_en)
-	//		cim_config_next_frame_addr(vnode, VIN_MAIN_FRAME);
-
-	//	if (cim_priv_attr->embeded_en)
-	//		cim_config_next_frame_addr(vnode, VIN_EMB);
 
 	rc = sif_set_state(&cim->sif, ipi_index, 1, false);
 
@@ -666,13 +733,21 @@ s32 cim_subdev_start(struct vio_video_ctx *vctx, u32 tpn_fps)
 		vio_err("[S%d]%s failed to call sif_set_state\n",
 			vnode->flow_id, __func__);
 	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
-		rc = sif_set_dma(&cim->sif, ipi_index, 1);
-		if (rc < 0)
-			vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
-				vctx->ctx_id, ipi_index, __func__);
+		if (cim_priv_attr->pdaf_en && ipi_index == cim->sif.pd_ipi_channel) {
+			rc = sif_set_dma(&cim->sif, ipi_index, 1, true);
+			if (rc < 0)
+				vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+					vctx->ctx_id, ipi_index, __func__);
+		} else {
+			rc = sif_set_dma(&cim->sif, ipi_index, 1, false);
+			if (rc < 0)
+				vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+					vctx->ctx_id, ipi_index, __func__);
+		}
 		sif_set_isp_ctrl(&cim->sif, ipi_index, 1, false);
 		ipi_index++;
 	}
+
 	osal_mutex_unlock(&cim->mlock);
 	vio_info("[S%d]%s\n", vnode->flow_id, __func__);
 	return ret;
@@ -727,11 +802,18 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 			vnode->flow_id, __func__);
 
 	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
-		rc = sif_set_dma(&cim->sif, ipi_index, 0);
+		if (cim_priv_attr->pdaf_en && ipi_index == cim->sif.pd_ipi_channel) {
+			rc = sif_set_dma(&cim->sif, ipi_index, 0, true);
+			if (rc < 0)
+				vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+					vctx->ctx_id, ipi_index, __func__);
+		} else {
+			rc = sif_set_dma(&cim->sif, ipi_index, 0, false);
+			if (rc < 0)
+				vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
+					vctx->ctx_id, ipi_index, __func__);
+		}
 		ipi_index++;
-		if (rc < 0)
-			vio_err("[S%d][ipi%d]%s failed to call sif_set_dma\n",
-				vctx->ctx_id, ipi_index, __func__);
 	}
 	ipi_index = cim_priv_attr->ipi_index;
 
@@ -745,6 +827,10 @@ s32 cim_subdev_stop(struct vio_video_ctx *vctx)
 	if (cim_priv_attr->embeded_en) {
 		ctx.emb_buf_ctx = NULL;
 		ctx.emb_buf = NULL;
+	}
+	if (cim_priv_attr->pdaf_en) {
+		ctx.pd_buf_ctx = NULL;
+		ctx.pd_buf = NULL;
 	}
 	rc = sif_set_ctx(&cim->sif, ipi_index, &ctx, 0);
 	if (rc < 0)
@@ -1065,8 +1151,6 @@ void cim_sw_rst(struct j6_cim_dev *cim)
  */
 static void cim_device_close(struct j6_cim_dev *cim, u32 rst_en, u32 ipi_channel)
 {
-	u32 i;
-
 	osal_mutex_lock(&cim->mlock);
 	if (osal_atomic_dec_return(&cim->open_cnt) == 0) {
 		osal_clear_bit((s32)CIM_OTF_INPUT, &cim->state);
@@ -1079,8 +1163,7 @@ static void cim_device_close(struct j6_cim_dev *cim, u32 rst_en, u32 ipi_channel
 			cim_sw_rst(cim);
 		}
 		cim_set_clk_enable(0);
-		for (i = 0; i < cim->sif.ipi_channel_num; i++)
-			sif_close(&cim->sif, ipi_channel + i);
+		sif_close(&cim->sif, ipi_channel);
 	}
 	osal_mutex_unlock(&cim->mlock);
 }
@@ -1176,24 +1259,11 @@ s32 cim_close(struct vio_video_ctx *vctx, u32 rst_en)
 	cim_priv_attr = cim_get_priv_by_subdev(subdev);
 	ipi_channel = cim_priv_attr->ipi_index;
 
-	if (vctx->state & BIT(VIO_VIDEO_OPEN)) {
-		cim_device_close(cim, rst_en, ipi_channel);
-		return 0;
-	}
-
-	//vio_group_close(vnode);
-	if (vctx->state & BIT(VIO_VIDEO_START)) {
-		//vio_group_stop_sensor(vnode->flow_id);
-		cim_subdev_stop(vctx);
-	}
 	cim_subdev_close(vdev);
 	cim_device_close(cim, rst_en, ipi_channel);
 
 	vctx->state = BIT(VIO_VIDEO_CLOSE);
 
-	//osal_spin_lock(&vdev->slock);
-	//osal_clear_bit(vctx->ctx_index, &vdev->val_ctx_mask);
-	//osal_spin_unlock(&vdev->slock);
 	vio_info("[S%d] %s open_cnt %d\n", vnode->flow_id, __func__,
 		 osal_atomic_read(&cim->open_cnt));
 

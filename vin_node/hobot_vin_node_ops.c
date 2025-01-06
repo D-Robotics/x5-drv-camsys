@@ -178,7 +178,7 @@ s32 vin_node_ochn_attr_check(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_a
 	struct j6_vin_node_dev *vin_node_dev;
 	struct vin_node_subdev *subdev, *src_subdev;
 	struct vio_subdev *vdev;
-	struct vin_roi_attr_s *roi_attr;
+	struct vin_pdaf_attr_s *pdaf_attr;
 	struct vin_emb_attr_s *emb_attr;
 	struct vin_basic_attr_s *base_attr;
 
@@ -189,7 +189,7 @@ s32 vin_node_ochn_attr_check(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_a
 
 	src_width = src_subdev->vin_attr.vin_ichn_attr.width;
 	src_height = src_subdev->vin_attr.vin_ichn_attr.height;
-	roi_attr = &ochn_attr->roi_attr;
+	pdaf_attr = &ochn_attr->pdaf_attr;
 	emb_attr = &ochn_attr->emb_attr;
 	base_attr = &ochn_attr->vin_basic_attr;
 
@@ -199,38 +199,16 @@ s32 vin_node_ochn_attr_check(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_a
 		return -EINVAL;
 	}
 
-	if (ochn_attr->roi_en && (roi_attr->roi_x + roi_attr->roi_width > src_width ||
-			roi_attr->roi_y + roi_attr->roi_height > src_height)) {
-		vio_err("[S%d] ochn%d unsupport roi attr x(%d) y(%d) w(%d) h(%d)\n",
-				vctx->ctx_id, ochn_id, roi_attr->roi_x, roi_attr->roi_y,
-				roi_attr->roi_width, roi_attr->roi_height);
-		return -EINVAL;
-	}
-
 	if (ochn_attr->emb_en) {
 		if (emb_attr->embeded_height > src_height) {
 			vio_err("[S%d] ochn%d emb size error w(%d) h(%d)\n", vctx->ctx_id, ochn_id,
 					emb_attr->embeded_width, emb_attr->embeded_height);
 			return -EINVAL;
 		}
-		if (ochn_attr->roi_en && (emb_attr->embeded_height != roi_attr->roi_height ||
-					emb_attr->embeded_width != roi_attr->roi_width)) {
-			vio_err("[S%d] ochn%d emb size error w(%d) h(%d) roi_w(%d) roi_h(%d)\n",
-					vctx->ctx_id, ochn_id,
-					emb_attr->embeded_width, emb_attr->embeded_height,
-					roi_attr->roi_width, roi_attr->roi_height);
-			return -EINVAL;
-		}
 	}
 
 	/* stride check */
-	if (ochn_attr->roi_en && ochn_attr->rawds_en) {
-		out_width = roi_attr->roi_width / 2;
-		out_height = roi_attr->roi_height / 2;
-	} else if (ochn_attr->roi_en) {
-		out_width = roi_attr->roi_width;
-		out_height = roi_attr->roi_height;
-	} else if (ochn_attr->rawds_en) {
+	if (ochn_attr->rawds_en) {
 		out_width = src_width / 2;
 		out_height = src_height / 2;
 	} else if (ochn_attr->emb_en) {
@@ -247,7 +225,7 @@ s32 vin_node_ochn_attr_check(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_a
 	if (base_attr->wstride == 0) {
 		base_attr->wstride = wstride;
 		vio_info("[S%d] ochn%d auto calc wstride %d\n", vctx->ctx_id, ochn_id, wstride);
-	} else if (base_attr->wstride < wstride && (!ochn_attr->emb_en)) {
+	} else if (base_attr->wstride < wstride && (!ochn_attr->emb_en) && (!ochn_attr->pdaf_en)) {
 		vio_err("[S%d] ochn%d unsupport wstride%d\n", vctx->ctx_id, ochn_id,
 				base_attr->wstride);
 		return -EINVAL;
@@ -256,7 +234,7 @@ s32 vin_node_ochn_attr_check(struct vio_video_ctx *vctx, vin_ochn_attr_t *ochn_a
 	if (base_attr->vstride == 0) {
 		base_attr->vstride = vstride;
 		vio_info("[S%d] ochn%d auto calc vstride %d\n", vctx->ctx_id, ochn_id, vstride);
-	} else if (base_attr->vstride < vstride) {
+	} else if (base_attr->vstride < vstride && (!ochn_attr->pdaf_en)) {
 		vio_err("[S%d] ochn%d unsupport vstride%d\n", vctx->ctx_id, ochn_id,
 					base_attr->vstride);
 		return -EINVAL;
@@ -842,8 +820,8 @@ s32 vin_node_bind_check(struct vio_subdev *vdev, struct vio_subdev *remote_vdev,
 		} else if (id == VNODE_ID_CAP + VIN_EMB && vin_ochn_attr->emb_en == 0) {
 			vio_err("[V%d] emb offline bind but emb not enable\n", id);
 			ret = -1;
-		} else if (id == VNODE_ID_CAP + VIN_ROI && vin_ochn_attr->roi_en == 0) {
-			vio_err("[V%d] roi offline bind but roi not enable\n", id);
+		} else if (id == VNODE_ID_CAP + VIN_PDAF && vin_ochn_attr->pdaf_en == 0) {
+			vio_err("[V%d] pdaf offline bind but pdaf not enable\n", id);
 			ret = -1;
 		}
 	}
@@ -858,7 +836,7 @@ void vin_node_set_ochn_bind_param(struct vio_video_ctx *vctx)
 	struct j6_vin_node_dev *vin_node_dev;
 	struct vin_node_subdev *src_subdev;
 	struct vin_node_subdev *emb_subdev;
-	struct vin_node_subdev *roi_subdev;
+	struct vin_node_subdev *pdaf_subdev;
 	vin_attr_t *vin_attr;
 	vin_ichn_attr_t *vin_ichn_attr;
 	struct chn_attr *chn_attr;
@@ -879,14 +857,7 @@ void vin_node_set_ochn_bind_param(struct vio_video_ctx *vctx)
 		vin_ichn_attr = &src_subdev->vin_attr.vin_ichn_attr;
 		chn_attr->format = vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].vin_basic_attr.format;
 		chn_attr->slot_id = vin_attr->vin_node_attr.cim_attr.vc_index;
-		if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_en == 1 &&
-				vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].rawds_en == 1) {
-			chn_attr->width = vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_width / 2;
-			chn_attr->height = vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_height / 2;
-		} else if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_en == 1) {
-			chn_attr->width = vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_width;
-			chn_attr->height = vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_height;
-		} else if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].rawds_en == 1) {
+		if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].rawds_en == 1) {
 			chn_attr->width = vin_ichn_attr->width / 2;
 			chn_attr->height = vin_ichn_attr->height / 2;
 		} else {
@@ -910,16 +881,17 @@ void vin_node_set_ochn_bind_param(struct vio_video_ctx *vctx)
 		}
 	}
 
-	if (vctx->id == VNODE_ID_CAP + VIN_ROI) {  //ROI
-		roi_subdev = &vin_node_dev->roi_subdev[vctx->ctx_id];
-		vin_attr = &roi_subdev->vin_attr;
-		chn_attr->format = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.format;
+	if (vctx->id == VNODE_ID_CAP + VIN_PDAF) {  //PDAF
+		pdaf_subdev = &vin_node_dev->pdaf_subdev[vctx->ctx_id];
+		vin_attr = &pdaf_subdev->vin_attr;
+		chn_attr->format = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.format;
 		chn_attr->slot_id = vin_attr->vin_node_attr.cim_attr.vc_index;
-		if (vin_attr->vin_ochn_attr[VIN_ROI].roi_en) {
-			chn_attr->width = vin_attr->vin_ochn_attr[VIN_ROI].roi_attr.roi_width;
-			chn_attr->height = vin_attr->vin_ochn_attr[VIN_ROI].roi_attr.roi_height;
-			chn_attr->wstride = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.wstride;
-			chn_attr->vstride = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.vstride;
+		if (vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_en) {
+			chn_attr->width = vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_attr.pd_width;
+			chn_attr->height = vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_attr.pd_height;
+			chn_attr->wstride = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.wstride;
+			chn_attr->vstride = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.vstride;
+			chn_attr->format  = vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_attr.pd_format;
 		}
 	}
 
@@ -953,7 +925,7 @@ s32 vin_node_reqbufs(struct vio_video_ctx *vctx,
 	struct j6_vin_node_dev *vin_node_dev;
 	struct vin_node_subdev *src_subdev;
 	struct vin_node_subdev *emb_subdev;
-	struct vin_node_subdev *roi_subdev;
+	struct vin_node_subdev *pdaf_subdev;
 	vin_attr_t *vin_attr;
 	vin_ichn_attr_t *vin_ichn_attr;
 
@@ -989,18 +961,7 @@ s32 vin_node_reqbufs(struct vio_video_ctx *vctx,
 		if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].ddr_en) {
 			group_attr->bit_map |= 1;
 			group_attr->is_contig = 1;
-			if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_en == 1 &&
-					vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].rawds_en == 1) {
-				group_attr->info[0].buf_attr.width =
-					vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_width / 2;
-				group_attr->info[0].buf_attr.height =
-					vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_height / 2;
-			} else if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_en == 1) {
-				group_attr->info[0].buf_attr.width =
-					vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_width;
-				group_attr->info[0].buf_attr.height =
-					vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].roi_attr.roi_height;
-			} else if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].rawds_en == 1) {
+			if (vin_attr->vin_ochn_attr[VIN_MAIN_FRAME].rawds_en == 1) {
 				group_attr->info[0].buf_attr.width = vin_ichn_attr->width / 2;
 				group_attr->info[0].buf_attr.height = vin_ichn_attr->height / 2;
 			} else {
@@ -1041,23 +1002,23 @@ s32 vin_node_reqbufs(struct vio_video_ctx *vctx,
 		vio_info("EMB vstride %d\n", vin_attr->vin_ochn_attr[VIN_EMB].vin_basic_attr.vstride);
 	}
 
-	if (vctx->id == VNODE_ID_CAP + VIN_ROI) {  //ROI
-		roi_subdev = &vin_node_dev->roi_subdev[vctx->ctx_id];
-		vin_attr = &roi_subdev->vin_attr;
-		format = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.format;
-		pack_mode = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.pack_mode;
+	if (vctx->id == VNODE_ID_CAP + VIN_PDAF) {  //PDAF
+		pdaf_subdev = &vin_node_dev->pdaf_subdev[vctx->ctx_id];
+		vin_attr = &pdaf_subdev->vin_attr;
+		format = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.format;
+		pack_mode = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.pack_mode;
 		hdr_mode = vin_attr->vin_node_attr.cim_attr.func.hdr_mode;
-		if (vin_attr->vin_ochn_attr[VIN_ROI].roi_en) {
+		if (vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_en) {
 			group_attr->bit_map |= 1;
 			group_attr->is_contig = 1;
-			group_attr->info[0].buf_attr.width = vin_attr->vin_ochn_attr[VIN_ROI].roi_attr.roi_width;
-			group_attr->info[0].buf_attr.height = vin_attr->vin_ochn_attr[VIN_ROI].roi_attr.roi_height;
-			group_attr->info[0].buf_attr.wstride = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.wstride;
-			group_attr->info[0].buf_attr.vstride = vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.vstride;
+			group_attr->info[0].buf_attr.width = vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_attr.pd_width;
+			group_attr->info[0].buf_attr.height = vin_attr->vin_ochn_attr[VIN_PDAF].pdaf_attr.pd_height;
+			group_attr->info[0].buf_attr.wstride = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.wstride;
+			group_attr->info[0].buf_attr.vstride = vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.vstride;
 			vin_node_get_plane(format, pack_mode, hdr_mode, group_attr);
 		}
-		vio_info("VIN_ROI wstride %d\n", vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.wstride);
-		vio_info("VIN_ROI vstride %d\n", vin_attr->vin_ochn_attr[VIN_ROI].vin_basic_attr.vstride);
+		vio_info("VIN_PDAF wstride %d\n", vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.wstride);
+		vio_info("VIN_PDAF vstride %d\n", vin_attr->vin_ochn_attr[VIN_PDAF].vin_basic_attr.vstride);
 	}
 	vio_info("[S%d] %s done bit_map 0x%x planecount %d \n",
 			vin_node_dev->flow_id, __func__, group_attr->bit_map,

@@ -30,9 +30,10 @@ enum sif_channel_type {
 	IN_CHANNEL       = 0,
 	OUT_CHANNEL_MAIN = 1,
 	OUT_CHANNEL_EMB  = 2,
-	BOTH_CHANNEL     = 3,
-	EX_FEAT_CHANNEL  = 4,
-	INVALID_CHANNEL  = 5,
+	OUT_CHANNEL_PDAF = 3,
+	ALL_CHANNEL     = 4,
+	EX_FEAT_CHANNEL  = 5,
+	INVALID_CHANNEL  = 6,
 };
 
 enum time_stamp_type {
@@ -81,6 +82,8 @@ struct sif_irq_ctx {
 	struct cam_buf *buf, *next_buf;
 	struct cam_ctx *emb_buf_ctx;
 	struct cam_buf *emb_buf;
+	struct cam_ctx *pd_buf_ctx;
+	struct cam_buf *pd_buf, *next_pd_buf;
 };
 
 struct sif_instance {
@@ -113,6 +116,8 @@ struct sif_device {
 	unsigned int pps_trigger_src;
 	u32 ipi_channel_num; // indicate how many ipis will be used.
 	u32 ipi_base; // indicate the base ipi num.
+	u8 pd_en; // indicate whether use pd mode.
+	u8 pd_ipi_channel; // indicate which ipi transmits pd data.
 	struct clk *axi, *pclk;
 	struct reset_control *rst;
 	struct isc_handle *isc;
@@ -146,7 +151,7 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 int sif_set_state(struct sif_device *sif, u32 inst, int enable, bool post);
 void sif_set_isp_ctrl(struct sif_device *dev, u32 inst, int enable, bool wait);
 int sif_set_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx, int enable);
-int sif_set_dma(struct sif_device *dev, u32 inst, int enable);
+int sif_set_dma(struct sif_device *dev, u32 inst, int enable, bool pd_path);
 int sif_get_ctx(struct sif_device *sif, u32 inst, struct sif_irq_ctx *ctx);
 int sif_open(struct sif_device *sif, u32 inst);
 int sif_close(struct sif_device *sif, u32 inst);

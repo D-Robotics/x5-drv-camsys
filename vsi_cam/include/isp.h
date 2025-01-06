@@ -51,8 +51,8 @@ union u32_byte_map {
 struct isp_irq_ctx {
 	bool sink_online_en;
 	union u32_byte_map src_online_stat;
-	struct cam_buf *sink_buf, *src_buf, *next_src_buf;
-	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *stat_ctx;
+	struct cam_buf *sink_buf, *src_buf, *next_src_buf, *pd_buf;
+	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *stat_ctx, *pd_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
 };
 
@@ -83,7 +83,7 @@ struct isp_instance {
 	struct isp_gamma_febe_ctrl febe_ctrl;
 	struct isp_rgbgamma_data rgbgamma_data;
 	struct isp_wdr5_data wdr5_data;
-	u32 meta_inst;
+	u32 af_mode;
 	void *prev;
 };
 

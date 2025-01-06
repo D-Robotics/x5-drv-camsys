@@ -222,18 +222,19 @@ static int sif_config(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 {
 	int ret;
 
-	if (channel_type == IN_CHANNEL || channel_type == BOTH_CHANNEL)
+	if (channel_type == IN_CHANNEL || channel_type == ALL_CHANNEL)
 		sif_set_ipi_feature(sif, inst);
 
-	if (channel_type == EX_FEAT_CHANNEL || channel_type == BOTH_CHANNEL)
+	if (channel_type == EX_FEAT_CHANNEL || channel_type == ALL_CHANNEL)
 		sif_set_ex_feature(sif, inst);
 
-	if (channel_type == OUT_CHANNEL_MAIN || channel_type == BOTH_CHANNEL) {
+	if (channel_type == OUT_CHANNEL_MAIN || channel_type == ALL_CHANNEL ||
+		channel_type == OUT_CHANNEL_PDAF) {
 		ret = sif_set_ipi_fmt(sif, inst, fmt);
 		if (ret)
 			return ret;
 	}
-	if (channel_type == OUT_CHANNEL_EMB || channel_type == BOTH_CHANNEL)
+	if (channel_type == OUT_CHANNEL_EMB || channel_type == ALL_CHANNEL)
 		sif_set_emb_data(sif, inst);
 
 	return 0;
@@ -266,11 +267,12 @@ int sif_set_format(struct sif_device *sif, u32 inst, struct cam_format *fmt,
 	rc = sif_config(sif, inst, fmt, channel_type);
 	if (rc < 0)
 		return rc;
-	memcpy(&ins->fmt, fmt, sizeof(ins->fmt));
+	if (channel_type != OUT_CHANNEL_PDAF)
+		memcpy(&ins->fmt, fmt, sizeof(ins->fmt));
 	return 0;
 }
 
-int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
+int sif_set_dma(struct sif_device *dev, u32 inst, int enable, bool pd_path)
 {
 	struct sif_instance *sif;
 	struct sif_irq_ctx *ctx;
@@ -278,14 +280,19 @@ int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 	u32 val, irq_val;
 	phys_addr_t p_addr = 0;
 	phys_addr_t p_uv_addr = 0;
+	struct cam_ctx *buf_ctx;
+	struct cam_buf **buf;
 
 	if (!dev || inst >= dev->num_insts)
 		return -EINVAL;
 
-	sif = &dev->insts[inst];
+	if (pd_path)
+		sif = &dev->insts[dev->ipi_base];
+	else
+		sif = &dev->insts[inst];
 
 	spin_lock_irqsave(&sif->lock, flags);
-	if (!sif->ctx.buf_ctx && inst == sif->ipi_base) {
+	if (!sif->ctx.buf_ctx && !pd_path && inst == sif->ipi_base) {
 		spin_unlock_irqrestore(&sif->lock, flags);
 		goto _exit;
 	}
@@ -293,6 +300,11 @@ int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 		sif->ctx.buf_ctx = NULL;
 		sif->ctx.buf = NULL;
 		sif->ctx.next_buf = NULL;
+		if (pd_path) {
+			sif->ctx.pd_buf_ctx = NULL;
+			sif->ctx.pd_buf = NULL;
+			sif->ctx.next_pd_buf = NULL;
+		}
 	}
 	spin_unlock_irqrestore(&sif->lock, flags);
 
@@ -313,15 +325,22 @@ int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 
 	if (!enable)
 		goto _exit;
-	sif = &dev->insts[inst];
 	spin_lock_irqsave(&sif->lock, flags);
 	ctx = &sif->ctx;
-	if (ctx->buf_ctx) {
-			ctx->buf = cam_dqbuf_irq(ctx->buf_ctx, true);
-		if (ctx->buf) {
-			p_addr = get_phys_addr(dev->dev, ctx->buf, 0);
+	if (pd_path) {
+		buf_ctx = ctx->pd_buf_ctx;
+		buf     = &sif->ctx.pd_buf;
+	} else {
+		buf_ctx = ctx->buf_ctx;
+		buf     = &sif->ctx.buf;
+	}
+
+	if (buf_ctx) {
+		*buf = cam_dqbuf_irq(buf_ctx, true);
+		if (*buf) {
+			p_addr = get_phys_addr(dev->dev, *buf, 0);
 			if (sif->fmt.format == CAM_FMT_NV12 || sif->fmt.format == CAM_FMT_NV16
-				|| (dev->ipi_channel_num != 1  && inst == sif->ipi_base))
+				|| (dev->ipi_channel_num > 1  && inst == sif->ipi_base))
 				p_uv_addr = p_addr + (sif->fmt.stride * sif->fmt.height);
 		} else {
 			dev_err(dev->dev,"%s sif(%d-%d) dqbuf failed \n", __func__, dev->id, inst);
@@ -333,7 +352,7 @@ int sif_set_dma(struct sif_device *dev, u32 inst, int enable)
 				sif_write(dev, SIF_IPI_BADDR_Y(inst), p_addr);
 				if (p_uv_addr)
 					sif_write(dev, SIF_IPI_BADDR_UV(inst), p_uv_addr);
-			} else if (dev->ipi_channel_num != 1 && inst == sif->ipi_base) {
+			} else if (dev->ipi_channel_num > 1 && inst == sif->ipi_base) {
 				sif_write(dev, SIF_IPI_BADDR_Y(inst), p_addr);
 				if (p_uv_addr)
 					sif_write(dev, SIF_IPI_BADDR_Y(inst + 1), p_uv_addr);
@@ -409,21 +428,24 @@ static void sif_stop_ipi(struct sif_device *dev, u32 inst)
 
 int sif_reset_ipi(struct sif_device *sif, u32 inst)
 {
-	u32 val;
+	u32 val, i, reset_val = 0;
 	int retrycnt = 100;
 
-	sif_write(sif, SIF_IPI_RESET, BIT(inst));
+	for (i = inst; i < sif->ipi_channel_num; i++)
+		reset_val |= BIT(i);
+
+	sif_write(sif, SIF_IPI_RESET, reset_val);
 	do {
 		val = sif_read(sif, SIF_IPI_RESET);
-	} while ((val != (BIT(inst) << 4)) && (--retrycnt));
+	} while (!(val & (reset_val << 4)) && (--retrycnt));
 
 	if (retrycnt > 0) {
-		dev_info(sif->dev, "sif ipi rest done\n");
+		dev_info(sif->dev, "sif%d reset done\n", sif->id);
 		return 0;
 	}
 
-	if (retrycnt == 0 && (val != (BIT(inst) << 4))) {
-		dev_info(sif->dev, "sif ipi rest failed\n");
+	if (retrycnt == 0 && !(val & (reset_val << 4))) {
+		dev_err(sif->dev, "sif%d reset failed\n", sif->id);
 		return -1;
 	}
 

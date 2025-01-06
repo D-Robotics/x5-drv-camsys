@@ -30,6 +30,9 @@ typedef struct isp_attr_s {
 	__u32 sched_mode;
 	__u32 tile_mode;
 	__u32 af_mode;
+	__u32 pd_format;
+	__u32 pd_width;
+	__u32 pd_height;
 	isp_sensor_mode_t sensor_mode;
 	rect_t crop;
 } isp_attr_t;

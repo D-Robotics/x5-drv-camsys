@@ -116,17 +116,16 @@ static void isp_frame_work(struct vio_node *vnode)
 	inst = container_of(vdev, struct isp_nat_instance, vdev);
 
 	pr_debug("%s, isp_add_job:%d\n", __func__, vnode->ctx_id);
-	if (!inst->metadata_en) {
+	if (vdev->id != (VNODE_ID_SRC + ISP_PDAF_DATA)) {
 		rc = isp_add_job(&inst->dev->isp_dev, vnode->ctx_id);
 		if (rc) {
 			// pr_err("%s: failed to call isp_add_job.\n", __func__);
 		}
+		vio_set_hw_free(vnode);
+		osal_clear_bit(VIO_NODE_SHOT, &vnode->state);
 	} else {
 		pr_info("%s:%d isp%d metadata enabled\n", __func__, __LINE__, inst->id);
 	}
-
-	vio_set_hw_free(vnode);
-	osal_clear_bit(VIO_NODE_SHOT, &vnode->state);
 }
 
 static s32 isp_nat_open(struct vio_video_ctx *vctx)
@@ -159,7 +158,7 @@ static s32 isp_nat_close(struct vio_video_ctx *vctx)
 	if (vctx->id == VNODE_ID_SRC) {
 		pr_debug("clean stream vnode, ctxid %d, online_mode %d, stream_idx %d\n",
 				vctx->ctx_id, inst->online_mode, inst->stream_idx);
-		if (inst->stream_idx > -1 && !inst->metadata_en) {
+		if (inst->stream_idx > -1) {
 			mutex_lock(&inst->dev->stream_vnodes_lock);
 			inst->dev->stream_vnodes[inst->stream_idx] = NULL;
 			mutex_unlock(&inst->dev->stream_vnodes_lock);
@@ -404,10 +403,13 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 		return rc;
 
 	dev = inst->dev;
-	if (vctx->ctx_id && inst->attr.af_mode) {
-		inst->metadata_en = true;
-		dev->isp_dev.insts[vctx->ctx_id-1].meta_inst = vctx->ctx_id;
-	} else if (inst->attr.input_mode == MCM_MODE) {
+
+	if (vctx->id == (VNODE_ID_SRC + ISP_PDAF_DATA))
+		return 0;
+
+	inst->dev->isp_dev.insts[vctx->ctx_id].af_mode = inst->attr.af_mode;
+
+	if (inst->attr.input_mode == MCM_MODE) {
 		dev->isp_dev.mode = ISP_MCM_MODE;
 		dev->isp_dev.insts[vctx->ctx_id].online_mcm = 1;
 	} else if (inst->attr.input_mode == DDR_MODE) {
@@ -437,9 +439,6 @@ static s32 isp_video_set_cfg(struct vio_video_ctx *vctx, unsigned long arg)
 	memset(&inst->ctx, 0, sizeof(inst->ctx));
 
 	if (vctx->id != VNODE_ID_SRC)
-		return 0;
-
-	if (inst->metadata_en)
 		return 0;
 
 	vctx->vdev->leader = 1;
@@ -559,10 +558,31 @@ static s32 isp_video_reqbufs(struct vio_video_ctx *vctx,
 		group_attr->info[0].buf_attr.vstride = inst->attr.crop.h;
 		isp_get_plane(format, group_attr);
 		group_attr->is_alloc = 0;
+	} else if (vctx->id == (VNODE_ID_SRC + ISP_PDAF_DATA)) {
+		format = inst->attr.pd_format;
+		group_attr->bit_map |= 1;
+		group_attr->is_contig = 1;
+		group_attr->info[0].buf_attr.width = inst->attr.pd_width;
+		group_attr->info[0].buf_attr.height = inst->attr.pd_height;
+		switch (format) {
+		case HW_FORMAT_RAW8:
+			group_attr->info[0].buf_attr.wstride = inst->attr.pd_width;
+			break;
+		case HW_FORMAT_RAW10:
+		case HW_FORMAT_RAW12:
+			group_attr->info[0].buf_attr.wstride = inst->attr.pd_width * 2;
+			break;
+		default:
+			pr_err("%s unsupported af data format:0x%x\n", __func__, format);
+			return -EINVAL;
+		}
+		group_attr->info[0].buf_attr.vstride = inst->attr.pd_height;
+		isp_get_plane(format, group_attr);
+		group_attr->is_alloc = 0;
 	}
 
-	pr_info("%s done bit_map 0x%x planecount %d\n", __func__, group_attr->bit_map,
-		group_attr->info[0].buf_attr.planecount);
+	pr_info("%s done bit_map 0x%x planecount %d vctx->id:%d\n", __func__, group_attr->bit_map,
+		group_attr->info[0].buf_attr.planecount, vctx->id);
 	return ret;
 }
 
@@ -597,7 +617,7 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 		dev = inst->dev;
 		src_inst = &dev->src_instance[vctx->ctx_id];
 		dev->isp_dev.insts[vctx->ctx_id].prev = src_inst->prev;
-		if (src_inst->online_mode && !inst->metadata_en) {
+		if (src_inst->online_mode) {
 			get_csi_ipi_idx(src_inst->prev, &csi_idx, &ipi_idx, &ipi_num);
 			pr_info("%s stream_idx=%d,csi_idx=%d,ipi_idx=%d,ipi_num=%d\n", __func__,
 				src_inst->stream_idx, csi_idx, ipi_idx, ipi_num);
@@ -616,13 +636,15 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 		if (!inst->ctx.sink_online_en)
 			inst->ctx.sink_ctx = (struct cam_ctx *)&src_inst->vdev;
 		inst->ctx.stat_ctx = (struct cam_ctx *)&src_inst->vdev;
+		if (inst->attr.af_mode)
+			inst->ctx.pd_ctx = (struct cam_ctx *)&src_inst->pddev;
 		rc = isp_set_ctx(&dev->isp_dev, vctx->ctx_id, &inst->ctx);
 		if (rc < 0) {
 			pr_err("%s failed to call isp_set_ctx (rc=%d)!\n", __func__, rc);
 			return rc;
 		}
 
-		if (!inst->metadata_en) {
+		if (vctx->id != (VNODE_ID_SRC + ISP_PDAF_DATA)) {
 			pr_info("%s inst: %d, set isp state to STARTED\n", __func__, vctx->ctx_id);
 			return isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STARTED, CUSTOM_GROUP);
 		}
@@ -642,13 +664,11 @@ static s32 isp_video_streamoff(struct vio_video_ctx *vctx)
 	if (vctx->id == VNODE_ID_CAP) {
 		dev = inst->dev;
 
-		if (!inst->metadata_en) {
-			pr_info("%s inst: %d, set isp state to STOPPED\n", __func__, vctx->ctx_id);
-			rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED, CUSTOM_GROUP);
-			if (rc < 0) {
-				pr_err("%s failed to call isp_set_state(err=%d).\n", __func__, rc);
-				return rc;
-			}
+		pr_info("%s inst: %d, set isp state to STOPPED\n", __func__, vctx->ctx_id);
+		rc = isp_set_state(&dev->isp_dev, vctx->ctx_id, CAM_STATE_STOPPED, CUSTOM_GROUP);
+		if (rc < 0) {
+			pr_err("%s failed to call isp_set_state(err=%d).\n", __func__, rc);
+			return rc;
 		}
 
 		memset(&ctx, 0, sizeof(ctx));
@@ -713,12 +733,12 @@ static s32 isp_video_set_ichn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	if (rc < 0)
 		return rc;
 
+	if (vctx->id == (VNODE_ID_SRC + ISP_PDAF_DATA))
+		return 0;
+
 	rc = isp_ichn_attr_check(vctx);
 	if (rc)
 		return rc;
-
-	if (inst->metadata_en)
-		return 0;
 
 	switch (inst->ichn_attr.bit_width) {
 	case 8:
@@ -781,7 +801,7 @@ static s32 isp_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	if (rc)
 		return rc;
 
-	if (inst->metadata_en)
+	if (vctx->id == (VNODE_ID_SRC + ISP_PDAF_DATA))
 		return 0;
 
 	pr_info("%s fmt=%d\n", __func__, inst->ochn_attr.fmt);
@@ -843,7 +863,7 @@ static s32 isp_video_set_inter_attr(struct vio_video_ctx *vctx, unsigned long ar
 	char sensor_cali_name[100] = {0};
 
 	inst = container_of(vctx->vdev, struct isp_nat_instance, vdev);
-	if (inst->metadata_en)
+	if (vctx->id == (VNODE_ID_SRC + ISP_PDAF_DATA))
 		return 0;
 	cops = (struct sensor_isp_ops_s *)inst->dev->sensor_ops->cops;
 	if (cops && cops->sensor_get_base_info) {
@@ -1030,10 +1050,13 @@ static int isp_nat_probe(struct platform_device *pdev)
 		nat_dev->vnode[i].allow_bind = isp_allow_bind;
 		nat_dev->vnode[i].frame_work = isp_frame_work;
 		nat_dev->vnode[i].ich_subdev[ISP_MAIN_FRAME] = &nat_dev->src_instance[i].vdev;
-		nat_dev->vnode[i].active_ich = 1 << ISP_MAIN_FRAME;
+		nat_dev->vnode[i].active_ich |= 1 << ISP_MAIN_FRAME;
 		nat_dev->vnode[i].och_subdev[ISP_MAIN_FRAME] = &nat_dev->cap_instance[i].vdev;
 		nat_dev->vnode[i].active_och = 1 << ISP_MAIN_FRAME;
+		nat_dev->vnode[i].ich_subdev[ISP_PDAF_DATA] = &nat_dev->src_instance[i].pddev;
+		nat_dev->vnode[i].active_ich |= 1 << ISP_PDAF_DATA;
 		nat_dev->src_instance[i].vdev.vnode = &nat_dev->vnode[i];
+		nat_dev->src_instance[i].pddev.vnode = &nat_dev->vnode[i];
 		nat_dev->src_instance[i].dev = nat_dev;
 		nat_dev->src_instance[i].id = i;
 		nat_dev->cap_instance[i].vdev.vnode = &nat_dev->vnode[i];
@@ -1071,6 +1094,23 @@ static int isp_nat_probe(struct platform_device *pdev)
 		return -EFAULT;
 	}
 
+	nat_dev->vps_dev[PD_INDEX].vps_ops = &isp_vops;
+	nat_dev->vps_dev[PD_INDEX].ip_dev = nat_dev;
+	nat_dev->vps_dev[PD_INDEX].vnode = nat_dev->vnode;
+	// nat_dev->vps_dev[CAP_INDEX].vnode_id = ISP_MODULE;
+	nat_dev->vps_dev[PD_INDEX].max_ctx = VIO_MAX_STREAM;
+	nat_dev->vps_dev[PD_INDEX].iommu_dev = dev;
+	nat_dev->vps_dev[PD_INDEX].vid = VNODE_ID_SRC + ISP_PDAF_DATA;
+	snprintf(name, sizeof(name), "%s%d_src_pd", ISP_DEV_NAME, nat_dev->isp_dev.id);
+	ret = vio_register_device_node(name, &nat_dev->vps_dev[PD_INDEX]);
+	if (ret < 0) {
+		dev_err(dev, "failed to call vio_register_device_node(err=%d).\n", ret);
+		vio_unregister_device_node(&nat_dev->vps_dev[SRC_INDEX]);
+		vio_unregister_device_node(&nat_dev->vps_dev[CAP_INDEX]);
+
+		return -EFAULT;
+	}
+
 	add_ops(ISP_MODULE, &isp_ops);
 	platform_set_drvdata(pdev, nat_dev);
 	nat_dev->sensor_ops = vio_get_callback_ops(&empty_sensor_cops, VIN_MODULE, COPS_4);
@@ -1096,6 +1136,7 @@ static int isp_nat_remove(struct platform_device *pdev)
 
 	vio_unregister_device_node(&nat_dev->vps_dev[CAP_INDEX]);
 	vio_unregister_device_node(&nat_dev->vps_dev[SRC_INDEX]);
+	vio_unregister_device_node(&nat_dev->vps_dev[PD_INDEX]);
 
 	rc = isp_remove(pdev, &nat_dev->isp_dev);
 	if (rc < 0) {
