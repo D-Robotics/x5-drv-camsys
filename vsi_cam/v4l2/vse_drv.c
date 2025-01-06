@@ -221,6 +221,27 @@ static int vse_enum_ctx_framesize_out(struct v4l2_buf_ctx *ctx,
 	return 0;
 }
 
+static int vse_set_mode(struct v4l2_buf_ctx *ctx, u32 mode)
+{
+	struct vse_v4l_instance *ins = buf_ctx_to_v4l_instance(vse, ctx);
+	struct vse_msg msg;
+
+	if (mode == CAM_SIMPLEX_MODE)
+		ins->dev->mode = VSE_SCM_MODE;
+	else if (mode == CAM_MULTIPLEX_MODE)
+		ins->dev->mode = VSE_MCM_MODE;
+	else
+		return -EINVAL;
+
+	pr_debug("%s: set vse mode: %d\n", __func__, ins->dev->mode);
+
+	msg.id = VSE_MSG_MODE_CHANGED;
+	msg.inst = ins->id;
+	msg.channel = -1;
+	msg.mode = ins->dev->mode;
+	return vse_post(ins->dev, &msg, true);
+}
+
 static int vse_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 			      struct v4l2_format *format, bool is_try)
 {
@@ -994,6 +1015,7 @@ static int vse_v4l_probe(struct platform_device *pdev)
 		n->bctx.enum_frameinterval = vse_enum_ctx_frameinterval;
 		n->bctx.set_stream = vse_set_stream;
 		n->bctx.set_cap = vse_set_cap;
+		n->bctx.set_mode = vse_set_mode;
 
 		n->dev = dev;
 		n->num_pads = VSE_OUT_CHNL_MAX + 1;

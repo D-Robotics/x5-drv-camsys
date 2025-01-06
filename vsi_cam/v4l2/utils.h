@@ -183,6 +183,7 @@ struct v4l2_buf_ctx {
 	void (*set_cap)(struct v4l2_buf_ctx *ctx);
 	int (*map_info)(struct v4l2_buf_ctx *ctx, u32 *devid, u32 *insid);
 	int (*check_datapath)(struct v4l2_buf_ctx *ctx, bool *online);
+	int (*set_mode)(struct v4l2_buf_ctx *ctx, u32 mode);
 };
 
 struct subdev_node {
