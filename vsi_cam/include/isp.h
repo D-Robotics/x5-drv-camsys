@@ -107,6 +107,14 @@ struct isp_schedule {
 	u32 frame_done_mask;
 };
 
+struct isp_ctrl_msg {
+	int rc;
+	union {
+		struct isp_ctrl ctrl;
+		struct isp_ctrl_ext ctrl_ext;
+	};
+};
+
 struct isp_device {
 	u32 id, num_insts;
 	struct device *dev;
@@ -145,6 +153,10 @@ struct isp_device {
 #endif
 	struct tasklet_struct update_lut_tbl;
 	struct cam_dev *cam_dev;
+	struct isp_ctrl_msg ctrl_msg;
+	wait_queue_head_t ctrl_waitq;
+	bool ctrl_cond, ctrl_exit;
+	struct mutex ctrl_lock; /* lock for isp ctrl */
 };
 
 bool isp_get_hdr_sram_enabled(struct isp_device *isp, u32 inst);

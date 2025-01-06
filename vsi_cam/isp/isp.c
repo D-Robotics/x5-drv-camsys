@@ -5,9 +5,10 @@
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/module.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
-#include <linux/of_reserved_mem.h>
+#include <linux/sched/clock.h>
 
 #include "cam_ctrl.h"
 #include "cam_dev.h"
@@ -115,6 +116,64 @@ int isp_set_input_select(struct isp_device *isp, u32 inst, u32 in_id, u32 in_chn
 	return rc;
 }
 
+static u64 get_ctrl_timestamp(struct isp_device *isp)
+{
+	u64 timestamp;
+
+	mutex_lock(&isp->ctrl_lock);
+	timestamp = local_clock();
+	mutex_unlock(&isp->ctrl_lock);
+	return timestamp;
+}
+
+#define ISP_CTRL_WAIT_TIMEOUT_MS (5000)
+static int get_ctrl_ack(struct isp_device *isp, u64 timestamp, void *data)
+{
+	int rc;
+	u64 ts;
+
+	while (!isp->ctrl_exit) {
+		mutex_lock(&isp->ctrl_lock);
+		ts = isp->ctrl_msg.ctrl.timestamp;
+		if (ts == timestamp) {
+			rc = isp->ctrl_msg.rc;
+			if (!rc)
+				rc = copy_to_user(data, isp->ctrl_msg.ctrl.ctrl_data,
+						  isp->ctrl_msg.ctrl.size);
+			memset(&isp->ctrl_msg, 0, sizeof(isp->ctrl_msg));
+			mutex_unlock(&isp->ctrl_lock);
+			break;
+		}
+		isp->ctrl_cond = false;
+		mutex_unlock(&isp->ctrl_lock);
+		wait_event_timeout(isp->ctrl_waitq, isp->ctrl_cond,
+				   msecs_to_jiffies(ISP_CTRL_WAIT_TIMEOUT_MS));
+	}
+	return rc;
+}
+
+static int get_ctrl_ext_ack(struct isp_device *isp, u64 timestamp)
+{
+	int rc;
+	u64 ts;
+
+	while (!isp->ctrl_exit) {
+		mutex_lock(&isp->ctrl_lock);
+		ts = isp->ctrl_msg.ctrl_ext.timestamp;
+		if (ts == timestamp) {
+			rc = isp->ctrl_msg.rc;
+			memset(&isp->ctrl_msg, 0, sizeof(isp->ctrl_msg));
+			mutex_unlock(&isp->ctrl_lock);
+			break;
+		}
+		isp->ctrl_cond = false;
+		mutex_unlock(&isp->ctrl_lock);
+		wait_event_timeout(isp->ctrl_waitq, isp->ctrl_cond,
+				   msecs_to_jiffies(ISP_CTRL_WAIT_TIMEOUT_MS));
+	}
+	return rc;
+}
+
 int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 size)
 {
 	struct isp_msg msg;
@@ -137,20 +196,22 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 		msg.ctrl.ctrl_id = cmd;
 		msg.ctrl.dir = 1;
 		msg.ctrl.size = size;
+		msg.ctrl.timestamp = get_ctrl_timestamp(isp);
 
 		ret = copy_from_user(msg.ctrl.ctrl_data, data, size);
 		if (ret) {
 			pr_info("%s: ctrl_data copy_from_user failed!\n", __func__);
 			return ret;
 		}
-		ret = _isp_post(isp, &msg, true, &result);
+		ret = _isp_post(isp, &msg, false, &result);
 		if (ret < 0 || result) {
 			ret |= result;
 			pr_info("%s: msg isp_post failed (err=%d)!\n", __func__, ret);
 		}
-		ret = copy_to_user(data, msg.ctrl.ctrl_data, size);
+
+		ret = get_ctrl_ack(isp, msg.ctrl.timestamp, data);
 		if (ret) {
-			pr_info("%s: ctrl_data copy_to_user failed!\n", __func__);
+			pr_info("%s: get_ctrl_ack failed!\n", __func__);
 			return ret;
 		}
 	} else {
@@ -159,6 +220,7 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 		msg.ctrl_ext.dir = 1;
 		msg.ctrl_ext.size = size;
 		msg.ctrl_ext.buf.size = size;
+		msg.ctrl_ext.timestamp = get_ctrl_timestamp(isp);
 
 		buf_va = isc_alloc_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 		if (!buf_va) {
@@ -172,10 +234,17 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 			return ret;
 		}
-		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, true, &result);
+		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, false, &result);
 		if (ret < 0 || result) {
 			ret |= result;
 			pr_info("%s: msg isp_post_ex failed (err=%d)!\n", __func__, ret);
+		}
+
+		ret = get_ctrl_ext_ack(isp, msg.ctrl_ext.timestamp);
+		if (ret) {
+			pr_info("%s: get_ctrl_ext_ack failed!\n", __func__);
+			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
+			return ret;
 		}
 
 		ret = copy_to_user(data, buf_va, size);
@@ -187,7 +256,6 @@ int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 
 		isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 	}
-
 	return ret;
 }
 
@@ -213,21 +281,22 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 		msg.ctrl.ctrl_id = cmd;
 		msg.ctrl.dir = 0;
 		msg.ctrl.size = size;
+		msg.ctrl.timestamp = get_ctrl_timestamp(isp);
 		ret = copy_from_user(msg.ctrl.ctrl_data, data, size);
 		if (ret) {
 			pr_info("%s: ctrl_data copy_from_user failed!\n", __func__);
 			return ret;
 		}
-		ret = _isp_post(isp, &msg, true, &result);
+		ret = _isp_post(isp, &msg, false, &result);
 		if (ret < 0 || result) {
 			ret |= result;
 			pr_info("%s: msg isp_post failed (err=%d)!\n", __func__, ret);
 			return ret;
 		}
 
-		ret = copy_to_user(data, msg.ctrl.ctrl_data, size);
+		ret = get_ctrl_ack(isp, msg.ctrl.timestamp, data);
 		if (ret) {
-			pr_info("%s: ctrl_data copy_to_user failed!\n", __func__);
+			pr_info("%s: get_ctrl_ack failed!\n", __func__);
 			return ret;
 		}
 	} else {
@@ -236,6 +305,7 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 		msg.ctrl_ext.dir = 0;
 		msg.ctrl_ext.size = size;
 		msg.ctrl_ext.buf.size = size;
+		msg.ctrl_ext.timestamp = get_ctrl_timestamp(isp);
 
 		buf_va = isc_alloc_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 		if (!buf_va) {
@@ -249,10 +319,17 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 			return ret;
 		}
-		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, true, &result);
+		ret = isp_post_ex(isp, &msg, &msg.ctrl_ext.buf, false, &result);
 		if (ret < 0 || result) {
 			ret |= result;
 			pr_info("%s: msg isp_post_ex failed (err=%d)!\n", __func__, ret);
+			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
+			return ret;
+		}
+
+		ret = get_ctrl_ext_ack(isp, msg.ctrl_ext.timestamp);
+		if (ret) {
+			pr_info("%s: get_ctrl_ext_ack failed!\n", __func__);
 			isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 			return ret;
 		}
@@ -265,7 +342,6 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 		}
 		isc_free_extra_buf(isp->isc, &msg.ctrl_ext.buf);
 	}
-
 	return 0;
 }
 
@@ -1501,6 +1577,7 @@ int isp_open(struct isp_device *isp, u32 inst)
 		isp_post_clk_on_off(isp, true);
 		tasklet_init(&isp->update_lut_tbl, isp_update_none_shd_regs,
 			     (unsigned long)isp);
+		isp->ctrl_exit = false;
 	}
 
 _exit:
@@ -1573,6 +1650,9 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 	reset_job_queue(isp->jq);
 	isp_reset_schedule(isp, INVALID_INST, true);
 	cam_iommu_unmap(isp->cam_dev);
+	isp->ctrl_exit = true;
+	isp->ctrl_cond = true;
+	wake_up_all(&isp->ctrl_waitq);
 
 	isp_post_clk_on_off(isp, false);
 	isp_reset(isp);
@@ -1650,6 +1730,8 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 	mutex_init(&isp->set_input_lock);
 	mutex_init(&isp->set_state_lock);
 	refcount_set(&isp->open_cnt, REFCNT_INIT_VAL);
+	mutex_init(&isp->ctrl_lock);
+	init_waitqueue_head(&isp->ctrl_waitq);
 
 	isp->insts = devm_kcalloc(dev, isp_dt.num_insts, sizeof(*isp->insts),
 				  GFP_KERNEL);
@@ -1743,6 +1825,7 @@ int isp_remove(struct platform_device *pdev, struct isp_device *isp)
 	mutex_destroy(&isp->set_state_lock);
 	mutex_destroy(&isp->in_buf_list.lock);
 	mutex_destroy(&isp->hdr_buf_list.lock);
+	mutex_destroy(&isp->ctrl_lock);
 
 	dev_dbg(&pdev->dev, "VS ISP driver (base) removed\n");
 	return rc;

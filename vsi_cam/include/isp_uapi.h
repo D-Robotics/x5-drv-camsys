@@ -21,7 +21,6 @@
 #define ISP_MSG_RESET_SCH       (0x7 << 0)
 #define ISP_MSG_SET_GAMMA_FE_BE (0x8 << 0)
 #define ISP_MSG_SET_RGBGAMMA    (0x9 << 0)
-
 #define ISP_MSG_SET_WDR5_HIST       (0xa << 0)
 #define ISP_MSG_SET_WDR5_SHIFT      (0xb << 0)
 #define ISP_MSG_SET_WDR5_SHIFT0     (0xc << 0)
@@ -33,6 +32,8 @@
 #define ISP_MSG_SET_WDR5_FACTOR     (0x12 << 0)
 #define ISP_MSG_SET_WDR5_LEVEL      (0x13 << 0)
 #define ISP_MSG_SET_WDR5_SAT_SHIFT  (0x14 << 0)
+#define ISP_MSG_ACK_CTRL            (0x15 << 0)
+#define ISP_MSG_ACK_CTRL_EXT        (0x16 << 0)
 
 #define ISP_MSG_IRQ_MIS    (0x1 << 8)
 #define ISP_MSG_MCM_SCH    (0x2 << 8)
@@ -73,6 +74,7 @@ struct isp_ctrl {
 	__u8 ctrl_data[ISP_CTRL_DATA_LENGTH];
 	__u32 size; // must no more than ISP_CTRL_DATA_LENGTH!
 	__u8 dir;
+	__u64 timestamp;
 };
 
 struct isp_ctrl_ext {
@@ -80,6 +82,7 @@ struct isp_ctrl_ext {
 	struct mem_buf buf;
 	__u32 size;
 	__u8 dir;
+	__u64 timestamp;
 };
 
 struct isp_gamma_febe_ctrl {
@@ -102,31 +105,31 @@ struct isp_rgbgamma_data {
 };
 
 struct isp_wdr5_data {
-    __u32 lut_histogram_write_data[65];
-    __u32 lut_shift_write_data[65];
-    __u32 lut_shift0_write_data[65];
-    __u32 lut_gammapre_write_data[65];
-    __u32 lut_gammadown_write_data[65];
-    __u32 lut_entropy_write_data[65];
+	__u32 lut_histogram_write_data[65];
+	__u32 lut_shift_write_data[65];
+	__u32 lut_shift0_write_data[65];
+	__u32 lut_gammapre_write_data[65];
+	__u32 lut_gammadown_write_data[65];
+	__u32 lut_entropy_write_data[65];
 
-    __u32 lut_distance_weight_write_data[65];
-    __u32 lut_difference_weight_write_data[65];
-    __u32 lut_flat_factor_write_data[272];
-    __u8 lut_flat_level_write_data[68];
-    __u32 lut_sat_shift_write_data[18];
+	__u32 lut_distance_weight_write_data[65];
+	__u32 lut_difference_weight_write_data[65];
+	__u32 lut_flat_factor_write_data[272];
+	__u8 lut_flat_level_write_data[68];
+	__u32 lut_sat_shift_write_data[18];
 
-    __u8 histogram_w_data_changed;
-    __u8 lut_shift_w_data_changed;
-    __u8 lut_shift0_w_data_changed;
-    __u8 gammapre_w_data_changed;
-    __u8 gammadown_w_data_changed;
-    __u8 entropy_w_data_changed;
+	__u8 histogram_w_data_changed;
+	__u8 lut_shift_w_data_changed;
+	__u8 lut_shift0_w_data_changed;
+	__u8 gammapre_w_data_changed;
+	__u8 gammadown_w_data_changed;
+	__u8 entropy_w_data_changed;
 
-    __u8 lut_distance_weight_w_data_changed;
-    __u8 difference_weight_w_data_changed;
-    __u8 flat_factor_w_data_changed;
-    __u8 flat_level_w_data_changed;
-    __u8 sat_shift_w_data_changed;
+	__u8 lut_distance_weight_w_data_changed;
+	__u8 difference_weight_w_data_changed;
+	__u8 flat_factor_w_data_changed;
+	__u8 flat_level_w_data_changed;
+	__u8 sat_shift_w_data_changed;
 };
 
 enum isp_work_mode {
