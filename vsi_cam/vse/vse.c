@@ -720,6 +720,7 @@ int vse_close(struct vse_device *vse, u32 inst)
 	vse->next_irq_ctx = 0;
 	vse->error = 1;
 	vse->mode = VSE_MCM_MODE;
+	vse->ext_mode = 0;
 	rc = vse_runtime_suspend(vse->dev);
 
 _exit:

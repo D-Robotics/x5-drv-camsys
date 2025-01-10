@@ -180,7 +180,7 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 	return rc;
 }
 
-static inline void frame_done(struct vse_instance *inst, bool drop)
+static inline void frame_done(struct vse_device *vse, struct vse_instance *inst, bool drop)
 {
 	struct vse_irq_ctx *ctx = &inst->ctx;
 	ktime_t now_time = ktime_get_boottime();
@@ -193,6 +193,10 @@ static inline void frame_done(struct vse_instance *inst, bool drop)
 
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
+			/* all online */
+			if (vse->ext_mode == 1) {
+				sif_get_frame_des(ctx->src_ctx[i]);
+			}
 			if (drop || vse_get_drop_status(ctx->src_ctx[i])) {
 				cam_drop_irq(ctx->src_ctx[i], ctx->src_buf[i]);
 				ctx->src_buf[i] = NULL;
@@ -243,8 +247,6 @@ int new_frame(struct vse_irq_ctx *ctx)
 		ctx->src_buf[i] = cam_dqbuf_irq(ctx->src_ctx[i], true);
 		if (ctx->src_buf[i]) {
 			count++;
-			if (ctx->sink_online_en)
-				sif_get_frame_des(ctx->src_ctx[i]);
 		}
 	}
 
@@ -372,7 +374,7 @@ irqreturn_t vse_irq_handler(int irq, void *arg)
 		value &= ~0x5;
 		vse_write(vse, VSE_MI_IMSC1, value);
 		spin_lock_irqsave(&inst->lock, flags);
-		frame_done(inst, !!(mis1 & 0x5));
+		frame_done(vse, inst, !!(mis1 & 0x5));
 		spin_unlock_irqrestore(&inst->lock, flags);
 
 		msg.inst = -1;

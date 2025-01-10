@@ -100,6 +100,7 @@ struct vse_device {
 	struct mutex open_lock; /* lock for open_cnt */
 	refcount_t open_cnt;
 	enum vse_work_mode mode;
+	u32 ext_mode;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_log_file;

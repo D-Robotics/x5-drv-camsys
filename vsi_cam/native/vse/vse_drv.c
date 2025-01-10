@@ -12,6 +12,7 @@
 #define VSE_DEV_NAME    "vs-vse"
 
 extern s32 isp_get_inst(struct vio_subdev *vdev, int *inst_id);
+extern s32 isp_is_strm_mode(struct vio_subdev *vdev);
 
 static struct vio_version_info g_vse_version = {
 	.major = 1,
@@ -109,12 +110,16 @@ static s32 vse_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 	if (online_mode && remote_node->id == ISP_MODULE && vdev->id == VNODE_ID_SRC) {
 		bind_type = CHN_BIND_OTF;
 		isp_get_inst(remote_vdev, &cas_id);
+
+		if (isp_is_strm_mode(remote_vdev)) {
+			inst->dev->vse_dev.ext_mode = 1;
+		}
 		vse_set_cascade(&inst->dev->vse_dev, inst->id, cas_id, online_mode);
 	} else {
 		bind_type = CHN_BIND_M2M;
 	}
 
-	pr_info("%s online_mode=%d,bind_type=%d\n", __func__, online_mode, bind_type);
+	pr_info("%s ext_mode %d online_mode=%d,bind_type=%d\n", __func__, inst->dev->vse_dev.ext_mode, online_mode, bind_type);
 	return bind_type;
 }
 
@@ -775,8 +780,10 @@ static int vse_trigger(struct cam_ctx *ctx)
 	struct vse_nat_instance *inst;
 
 	inst = container_of(vdev, struct vse_nat_instance, vdev);
-	if (vdev)
+	if (vdev) {
+		pr_debug("vse_trigger fid %d\n", vdev->vnode->frameid.frame_id);
 		vse_add_job(&inst->dev->vse_dev, inst->id);
+	}
 	return 0;
 }
 

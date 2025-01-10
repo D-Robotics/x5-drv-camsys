@@ -72,6 +72,21 @@ s32 isp_get_inst(struct vio_subdev *vdev, int *inst_id)
 }
 EXPORT_SYMBOL(isp_get_inst);
 
+s32 isp_is_strm_mode(struct vio_subdev *vdev)
+{
+	struct isp_nat_instance *isp_inst = NULL;
+
+	isp_inst = container_of(vdev, struct isp_nat_instance, vdev);
+	if (!isp_inst)
+		return 0;
+
+	if (isp_inst->dev->isp_dev.mode == ISP_STRM_MODE) {
+		return 1;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(isp_is_strm_mode);
+
 static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vdev, u8 online_mode)
 {
 	struct isp_nat_instance *inst;

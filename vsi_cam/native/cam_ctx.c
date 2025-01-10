@@ -11,6 +11,7 @@
 
 int cam_trigger(struct cam_ctx *ctx)
 {
+	struct vio_subdev *src_vdev = (struct vio_subdev *)ctx;
 	struct vio_subdev *vdev = (struct vio_subdev *)ctx;
 	const struct cam_ops *ops = NULL;
 	struct vio_node *vnode;
@@ -22,14 +23,18 @@ int cam_trigger(struct cam_ctx *ctx)
 		vdev = vdev->next;
 		if (vdev->vnode->id < MODULE_NUM)
 			ops = get_ops(vdev->vnode->id);
-		if (ops && ops->trigger)
+		if (ops && ops->trigger) {
+			memcpy(&vdev->vnode->frameid, &src_vdev->vnode->frameid, sizeof(vnode->frameid));
 			return ops->trigger((struct cam_ctx *)vdev);
+		}
 	} else if (vdev->vnode->next) {
 		vnode = vdev->vnode->next;
 		if (vnode->id < MODULE_NUM)
 			ops = get_ops(vnode->id);
-		if (ops && ops->trigger)
+		if (ops && ops->trigger) {
+			memcpy(&vnode->frameid, &src_vdev->vnode->frameid, sizeof(vnode->frameid));
 			return ops->trigger((struct cam_ctx *)vnode->ich_subdev[0]);
+		}
 	}
 
 	return -EBUSY;

@@ -1173,8 +1173,13 @@ static int isp_set_schedule_online_mcm(struct isp_device *isp, struct isp_mcm_sc
 	}
 
 	for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
-		if (is_online(ins->ctx.src_online_stat, i))
+		if (is_online(ins->ctx.src_online_stat, i)) {
+			/* copy ib frame info to isp vnode */
+			if (NULL != ins->ctx.src_ctx[i]) {
+				sif_set_frame_des(ins->ctx.src_ctx[i], (void *)&mcm_ib->info);
+			}
 			cam_trigger(ins->ctx.src_ctx[i]);
+		}
 	}
 
 	isp->error = 0;
