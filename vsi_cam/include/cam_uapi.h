@@ -121,6 +121,7 @@ enum cam_work_mode {
 struct cam_frame_info {
 	__u32 frame_id;
 	__u64 time_stamp;
+	__u64 sys_timestamps;
 	__u64 tv_sec;
 	__u64 tv_usec;
 	__u64 trig_tv_sec;
