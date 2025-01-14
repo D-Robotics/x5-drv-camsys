@@ -42,6 +42,9 @@ struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 			if (subdev->id == VNODE_ID_SRC) {
 				(void)memcpy(&vnode->frameid, &frame->frameinfo.frameid,
 					sizeof(struct frame_id_desc));
+				pr_debug("[%s][S%d] dqbuf set frame_des %d to %s vnode\n",
+					vnode->name, vnode->flow_id,
+					vnode->frameid.frame_id, vnode->name);
 			}
 			vio_set_stat_info(vnode->flow_id, vnode->id, STAT_DQ,
 					  vnode->frameid.frame_id);

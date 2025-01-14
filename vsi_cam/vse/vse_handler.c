@@ -191,12 +191,13 @@ static inline void frame_done(struct vse_device *vse, struct vse_instance *inst,
 		ctx->sink_buf = NULL;
 	}
 
+	/* all online */
+	if (vse->ext_mode == 1 ) {
+		sif_get_frame_des(ctx->sink_ctx);
+	}
+
 	for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
 		if (ctx->src_buf[i]) {
-			/* all online */
-			if (vse->ext_mode == 1) {
-				sif_get_frame_des(ctx->src_ctx[i]);
-			}
 			if (drop || vse_get_drop_status(ctx->src_ctx[i])) {
 				cam_drop_irq(ctx->src_ctx[i], ctx->src_buf[i]);
 				ctx->src_buf[i] = NULL;

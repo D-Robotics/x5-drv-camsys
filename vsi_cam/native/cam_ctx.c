@@ -25,6 +25,9 @@ int cam_trigger(struct cam_ctx *ctx)
 			ops = get_ops(vdev->vnode->id);
 		if (ops && ops->trigger) {
 			memcpy(&vdev->vnode->frameid, &src_vdev->vnode->frameid, sizeof(vnode->frameid));
+			pr_debug("[%s][S%d]cam_trigger vdev set frame_des %d from %s to %s\n",
+				src_vdev->vnode->name, src_vdev->vnode->flow_id,
+				src_vdev->vnode->frameid.frame_id, src_vdev->vnode->name, vnode->name);
 			return ops->trigger((struct cam_ctx *)vdev);
 		}
 	} else if (vdev->vnode->next) {
@@ -33,6 +36,9 @@ int cam_trigger(struct cam_ctx *ctx)
 			ops = get_ops(vnode->id);
 		if (ops && ops->trigger) {
 			memcpy(&vnode->frameid, &src_vdev->vnode->frameid, sizeof(vnode->frameid));
+			pr_debug("[%s][S%d]cam_trigger vnode set frame_des %d from %s to %s\n",
+				src_vdev->vnode->name, src_vdev->vnode->flow_id,
+				src_vdev->vnode->frameid.frame_id, src_vdev->vnode->name, vnode->name);
 			return ops->trigger((struct cam_ctx *)vnode->ich_subdev[0]);
 		}
 	}
@@ -55,19 +61,26 @@ void sif_set_frame_des(struct cam_ctx *ctx, void *data)
 	frameid.trig_tv_sec = des->trigger_ts / des->trigger_freq;
 	frameid.trig_tv_usec = (des->trigger_ts % des->trigger_freq) / (des->trigger_freq / 1000000u);
 
-	// printk("kernel time:%lld fs time %llds %lldus, trigger time %llds %lldus\n",
-	// 	   frameid.timestamps, frameid.tv_sec, frameid.tv_usec, frameid.trig_tv_sec, frameid.trig_tv_usec);
-
-	if (subdev)
+	if (subdev) {
 		memcpy(&subdev->vnode->frameid, &frameid, sizeof(struct frame_id_desc));
+		pr_debug("[%s][S%d] set frame_des frameid %d kernel time:%lld fs time %llds %lldus, trigger time %llds %lldus\n",
+				subdev->vnode->name, subdev->vnode->flow_id,
+				frameid.frame_id, frameid.timestamps, frameid.tv_sec, frameid.tv_usec,
+				frameid.trig_tv_sec, frameid.trig_tv_usec);
+	}
 }
 
 void sif_get_frame_des(struct cam_ctx *ctx)
 {
 	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
 
-	if (subdev)
+	if (subdev) {
 		vio_get_frame_id(subdev->vnode);
+		pr_debug("[%s][S%d] get frame_des frameid %d kernel time:%lld fs time %llds %lldus, trigger time %llds %lldus\n",
+			subdev->vnode->name, subdev->vnode->flow_id,
+			subdev->vnode->frameid.frame_id, subdev->vnode->frameid.timestamps, subdev->vnode->frameid.tv_sec,
+			subdev->vnode->frameid.tv_usec, subdev->vnode->frameid.trig_tv_sec, subdev->vnode->frameid.trig_tv_usec);
+	}
 }
 
 void sif_set_frame_event(struct cam_ctx *ctx, u32 type)
@@ -249,6 +262,7 @@ int cam_get_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
 	if (vnode) {
 		vio_get_frame_id(vnode);
 		memcpy(info, &vnode->frameid, sizeof(struct cam_frame_info));
+		pr_debug("[%s][S%d] cam get frame_des %d to info\n", vnode->name, vnode->flow_id, info->frame_id);
 	} else {
 		return -EINVAL;
 	}
@@ -267,8 +281,10 @@ int cam_update_frame_info(struct cam_ctx *ctx, struct cam_frame_info *info)
 
 	vnode = (struct vio_node *)subdev->vnode;
 
-	if (vnode && info)
+	if (vnode && info) {
 		memcpy(&vnode->frameid, info, sizeof(struct cam_frame_info));
+		pr_debug("[%s][S%d] cam set frame_des %d to vnode\n", vnode->name, vnode->flow_id, info->frame_id);
+	}
 	else
 		return -EINVAL;
 
