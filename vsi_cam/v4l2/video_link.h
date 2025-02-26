@@ -303,6 +303,60 @@ static struct entity_link links21[] = {
 	{ GDC_DEV_NAME "0-1", 0, "video-m2m", 0, MEDIA_LNK_FL_ENABLED },
 };
 
+/* RDK X5 4v sif online isp online vse 6 channel */
+static struct entity_link links22[] = {
+	{ SIF_DEV_NAME "0-0", 0, ISP_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 0, ISP_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 0, ISP_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 0, ISP_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 0, VSE_DEV_NAME "0-0", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-1", 0, VSE_DEV_NAME "0-1", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-2", 0, VSE_DEV_NAME "0-2", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-3", 0, VSE_DEV_NAME "0-3", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "1-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "2-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ SIF_DEV_NAME "3-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-1", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ ISP_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-0", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-1", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-1", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-1", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-1", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-1", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-1", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-2", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-3", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
+/* vse stand alone 6 channel */
+static struct entity_link links23[] = {
+	{ VSE_DEV_NAME "0-4", 0, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 1, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 2, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 3, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 4, "video", 0, MEDIA_LNK_FL_ENABLED },
+	{ VSE_DEV_NAME "0-4", 5, "video", 0, MEDIA_LNK_FL_ENABLED },
+};
+
 static struct entity_link *links[] = {
 	links0,
 	links1,
@@ -326,6 +380,8 @@ static struct entity_link *links[] = {
 	links19,
 	links20,
 	links21,
+	links22,
+	links23,
 };
 
 static u32 links_size[] = {
@@ -351,6 +407,8 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links19),
 	ARRAY_SIZE(links20),
 	ARRAY_SIZE(links21),
+	ARRAY_SIZE(links22),
+	ARRAY_SIZE(links23),
 };
 
 #endif /* _VIDEO_LINK_H_ */
