@@ -23,41 +23,6 @@ static s32 handle_reset_control(struct vse_device *vse, struct vse_msg *msg)
 	return dw_reset(vse->crc_dev, DW_MOD_VSE);
 }
 
-static s32 handle_alloc_cmd_buf(struct vse_device *vse, struct vse_msg *msg)
-{
-	struct vse_instance *ins;
-
-	if (msg->inst >= vse->num_insts)
-		return -EINVAL;
-
-	ins = &vse->insts[msg->inst];
-
-	if (msg->cmd.size > 0) {
-		ins->cmd_buf_va = dma_alloc_coherent(vse->dev, msg->cmd.size, &msg->cmd.addr,
-						  GFP_KERNEL);
-		if (!ins->cmd_buf_va)
-			return -ENOMEM;
-	} else {
-		dma_free_coherent(vse->dev, ins->cmd_buf.size, ins->cmd_buf_va, ins->cmd_buf.addr);
-		ins->cmd_buf_va = NULL;
-	}
-	ins->cmd_buf = msg->cmd;
-	return 0;
-}
-
-static s32 handle_set_osd_buf(struct vse_device *vse, struct vse_msg *msg)
-{
-	struct vse_instance *ins;
-
-	if (msg->inst >= vse->num_insts || msg->channel >= VSE_OUT_CHNL_MAX || msg->osd.id >= 4)
-		return -EINVAL;
-
-	ins = &vse->insts[msg->inst];
-
-    ins->osd[msg->channel][msg->osd.id] = msg->osd.buf;
-	return 0;
-}
-
 static s32 handle_iommu_map(struct vse_device *vse, struct vse_msg *msg)
 {
 	return mem_iommu_map(vse->dev, msg->map_buf.phys,
@@ -155,12 +120,6 @@ s32 vse_msg_handler(void *msg, u32 len, void *arg)
 		break;
 	case CAM_MSG_RESET_CONTROL:
 		rc = handle_reset_control(vse, m);
-		break;
-	case VSE_MSG_ALLOC_CMD_BUF:
-		rc = handle_alloc_cmd_buf(vse, m);
-		break;
-	case VSE_MSG_SET_OSD_BUF:
-		rc = handle_set_osd_buf(vse, m);
 		break;
 	case CAM_MSG_IOMMU_MAP:
 		rc = handle_iommu_map(vse, m);

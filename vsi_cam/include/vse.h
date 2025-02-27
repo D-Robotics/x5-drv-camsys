@@ -66,9 +66,6 @@ struct vse_instance {
 	struct cam_rect crop[VSE_OUT_CHNL_MAX];
 	struct vse_hist_num hist_num[VSE_OUT_CHNL_MAX];
 	spinlock_t hist_lock; /* lock for handling ctx */
-	struct vse_cmd_buf *cmd_buf_va;
-	struct mem_buf cmd_buf;
-	struct mem_buf osd[VSE_OUT_CHNL_MAX][4];
 	struct vse_sch sch;
 	struct vse_fps_rate fps[VSE_OUT_CHNL_MAX];
 	enum vse_src source;

@@ -91,47 +91,6 @@ struct isp_gamma_febe_ctrl {
 	__u8  flag;
 };
 
-struct isp_rgbgamma_data {
-	__u32 rgbgc_r_px[64];
-	__u32 rgbgc_r_datax[63];
-	__u32 rgbgc_r_datay[64];
-	__u32 rgbgc_g_px[64];
-	__u32 rgbgc_g_datax[63];
-	__u32 rgbgc_g_datay[64];
-	__u32 rgbgc_b_px[64];
-	__u32 rgbgc_b_datax[63];
-	__u32 rgbgc_b_datay[64];
-	__u8  flag;
-};
-
-struct isp_wdr5_data {
-	__u32 lut_histogram_write_data[65];
-	__u32 lut_shift_write_data[65];
-	__u32 lut_shift0_write_data[65];
-	__u32 lut_gammapre_write_data[65];
-	__u32 lut_gammadown_write_data[65];
-	__u32 lut_entropy_write_data[65];
-
-	__u32 lut_distance_weight_write_data[65];
-	__u32 lut_difference_weight_write_data[65];
-	__u32 lut_flat_factor_write_data[272];
-	__u8 lut_flat_level_write_data[68];
-	__u32 lut_sat_shift_write_data[18];
-
-	__u8 histogram_w_data_changed;
-	__u8 lut_shift_w_data_changed;
-	__u8 lut_shift0_w_data_changed;
-	__u8 gammapre_w_data_changed;
-	__u8 gammadown_w_data_changed;
-	__u8 entropy_w_data_changed;
-
-	__u8 lut_distance_weight_w_data_changed;
-	__u8 difference_weight_w_data_changed;
-	__u8 flat_factor_w_data_changed;
-	__u8 flat_level_w_data_changed;
-	__u8 sat_shift_w_data_changed;
-};
-
 enum isp_work_mode {
 	ISP_MODE_INVALID = 0,
 	ISP_STRM_MODE,

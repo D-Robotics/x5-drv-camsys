@@ -19,11 +19,6 @@ enum cam_error {
 	CAM_ERROR_WAIT_SINK_BUF = 1 << 1,
 };
 
-enum cam_stat_type {
-	CAM_STAT_FS,
-	CAM_STAT_FE,
-};
-
 enum cam_format_type {
 	CAM_FMT_NULL,
 	CAM_FMT_RAW8,
@@ -118,16 +113,6 @@ enum cam_work_mode {
 	CAM_MULTIPLEX_MODE,
 };
 
-struct cam_frame_info {
-	__u32 frame_id;
-	__u64 time_stamp;
-	__u64 sys_timestamps;
-	__u64 tv_sec;
-	__u64 tv_usec;
-	__u64 trig_tv_sec;
-	__u64 trig_tv_usec;
-};
-
 struct cam_reg {
 	__u32 offset;
 	__u32 value;
@@ -148,6 +133,7 @@ struct cam_clk {
 #define CAM_LOG_MAIN       (0x000)
 #define CAM_LOG_USR1       (0x001)
 #define CAM_LOG_USR2       (0x002)
+#define CAM_LOG_USR3       (0x003)
 
 /* log priority */
 #define CAM_LOG_ERROR      (1 << 0)

@@ -674,14 +674,9 @@ int vse_close(struct vse_device *vse, u32 inst)
 	memset(&ins->ifmt, 0, sizeof(ins->ifmt));
 	memset(ins->ofmt, 0, sizeof(ins->ofmt));
 	memset(ins->crop, 0, sizeof(ins->crop));
-	memset(&ins->osd, 0, sizeof(ins->osd));
 	ins->error = 1;
 	memset(ins->fps, 0, sizeof(ins->fps));
 	memset(ins->hist_num, 0, sizeof(ins->hist_num));
-	if (ins->cmd_buf_va) {
-		dma_free_coherent(vse->dev, ins->cmd_buf.size, ins->cmd_buf_va, ins->cmd_buf.addr);
-		ins->cmd_buf_va = NULL;
-	}
 
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = inst;
@@ -832,20 +827,13 @@ int vse_probe(struct platform_device *pdev, struct vse_device *vse)
 
 int vse_remove(struct platform_device *pdev, struct vse_device *vse)
 {
-	int i, rc;
+	int rc;
 
 	rc = isc_unregister(VSE_UID(vse->id));
 	if (rc < 0)
 		dev_err(&pdev->dev, "failed to call isc_unregister (err=%d)\n", rc);
 
 	destroy_job_queue(vse->jq);
-
-	for (i = 0; i < vse->num_insts; i++) {
-		struct vse_instance *ins = &vse->insts[i];
-
-		if (ins->cmd_buf_va)
-			dma_free_coherent(vse->dev, ins->cmd_buf.size, ins->cmd_buf_va, ins->cmd_buf.addr);
-	}
 	put_cam_ctrl_device(vse->ctrl_dev);
 	devm_kfree(&pdev->dev, vse->insts);
 	mutex_destroy(&vse->open_lock);

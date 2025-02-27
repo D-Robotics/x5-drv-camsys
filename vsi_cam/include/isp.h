@@ -8,7 +8,7 @@
 #include <linux/refcount.h>
 #include <linux/timekeeping.h>
 
-#include "cam_buf.h"
+#include "cam_ctx.h"
 #include "isp_uapi.h"
 #include "job_queue.h"
 #include "mem_helper.h"
@@ -60,6 +60,47 @@ struct isp_irq_ctx {
 struct cam_list_node {
 	void *data;
 	struct list_head entry;
+};
+
+struct isp_rgbgamma_data {
+	u32 rgbgc_r_px[64];
+	u32 rgbgc_r_datax[63];
+	u32 rgbgc_r_datay[64];
+	u32 rgbgc_g_px[64];
+	u32 rgbgc_g_datax[63];
+	u32 rgbgc_g_datay[64];
+	u32 rgbgc_b_px[64];
+	u32 rgbgc_b_datax[63];
+	u32 rgbgc_b_datay[64];
+	u8  flag;
+};
+
+struct isp_wdr5_data {
+	u32 lut_histogram_write_data[65];
+	u32 lut_shift_write_data[65];
+	u32 lut_shift0_write_data[65];
+	u32 lut_gammapre_write_data[65];
+	u32 lut_gammadown_write_data[65];
+	u32 lut_entropy_write_data[65];
+
+	u32 lut_distance_weight_write_data[65];
+	u32 lut_difference_weight_write_data[65];
+	u32 lut_flat_factor_write_data[272];
+	u8 lut_flat_level_write_data[68];
+	u32 lut_sat_shift_write_data[18];
+
+	u8 histogram_w_data_changed;
+	u8 lut_shift_w_data_changed;
+	u8 lut_shift0_w_data_changed;
+	u8 gammapre_w_data_changed;
+	u8 gammadown_w_data_changed;
+	u8 entropy_w_data_changed;
+
+	u8 lut_distance_weight_w_data_changed;
+	u8 difference_weight_w_data_changed;
+	u8 flat_factor_w_data_changed;
+	u8 flat_level_w_data_changed;
+	u8 sat_shift_w_data_changed;
 };
 
 struct isp_instance {

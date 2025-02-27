@@ -18,10 +18,8 @@
 
 #define VSE_UID(n) cam_fourcc('v', 's', 'e', (n) + '0')
 
-#define VSE_MSG_ALLOC_CMD_BUF (0x1)
-#define VSE_MSG_SET_OSD_BUF   (0x2)
-#define VSE_MSG_SET_ERROR     (0x3)
-#define VSE_MSG_SET_CFG_AUTO  (0x4)
+#define VSE_MSG_SET_ERROR     (0x1)
+#define VSE_MSG_SET_CFG_AUTO  (0x2)
 
 #define VSE_MSG_IRQ_STAT         (0x1 << 8)
 #define VSE_MSG_SRC_ALT          (0x2 << 8)
@@ -87,15 +85,6 @@ struct vse_lut_tbl {
 	__u32 rgb_data[LUT_NUM];
 };
 
-struct vse_cmd_buf {
-	__u16 ready;
-	__u16 num;
-	struct {
-		__u32 offset;
-		__u32 value;
-	} regs[0];
-};
-
 struct vse_osd_buf {
 	struct mem_buf buf;
 	__u8 id;
@@ -159,7 +148,6 @@ struct vse_msg {
 		struct vse_format fmt;
 		struct vse_osd_info osd_info[VSE_OSD_MAX];
 		struct vse_lut_tbl lut_tbl;
-		struct mem_buf cmd;
 		struct vse_osd_buf osd;
 		__u32 state;  /* enum cam_state */
 		__u32 source; /* enum vse_src */

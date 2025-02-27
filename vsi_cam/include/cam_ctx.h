@@ -6,6 +6,11 @@
 
 #include "cam_buf.h"
 
+enum cam_stat_type {
+	CAM_STAT_FS,
+	CAM_STAT_FE,
+};
+
 enum cam_frame_status {
 	NO_ERR    = 0,
 	VSIZE_ERR = 1,
@@ -13,6 +18,16 @@ enum cam_frame_status {
 	BOTH_ERR  = 1,
 	IPI_OF    = 2,
 	DQ_FAIL   = 3,
+};
+
+struct cam_frame_info {
+	u32 frame_id;
+	u64 time_stamp;
+	u64 sys_timestamps;
+	u64 tv_sec;
+	u64 tv_usec;
+	u64 trig_tv_sec;
+	u64 trig_tv_usec;
 };
 
 int cam_trigger(struct cam_ctx *ctx);
