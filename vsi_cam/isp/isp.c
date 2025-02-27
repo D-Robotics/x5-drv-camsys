@@ -848,6 +848,7 @@ int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type t
 			spin_unlock_irqrestore(&ins->lock, flags2);
 		} else {
 			isp_remove_job(isp, inst);
+			ins->job_count = 0;
 			if (ins->online_mcm) {
 				list_splice_tail_init(&isp->ibm[inst].list2, &isp->ibm[inst].list1);
 				list_splice_tail_init(&isp->ibm[inst].list3, &isp->ibm[inst].list1);
@@ -985,7 +986,7 @@ int isp_add_job(struct isp_device *isp, u32 inst)
 		// dev_err(isp->dev, "failed to push a job %d (err=%d)\n", inst, rc);
 		return rc;
 	}
-
+	ins->job_count++;
 	if (!ins->online_mcm) {
 		sch.id = inst;
 		isp_set_schedule(isp, &sch, 0, 0, false);
@@ -1069,6 +1070,37 @@ int isp_query_job(struct isp_device *isp, u32 *inst)
 
 	*inst = job.irq_ctx_index;
 	return 0;
+}
+
+int isp_wake_up(struct isp_device *isp, u32 inst)
+{
+	struct irq_job job = { inst };
+	struct isp_instance *ins;
+	struct isp_mcm_sch sch = {.id = inst};
+	int rc = 0;
+
+	if (!isp)
+		return -EINVAL;
+
+	if (isp->mode == ISP_STRM_MODE)
+		return -EFAULT;
+	if (WARN_ON(inst >= isp->num_insts))
+		return -EFAULT;
+
+	ins = &isp->insts[inst];
+	if (ins->state != CAM_STATE_STARTED || ins->ctx.sink_online_en)
+		return 0;
+
+	if (!ins->job_count) {
+		rc = push_job(isp->jq, &job);
+		if (rc < 0)
+			return rc;
+		ins->job_count++;
+
+		isp_set_schedule(isp, &sch, 0, 0, false);
+	}
+
+	return rc;
 }
 
 static int isp_set_schedule_online_stream(struct isp_device *isp, bool isp_irq_call)
@@ -1339,6 +1371,7 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_m
 				isp_post(isp, &msg, false);
 				pr_debug("post frame end inst:%d", inst);
 			}
+			isp->error = 1;
 			isp->sch.mi_idle = true;
 			isp->sch.next_mi_inst = INVALID_INST;
 		}
@@ -1371,6 +1404,7 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_m
 		}
 		isp_fetch_job(isp, &id);
 		ins = &isp->insts[inst];
+		ins->job_count--;
 		if (ins->state != CAM_STATE_STARTED) {
 			rc = -1;
 			goto _exit;
@@ -1403,6 +1437,7 @@ int isp_get_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
 	if (isp->mode == ISP_STRM_MODE) {
 		ins = &isp->insts[0];
 		isp->sch.mi_idle = true;
+		isp->error = 1;
 		id = 0;
 		goto _frame_done;
 	}
@@ -1479,7 +1514,7 @@ int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
 		ris = isp_read(isp, MIV2_RIS1);
 		if (isp_ris & BIT(26)) {
 			if (!(ris & MIV2_MIS_MCM_RAW0_BUF_FULL_MASK)) {
-				pr_info("%s sensor0 dataloss but no buf full\n", __func__);
+				pr_err("%s sensor0 dataloss but no buf full\n", __func__);
 				ris |= MIV2_MIS_MCM_RAW0_BUF_FULL_MASK;
 			}
 		}
@@ -1490,7 +1525,7 @@ int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
 		ris = isp_read(isp, MIV2_RIS1);
 		if (isp_ris & BIT(25)) {
 			if (!(ris & MIV2_MIS_MCM_RAW1_BUF_FULL_MASK)) {
-				pr_info("%s sensor1 dataloss but no buf full\n", __func__);
+				pr_err("%s sensor1 dataloss but no buf full\n", __func__);
 				ris |= MIV2_MIS_MCM_RAW1_BUF_FULL_MASK;
 			}
 		}
@@ -1501,7 +1536,7 @@ int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
 		ris = isp_read(isp, MIV2_RIS3);
 		if (isp_ris & BIT(24)) {
 			if (!(ris & MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK)) {
-				pr_info("%s sensor2 dataloss but no buf full\n", __func__);
+				pr_err("%s sensor2 dataloss but no buf full\n", __func__);
 				ris |= MIV2_MIS3_MCM_G2RAW0_BUF_FULL_MASK;
 			}
 		}
@@ -1512,7 +1547,7 @@ int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis)
 		ris = isp_read(isp, MIV2_RIS3);
 		if (isp_ris & BIT(23)) {
 			if (!(ris & MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK)) {
-				pr_info("%s sensor3 dataloss but no buf full\n", __func__);
+				pr_err("%s sensor3 dataloss but no buf full\n", __func__);
 				ris |= MIV2_MIS3_MCM_G2RAW1_BUF_FULL_MASK;
 			}
 		}

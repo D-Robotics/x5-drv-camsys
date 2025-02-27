@@ -116,6 +116,7 @@ struct isp_instance {
 	struct cam_input in;
 	enum cam_state state;
 	enum cam_error error;
+	u32 job_count;
 	int stream_idx;
 	bool hdr_en;
 	bool tile_en;
@@ -236,6 +237,7 @@ int isp_set_schedule(struct isp_device *isp, struct isp_mcm_sch *sch, u32 miv2_m
 int isp_get_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis);
 int isp_reset_schedule(struct isp_device *isp, u32 inst, bool force_reset);
 int isp_add_schedule(struct isp_device *isp, struct mi_mis_group *mi_mis);
+int isp_wake_up(struct isp_device *isp, u32 inst);
 int isp_open(struct isp_device *isp, u32 inst);
 int isp_close(struct isp_device *isp, u32 inst, enum group_type type);
 int isp_probe(struct platform_device *pdev, struct isp_device *isp);

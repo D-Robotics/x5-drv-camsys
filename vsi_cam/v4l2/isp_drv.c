@@ -83,10 +83,10 @@ static int isp_link_setup(struct media_entity *entity,
 		if (local->flags & MEDIA_PAD_FL_SINK) {
 			if (sink_online_en(lctx) != rctx->src_online_en)
 				return -EBUSY;
-			if (is_sink_online_en(lctx))
-				return 0;
-			p_attr = &attr;
-			online = false;
+			if (!is_sink_online_en(lctx)) {
+				p_attr = &attr;
+				online = false;
+			}
 		} else {
 			lctx->src_online_en = sink_online_en(rctx);
 			online = sink_online_en(rctx);
@@ -124,6 +124,18 @@ static const struct media_entity_operations isp_media_ops = {
 
 static void isp_buf_ready(struct v4l2_buf_ctx *ctx, u32 pad, int on)
 {
+	struct isp_v4l_instance *isp = buf_ctx_to_v4l_instance(isp, ctx);
+	int rc;
+
+	if (!ctx || !on)
+		return;
+
+	if (is_sink_online_en(ctx))
+		rc = cam_ready(sink_ctx(isp), on);
+	else
+		rc = isp_wake_up(isp->dev, isp->id);
+	if (rc < 0)
+		pr_err("%s failed to handle buf ready (err=%d)\n", __func__, rc);
 }
 
 static int isp_qbuf(struct v4l2_buf_ctx *ctx, u32 pad, struct cam_buf *buf)
@@ -320,7 +332,17 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	f.ifmt.width  = format->fmt.pix.width;
 	f.ifmt.height = format->fmt.pix.height;
 	f.ifmt.format = pixelformat_to_cam_format(inst->input_fmt);
-	f.ifmt.stride = inst->fmt.ifmt.stride;
+	switch (f.ifmt.format) {
+	case CAM_FMT_RAW8:
+		f.ifmt.stride = format->fmt.pix.width;
+		break;
+	case CAM_FMT_RAW10:
+	case CAM_FMT_RAW12:
+		f.ifmt.stride = format->fmt.pix.width * 2;
+		break;
+	default:
+		break;
+	}
 	f.ofmt.width  = format->fmt.pix.width;
 	f.ofmt.height = format->fmt.pix.height;
 	f.ofmt.stride = ALIGN(f.ofmt.width, STRIDE_ALIGN);
@@ -336,18 +358,6 @@ static int isp_set_ctx_format(struct v4l2_buf_ctx *ctx, u32 pad,
 	if (rc < 0) {
 		pr_err("%s v4l2_subdev_ctx_call failed (err=%d)\n", __func__, rc);
 		goto _exit;
-	}
-
-	switch (f.ifmt.format) {
-	case CAM_FMT_RAW8:
-		f.ifmt.stride = format->fmt.pix.width;
-		break;
-	case CAM_FMT_RAW10:
-	case CAM_FMT_RAW12:
-		f.ifmt.stride = format->fmt.pix.width * 2;
-		break;
-	default:
-		break;
 	}
 
 	rc = isp_set_sub_chnl_format(inst, &f.ifmt, &s_f, is_try);

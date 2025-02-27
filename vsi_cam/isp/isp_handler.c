@@ -746,6 +746,7 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 		}
 		pr_debug("isp %s: pop_job[%d]\n", __func__, id);
 		inst = &isp->insts[id];
+		inst->job_count--;
 		if (inst->state != CAM_STATE_STARTED)
 			continue;
 		if (inst->online_mcm) {
@@ -770,11 +771,11 @@ struct isp_irq_ctx *get_next_irq_ctx(struct isp_device *isp)
 
 int new_frame(struct isp_irq_ctx *ctx)
 {
-	struct cam_buf *buf;
+	struct cam_buf *src_buf, *sink_buf = NULL;
 
-	if (ctx->sink_ctx) {
-		buf = cam_acqbuf_irq(ctx->sink_ctx, false);
-		if (!buf) {
+	if (!ctx->sink_online_en && ctx->sink_ctx) {
+		sink_buf = cam_acqbuf_irq(ctx->sink_ctx, false);
+		if (!sink_buf) {
 			ctx->sink_buf = NULL;
 			return -ENOMEM;
 		}
@@ -784,20 +785,21 @@ int new_frame(struct isp_irq_ctx *ctx)
 		struct cam_list_node *node;
 		u32 i = get_offline(ctx->src_online_stat);
 
-		buf = cam_dqbuf_irq(ctx->src_ctx[i], true);
-		if (!buf)
+		src_buf = cam_dqbuf_irq(ctx->src_ctx[i], true);
+		if (!src_buf)
 			return -ENOMEM;
+
 		node = list_first_entry_or_null(ctx->src_buf_list1,
 						struct cam_list_node, entry);
 		if (WARN_ON(!node))
 			return -ENOMEM;
-		node->data = buf;
+		node->data = src_buf;
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list2);
 		pr_debug("isp list_add_tail src_buf_list2\n");
 	}
 
-	if (ctx->sink_ctx)
+	if (sink_buf)
 		ctx->sink_buf = cam_dqbuf_irq(ctx->sink_ctx, false);
 	return 0;
 }
@@ -875,7 +877,7 @@ static inline void irq_notify(struct isp_device *isp, struct mi_mis_group *mi_mi
 irqreturn_t mi_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
-	struct isp_mcm_sch sch;
+	struct isp_mcm_sch sch = {0};
 	struct mi_mis_group mi_mis;
 	u32 isp_mis = 0, value;
 
