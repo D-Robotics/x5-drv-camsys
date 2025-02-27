@@ -34,7 +34,6 @@ struct isp_v4l_instance {
 struct isp_v4l_device {
 	struct isp_device isp_dev;
 	struct isp_v4l_instance *insts;
-	struct cam_dev cam_dev;
 };
 
 #endif /* _ISP_DRV_H_ */

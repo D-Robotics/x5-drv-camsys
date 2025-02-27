@@ -997,11 +997,6 @@ static int isp_v4l_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = cam_dev_init(dev, &v4l_dev->cam_dev, 64);
-	if (rc < 0)
-		return rc;
-	v4l_dev->isp_dev.cam_dev = &v4l_dev->cam_dev;
-
 	insts = devm_kzalloc(dev, sizeof(*insts) * v4l_dev->isp_dev.num_insts,
 			     GFP_KERNEL);
 	if (!insts)
@@ -1120,7 +1115,6 @@ static int isp_v4l_remove(struct platform_device *pdev)
 		dev_err(dev, "failed to call isp_remove (err=%d)\n", rc);
 		return rc;
 	}
-	cam_dev_deinit(&v4l_dev->cam_dev);
 
 #ifdef CONFIG_DEBUG_FS
 	isp_debugfs_remo(&v4l_dev->isp_dev);

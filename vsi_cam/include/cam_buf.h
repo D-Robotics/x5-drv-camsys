@@ -40,8 +40,7 @@ int cam_buf_ctx_init(struct cam_ctx *ctx, void *data, struct init_attr *attr);
 __weak
 void cam_buf_ctx_release(struct cam_ctx *ctx);
 
-struct cam_dev;
-phys_addr_t get_phys_addr(struct cam_dev *dev, struct cam_buf *buf, unsigned int plane);
+phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf, unsigned int plane);
 
 unsigned long get_buf_size(struct cam_buf *buf, unsigned int plane);
 
@@ -54,6 +53,5 @@ int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf);
 __weak
 int cam_ready(struct cam_ctx *ctx, int on);
 
-int cam_iommu_unmap(struct cam_dev *dev);
-
+void cam_iommu_unmap(struct cam_buf *buf);
 #endif /* _CAM_BUF_H_ */

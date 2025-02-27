@@ -232,11 +232,19 @@ static void vid_stop_streaming(struct vb2_queue *vq)
 	vid_return_all_buffers(vdev, VB2_BUF_STATE_ERROR);
 }
 
+static void vid_buf_cleanup(struct vb2_buffer *vb)
+{
+	struct cam_buf *buf = vb2_buf_to_cam_buf(vb);
+
+	cam_iommu_unmap(buf);
+}
+
 static const struct vb2_ops vid_vb2_ops = {
 	.queue_setup = vid_queue_setup,
 	.buf_queue = vid_buf_queue,
 	.start_streaming = vid_start_streaming,
 	.stop_streaming = vid_stop_streaming,
+	.buf_cleanup = vid_buf_cleanup,
 };
 
 #define file_to_video_device(file) \

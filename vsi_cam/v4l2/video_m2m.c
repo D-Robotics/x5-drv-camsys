@@ -747,6 +747,13 @@ static void vid_m2m_buf_request_complete(struct vb2_buffer *vb)
 {
 }
 
+static void vid_m2m_buf_cleanup(struct vb2_buffer *vb)
+{
+	struct cam_buf *buf = vb2_buf_to_cam_buf(vb);
+
+	cam_iommu_unmap(buf);
+}
+
 static const struct vb2_ops vid_m2m_qops = {
 	.queue_setup = vid_m2m_queue_setup,
 	.buf_out_validate = vid_m2m_buf_out_validate,
@@ -757,6 +764,7 @@ static const struct vb2_ops vid_m2m_qops = {
 	.wait_prepare = vb2_ops_wait_prepare,
 	.wait_finish = vb2_ops_wait_finish,
 	.buf_request_complete = vid_m2m_buf_request_complete,
+	.buf_cleanup = vid_m2m_buf_cleanup,
 };
 
 static int queue_init(void *priv, struct vb2_queue *src_vq,

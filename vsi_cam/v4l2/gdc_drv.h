@@ -27,7 +27,6 @@ struct gdc_v4l_instance {
 struct gdc_v4l_device {
 	struct gdc_device gdc_dev;
 	struct gdc_v4l_instance *insts;
-	struct cam_dev cam_dev;
 };
 
 #endif /* _GDC_DRV_H_ */

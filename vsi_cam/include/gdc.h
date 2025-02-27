@@ -48,7 +48,6 @@ struct gdc_device {
 	refcount_t open_cnt;
 	u32 next_irq_ctx;
 	enum cam_error error;
-	struct cam_dev *cam_dev;
 };
 
 int32_t gdc_hw_set_format(struct gdc_device *gdc, uint32_t inst, struct gdc_format *fmt);

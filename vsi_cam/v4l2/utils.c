@@ -488,20 +488,3 @@ struct v4l2_subdev *sif_device_to_v4l2_subdev(void *data, uint32_t inst)
 
 	return &ins->node.sd;
 }
-
-int cam_dev_init(struct device *dev, struct cam_dev *cdev, u32 iova_sz)
-{
-	cdev->dev = dev;
-	spin_lock_init(&cdev->lock);
-	cdev->size = iova_sz;
-	cdev->list = devm_kcalloc(dev, iova_sz, sizeof(struct cam_iova),
-				     GFP_KERNEL);
-	if (!cdev->list)
-		return -ENOMEM;
-	return 0;
-}
-
-void cam_dev_deinit(struct cam_dev *cdev)
-{
-	devm_kfree(cdev->dev, cdev->list);
-}

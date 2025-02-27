@@ -193,7 +193,6 @@ struct isp_device {
 	struct dentry *debugfs_fps_file;
 #endif
 	struct tasklet_struct update_lut_tbl;
-	struct cam_dev *cam_dev;
 	struct isp_ctrl_msg ctrl_msg;
 	wait_queue_head_t ctrl_waitq;
 	bool ctrl_cond, ctrl_exit;

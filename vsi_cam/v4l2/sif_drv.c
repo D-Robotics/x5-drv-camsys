@@ -567,11 +567,6 @@ static int sif_v4l_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = cam_dev_init(dev, &v4l_dev->cam_dev, 64);
-	if (rc < 0)
-		return rc;
-	v4l_dev->sif_dev.cam_dev = &v4l_dev->cam_dev;
-
 	insts = devm_kzalloc(dev, sizeof(*insts) * v4l_dev->sif_dev.num_insts,
 			     GFP_KERNEL);
 	if (!insts)
@@ -665,7 +660,6 @@ static int sif_v4l_remove(struct platform_device *pdev)
 		dev_err(dev, "failed to call sif_remove (err=%d)\n", rc);
 		return rc;
 	}
-	cam_dev_deinit(&v4l_dev->cam_dev);
 
 	dev_dbg(dev, "VS SIF driver (v4l) removed\n");
 	return 0;

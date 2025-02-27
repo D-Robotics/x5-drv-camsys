@@ -68,7 +68,7 @@ struct cam_buf *cam_acqbuf_irq(struct cam_ctx *ctx, bool remote)
 	return (struct cam_buf *)frame;
 }
 
-phys_addr_t get_phys_addr(struct cam_dev *dev, struct cam_buf *buf, unsigned int plane)
+phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf, unsigned int plane)
 {
 	if (unlikely(!buf))
 		return 0;
@@ -101,7 +101,6 @@ int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
-int cam_iommu_unmap(struct cam_dev *dev)
+void cam_iommu_unmap(struct cam_buf *buf)
 {
-	return 0;
 }

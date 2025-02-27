@@ -796,11 +796,6 @@ static int gdc_v4l_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = cam_dev_init(dev, &v4l_dev->cam_dev, 64);
-	if (rc < 0)
-		return rc;
-	v4l_dev->gdc_dev.cam_dev = &v4l_dev->cam_dev;
-
 	insts = devm_kzalloc(dev, sizeof(*insts) * v4l_dev->gdc_dev.num_insts,
 			     GFP_KERNEL);
 	if (!insts)
@@ -902,7 +897,6 @@ static int gdc_v4l_remove(struct platform_device *pdev)
 		dev_err(dev, "failed to call gdc_remove (err=%d)\n", rc);
 		return rc;
 	}
-	cam_dev_deinit(&v4l_dev->cam_dev);
 
 	rc = gdc_runtime_suspend(dev);
 	if (rc) {

@@ -63,11 +63,19 @@ static void cam_stop_streaming(struct vb2_queue *vq)
 		vb2_buffer_done(vb, VB2_BUF_STATE_QUEUED);
 }
 
+static void cam_buf_cleanup(struct vb2_buffer *vb)
+{
+	struct cam_buf *buf = vb2_buf_to_cam_buf(vb);
+
+	cam_iommu_unmap(buf);
+}
+
 static const struct vb2_ops cam_vb2_ops = {
 	.queue_setup = cam_queue_setup,
 	.buf_queue = cam_buf_queue,
 	.start_streaming = cam_start_streaming,
 	.stop_streaming = cam_stop_streaming,
+	.buf_cleanup = cam_buf_cleanup,
 };
 
 static struct local_buf_ctx *create_local_buf_ctx(struct init_attr *attr,
@@ -427,8 +435,8 @@ static inline bool is_addr_mapped(struct device *dev, struct cam_buf *buf,
 	bool mapped = false;
 
 	for (i = 0; i < ARRAY_SIZE(buf->iova); i++) {
-		if (buf->iova[i].dev == dev && buf->iova[i].addr[plane]) {
-			*addr = buf->iova[i].addr[plane];
+		if (buf->iova[i].dev == dev && buf->iova[i].piova[plane].addr) {
+			*addr = buf->iova[i].piova[plane].addr;
 			mapped = true;
 			break;
 		}
@@ -436,25 +444,16 @@ static inline bool is_addr_mapped(struct device *dev, struct cam_buf *buf,
 	return mapped;
 }
 
-static inline int add_mapped_addr(struct cam_dev *dev, struct cam_buf *buf,
+static inline int add_mapped_addr(struct device *dev, struct cam_buf *buf,
 				  unsigned int plane, phys_addr_t iova, u32 size)
 {
-	unsigned long flags;
-	struct cam_iova *piova;
 	u32 i;
-
-	spin_lock_irqsave(&dev->lock, flags);
-	if (dev->index >= dev->size) {
-		spin_unlock_irqrestore(&dev->lock, flags);
-		pr_err("there's no space to store iova, enlarge the size firstly.\n");
-		return -EINVAL;
-	}
-	spin_unlock_irqrestore(&dev->lock, flags);
 
 	for (i = 0; i < ARRAY_SIZE(buf->iova); i++) {
 		if (!buf->iova[i].dev) {
-			buf->iova[i].addr[plane] = iova;
-			buf->iova[i].dev = dev->dev;
+			buf->iova[i].piova[plane].addr = iova;
+			buf->iova[i].piova[plane].size = size;
+			buf->iova[i].dev = dev;
 			break;
 		}
 	}
@@ -462,15 +461,10 @@ static inline int add_mapped_addr(struct cam_dev *dev, struct cam_buf *buf,
 	if (i == ARRAY_SIZE(buf->iova))
 		return -EINVAL;
 
-	spin_lock_irqsave(&dev->lock, flags);
-	piova = &dev->list[dev->index++];
-	piova->addr = iova;
-	piova->size = size;
-	spin_unlock_irqrestore(&dev->lock, flags);
 	return 0;
 }
 
-phys_addr_t get_phys_addr(struct cam_dev *dev, struct cam_buf *buf,
+phys_addr_t get_phys_addr(struct device *dev, struct cam_buf *buf,
 			  unsigned int plane)
 {
 	struct vb2_buffer *vb;
@@ -484,17 +478,17 @@ phys_addr_t get_phys_addr(struct cam_dev *dev, struct cam_buf *buf,
 	vb = &buf->vb.vb2_buf;
 	addr = vb2_dma_contig_plane_dma_addr(vb, plane);
 	if (dev && addr) {
-		if (is_addr_mapped(dev->dev, buf, plane, &addr))
+		if (is_addr_mapped(dev, buf, plane, &addr))
 			goto _exit;
 		size = vb2_plane_size(vb, plane);
-		rc = mem_iommu_map(dev->dev, addr, size, &iova);
+		rc = mem_iommu_map(dev, addr, size, &iova);
 		if (rc < 0) {
-			dev_warn(dev->dev, "failed to call mem_iommu_map (err=%d)\n", rc);
+			dev_warn(dev, "failed to call mem_iommu_map (err=%d)\n", rc);
 			goto _exit;
 		}
 		rc = add_mapped_addr(dev, buf, plane, iova, size);
 		if (rc < 0) {
-			mem_iommu_unmap(dev->dev, iova, size);
+			mem_iommu_unmap(dev, iova, size);
 			goto _exit;
 		}
 		return (phys_addr_t)iova;
@@ -590,26 +584,25 @@ int cam_ready(struct cam_ctx *ctx, int on)
 	return 0;
 }
 
-int cam_iommu_unmap(struct cam_dev *dev)
+void cam_iommu_unmap(struct cam_buf *buf)
 {
-	unsigned long flags;
 	struct cam_iova *piova;
+	struct device *dev;
+	u32 i, j;
 	int rc;
-	size_t i;
 
-	if (!dev || !dev->list)
-		return -EINVAL;
-
-	spin_lock_irqsave(&dev->lock, flags);
-	for (i = 0; i < dev->index; i++) {
-		piova = &dev->list[i];
-		rc = mem_iommu_unmap(dev->dev, piova->addr, piova->size);
-		if (rc < 0)
-			dev_warn(dev->dev, "failed to call mem_iommu_unmap (err=%d)\n",
-				 rc);
-		memset(piova, 0, sizeof(*piova));
+	for (i = 0; i < ARRAY_SIZE(buf->iova); i++) {
+		if (!buf->iova[i].dev)
+			continue;
+		dev = buf->iova[i].dev;
+		for (j = 0; j < ARRAY_SIZE(buf->iova[i].piova); j++) {
+			piova = &buf->iova[i].piova[j];
+			if (!piova->addr)
+				continue;
+			rc = mem_iommu_unmap(dev, piova->addr, piova->size);
+			if (rc < 0)
+				dev_warn(dev, "failed to call mem_iommu_unmap (err=%d)\n", rc);
+		}
 	}
-	dev->index = 0;
-	spin_unlock_irqrestore(&dev->lock, flags);
-	return 0;
+
 }

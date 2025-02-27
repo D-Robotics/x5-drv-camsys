@@ -22,6 +22,7 @@
 
 #define STRIDE_ALIGN    (64)
 #define V4L2_SUBDEV_BUF_NUM (4)
+#define BUF_MAP_DEV_MAX_NUM (2)
 
 #define BCTX_MAGIC         (0x12345678)
 #define is_v4l2_buf_ctx(x) ((x) && (x)->magic == BCTX_MAGIC)
@@ -150,13 +151,6 @@ struct cam_iova {
 	u32 size;
 };
 
-struct cam_dev {
-	struct device *dev;
-	spinlock_t lock; /* lock for list */
-	struct cam_iova *list;
-	u32 size, index;
-};
-
 struct cam_buf {
 	union {
 		struct vb2_v4l2_buffer vb;
@@ -164,8 +158,8 @@ struct cam_buf {
 	};
 	struct {
 		struct device *dev;
-		phys_addr_t addr[VB2_MAX_PLANES];
-	} iova[2];
+		struct cam_iova piova[VB2_MAX_PLANES];
+	} iova[BUF_MAP_DEV_MAX_NUM];
 	struct list_head entry;
 };
 
@@ -271,6 +265,4 @@ int pixelformat_to_mbus_code(u32 format);
 u32 mbus_code_to_pixelformat(u32 code);
 int subdev_call_command(struct v4l2_subdev *sd, uint32_t cmd, void *arg);
 int get_front_info(struct media_pad *pad, u32 *devid, u32 *insid);
-int cam_dev_init(struct device *dev, struct cam_dev *cdev, u32 iova_sz);
-void cam_dev_deinit(struct cam_dev *cdev);
 #endif /* _UTILS_H_ */

@@ -229,7 +229,6 @@ int gdc_close(struct gdc_device *gdc, u32 inst)
 
 	reset_job_queue(gdc->jq);
 	gdc_stop(gdc);
-	cam_iommu_unmap(gdc->cam_dev);
 
 _exit:
 	return rc;
