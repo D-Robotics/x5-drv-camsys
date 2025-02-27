@@ -431,6 +431,10 @@ static inline int isc_wait(struct isc_wait *w)
 	w->stat = true;
 	wait_event_timeout(w->wq, w->cond,
 			   msecs_to_jiffies(ISC_SYNC_WAIT_TIMEOUT_MS));
+	if (!w->cond) {
+		w->stat = false;
+		return -ETIMEDOUT;
+	}
 	w->cond = false;
 	if (!w->stat)
 		return -EFAULT;

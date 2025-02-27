@@ -1547,12 +1547,17 @@ static struct isc_notifier_ops isp_notifier_ops = {
 static inline int isp_post_clk_on_off(struct isp_device *isp, bool on)
 {
 	struct isp_msg msg;
+	int rc;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.id = CAM_MSG_STATE_CHANGED;
 	msg.inst = 0;
 	msg.state = on ? CAM_STATE_CLK_ON : CAM_STATE_CLK_OFF;
-	return isp_post(isp, &msg, true);
+	rc = isp_post(isp, &msg, true);
+	if (rc < 0)
+		dev_err(isp->dev, "failed to post %s state changed (err=%d)\n",
+			on ? "on" : "off", rc);
+	return rc;
 }
 
 int isp_open(struct isp_device *isp, u32 inst)
