@@ -34,6 +34,8 @@
 #define ISP_MIS_FRAME_END (0x1 << 2)
 #define ISP_SW_FRAME_DONE (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END)
 
+#define ISP_CTRL_WAIT_TIME_MS (5000)
+
 union u32_byte_map {
 	u32 v;
 	u8 b[4];
@@ -148,8 +150,14 @@ struct isp_schedule {
 	u32 frame_done_mask;
 };
 
+enum isp_ctrl_msg_type {
+	ISP_CTRL_MSG = 1,
+	ISP_CTRL_EXT_MSG,
+};
+
 struct isp_ctrl_msg {
 	int rc;
+	enum isp_ctrl_msg_type type;
 	union {
 		struct isp_ctrl ctrl;
 		struct isp_ctrl_ext ctrl_ext;
@@ -194,8 +202,9 @@ struct isp_device {
 #endif
 	struct tasklet_struct update_lut_tbl;
 	struct isp_ctrl_msg ctrl_msg;
-	wait_queue_head_t ctrl_waitq;
-	bool ctrl_cond, ctrl_exit;
+	wait_queue_head_t ctrl_ack_waitq, ctrl_msg_waitq;
+	u64 ctrl_msg_wait_cond;
+	bool ctrl_exit;
 	struct mutex ctrl_lock; /* lock for isp ctrl */
 };
 
@@ -207,6 +216,7 @@ int isp_post_ex(struct isp_device *isp, struct isp_msg *msg,
 		struct mem_buf *extra, bool sync, int *result);
 int isp_set_input(struct isp_device *isp, u32 inst, struct cam_input *in);
 int isp_set_input_select(struct isp_device *isp, u32 inst, u32 in_id, u32 in_chnl);
+u64 get_ctrl_timestamp(struct isp_device *isp);
 int isp_set_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 size);
 int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 size);
 int isp_set_iformat(struct isp_device *isp, u32 inst, struct cam_format *fmt, struct cam_rect *crop,

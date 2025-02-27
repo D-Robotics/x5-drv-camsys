@@ -457,22 +457,79 @@ static s32 handle_isp_reset_schedule(struct isp_device *isp, struct isp_msg *msg
 
 static s32 handle_ack_ctrl(struct isp_device *isp, struct isp_msg *msg)
 {
-	mutex_lock(&isp->ctrl_lock);
+	u64 curr, cond = 0;
+
+	while (true) {
+		curr = get_ctrl_timestamp(isp);
+		if (curr - msg->ctrl.timestamp >=
+		    ISP_CTRL_WAIT_TIME_MS * 1000000llu) {
+			pr_warn("isp ctrl cmd: 0x%x timedout\n", msg->ctrl.ctrl_id);
+			return -ETIMEDOUT;
+		}
+		mutex_lock(&isp->ctrl_lock);
+		if (isp->ctrl_msg.type == ISP_CTRL_MSG) {
+			if (curr - isp->ctrl_msg.ctrl.timestamp >=
+			    ISP_CTRL_WAIT_TIME_MS * 1000000llu) {
+				pr_warn("isp ctrl cmd: 0x%x timedout, cleared\n",
+					isp->ctrl_msg.ctrl.ctrl_id);
+				memset(&isp->ctrl_msg, 0, sizeof(isp->ctrl_msg));
+				break;
+			}
+		} else if (!isp->ctrl_msg.type) {
+			break;
+		}
+		cond = !cond ? isp->ctrl_msg_wait_cond + 1 : cond + 1;
+		mutex_unlock(&isp->ctrl_lock);
+		wait_event_timeout(isp->ctrl_msg_waitq,
+				   cond == isp->ctrl_msg_wait_cond,
+				   msecs_to_jiffies(ISP_CTRL_WAIT_TIME_MS));
+		if (isp->ctrl_exit)
+			return -EINTR;
+	}
 	isp->ctrl_msg.rc = (int)msg->group;
 	memcpy(&isp->ctrl_msg.ctrl, &msg->ctrl, sizeof(msg->ctrl));
-	isp->ctrl_cond = true;
-	wake_up_all(&isp->ctrl_waitq);
+	isp->ctrl_msg.type = ISP_CTRL_MSG;
+	wake_up_all(&isp->ctrl_ack_waitq);
 	mutex_unlock(&isp->ctrl_lock);
 	return 0;
 }
 
 static s32 handle_ack_ctrl_ext(struct isp_device *isp, struct isp_msg *msg)
 {
-	mutex_lock(&isp->ctrl_lock);
+	u64 curr, cond = 0;
+
+	while (true) {
+		curr = get_ctrl_timestamp(isp);
+		if (curr - msg->ctrl_ext.timestamp >=
+		    ISP_CTRL_WAIT_TIME_MS * 1000000llu) {
+			pr_warn("isp ctrl ext cmd: 0x%x timedout\n",
+				msg->ctrl_ext.ctrl_id);
+			return -ETIMEDOUT;
+		}
+		mutex_lock(&isp->ctrl_lock);
+		if (isp->ctrl_msg.type == ISP_CTRL_EXT_MSG) {
+			if (curr - isp->ctrl_msg.ctrl_ext.timestamp >=
+			    ISP_CTRL_WAIT_TIME_MS * 1000000llu) {
+				pr_warn("isp ctrl ext cmd: 0x%x timedout, cleared\n",
+					isp->ctrl_msg.ctrl_ext.ctrl_id);
+				memset(&isp->ctrl_msg, 0, sizeof(isp->ctrl_msg));
+				break;
+			}
+		} else if (!isp->ctrl_msg.type) {
+			break;
+		}
+		cond = !cond ? isp->ctrl_msg_wait_cond + 1 : cond + 1;
+		mutex_unlock(&isp->ctrl_lock);
+		wait_event_timeout(isp->ctrl_msg_waitq,
+				   cond == isp->ctrl_msg_wait_cond,
+				   msecs_to_jiffies(ISP_CTRL_WAIT_TIME_MS));
+		if (isp->ctrl_exit)
+			return -EINTR;
+	}
 	isp->ctrl_msg.rc = (int)msg->group;
 	memcpy(&isp->ctrl_msg.ctrl_ext, &msg->ctrl_ext, sizeof(msg->ctrl_ext));
-	isp->ctrl_cond = true;
-	wake_up_all(&isp->ctrl_waitq);
+	isp->ctrl_msg.type = ISP_CTRL_EXT_MSG;
+	wake_up_all(&isp->ctrl_ack_waitq);
 	mutex_unlock(&isp->ctrl_lock);
 	return 0;
 }
