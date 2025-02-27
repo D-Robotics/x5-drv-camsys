@@ -503,5 +503,5 @@ int cam_dev_init(struct device *dev, struct cam_dev *cdev, u32 iova_sz)
 
 void cam_dev_deinit(struct cam_dev *cdev)
 {
-	devm_kfree(cdev->dev, cdev);
+	devm_kfree(cdev->dev, cdev->list);
 }

@@ -180,7 +180,7 @@ static s32 vse_nat_close(struct vio_video_ctx *vctx)
 	} else {
 		return -EINVAL;
 	}
-
+	inst->online_mode = 0;
 	memset(&inst->attr, 0, sizeof(inst->attr));
 	memset(&inst->ichn_attr, 0, sizeof(inst->ichn_attr));
 	memset(&inst->ochn_attr, 0, sizeof(inst->ochn_attr));

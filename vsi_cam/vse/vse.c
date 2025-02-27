@@ -717,7 +717,9 @@ int vse_close(struct vse_device *vse, u32 inst)
 	rc = dw_reset(vse->crc_dev, DW_MOD_VSE);
 	if (rc == -EBUSY)
 		dev_warn(vse->dev, "DW module is busy now and cannot be reset!\n");
+	vse->next_irq_ctx = 0;
 	vse->error = 1;
+	vse->mode = VSE_MCM_MODE;
 	rc = vse_runtime_suspend(vse->dev);
 
 _exit:
