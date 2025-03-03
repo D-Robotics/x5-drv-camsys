@@ -1893,7 +1893,7 @@ static void mipi_host_drop_func(struct mipi_host_s *host, uint32_t icnt, uint32_
 	struct os_dev *dev = &hdev->osdev;
 	uint32_t ipi_mask;
 	const char *err_op = "";
-	int32_t need_ipireset = 0;
+	int32_t need_ipireset = 1;
 
 	if ((drops == NULL) || (icnt >= MIPI_HOST_ICNT_NUM)) {
 		return;
@@ -3411,16 +3411,18 @@ static void mipi_host_irq_disable_mask(struct mipi_hdev_s *hdev, uint32_t mask)
 
 	for (i = 0U; i < ierr->num; i ++) {
 		ireg = &ierr->iregs[i];
-		if ((mask & (uint32_t)(0x1UL << ireg->icnt_n)) != 0U) { /* qacfix: conversion */
-			temp = mhost_getreg(host, ireg->reg_mask);
-			temp &= ~(ireg->err_mask);
-			mhost_putreg(host, ireg->reg_mask, temp);
+		if (ireg->icnt_n <= 31) {
+			if ((mask & (uint32_t)(0x1UL << ireg->icnt_n)) != 0U) { /* qacfix: conversion */
+				temp = mhost_getreg(host, ireg->reg_mask);
+				temp &= ~(ireg->err_mask);
+				mhost_putreg(host, ireg->reg_mask, temp);
 #if defined MIPI_HOST_INT_USE_TIMER
-		} else {
-			temp = mhost_getreg(host, ireg->reg_mask);
-			if (temp != 0U)
-				keep = 1;
+			} else {
+				temp = mhost_getreg(host, ireg->reg_mask);
+				if (temp != 0U)
+					keep = 1;
 #endif
+			}
 		}
 	}
 
@@ -3502,7 +3504,7 @@ static uint32_t mipi_host_subirq_func(struct mipi_hdev_s *hdev, const struct mip
 	char err_str[1] = '\0';
 #endif
 	const char *err_op = "";
-	int32_t need_ipireset = 0;
+	int32_t need_ipireset = 1;
 
 #if defined MIPI_HOST_INT_USE_TIMER && defined CONFIG_ARCH_ZYNQMP
 	if ((host->ap != 0) && (reg == REG_MIPI_HOST_INT_ST_AP_GENERIC)) {

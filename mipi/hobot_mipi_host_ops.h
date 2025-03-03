@@ -595,11 +595,11 @@ struct mipi_host_icnt_s {
 	uint32_t logger_err;
 };
 #define MIPI_HOST_ICNT_NUM (sizeof(struct mipi_host_icnt_s)/sizeof(uint32_t))
-#define MIPI_HOST_ICNT_IPI	    (13U)
-#define MIPI_HOST_ICNT_IPIE     (20U)
-#define MIPI_HOST_ICNT_IPI_MASK	((uint32_t)(0xFFUL << 13))
-#define MIPI_HOST_ICNT_APIPI	(22U)
-#define MIPI_HOST_ICNT_APIPIE	(29U)
+#define MIPI_HOST_ICNT_IPI	    (27U)
+#define MIPI_HOST_ICNT_IPIE     (34U)
+#define MIPI_HOST_ICNT_IPI_MASK	((uint32_t)(0xF8000000))
+#define MIPI_HOST_ICNT_APIPI	(36U)
+#define MIPI_HOST_ICNT_APIPIE	(43U)
 /* interrupt error counts of sysfs, see: struct mipi_host_icnt_s */
 #define MIPI_HOST_ICNT_STRINGS { \
 	"st_main", \
