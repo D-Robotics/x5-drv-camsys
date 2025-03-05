@@ -167,7 +167,7 @@ static int csi_set_fmt(struct v4l2_subdev *sd,
 	f.format = mbus_code_to_csi_format(fmt->format.code);
 	ipi_cfg.id = csi->id;
 	ipi_cfg.adv_val = CSI_IPI_ADV_FEAT_EVSELPROG | CSI_IPI_ADV_FEAT_EN_VIDEO
-			| CSI_IPI_ADV_FEAT_EN_EBD | CSI_IPI_ADV_FEAT_MODE_LEGACY;
+			| CSI_IPI_ADV_FEAT_MODE_LEGACY;
 	ipi_cfg.cut_through = true;
 	ipi_cfg.mem_auto_flush = true;
 	csi_ipi_init(csi->dev, &ipi_cfg, &f);
@@ -616,7 +616,7 @@ static int config_csi(struct csi_v4l_instance *csi)
 	int rc = 0;
 
 	vc_cfg.vc_mode   = CSI_VC_CAMERA;
-	vc_cfg.vc_ebd_en = 1;
+	vc_cfg.vc_ebd_en = 0;	/* We not support emb now. */
 	sd = &csi->node.sd;
 	csi_dev = csi->dev;
 

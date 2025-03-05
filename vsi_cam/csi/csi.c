@@ -443,6 +443,7 @@ int csi_ipi_set_vc_cfg(struct csi_device *csi, u32 ipi_id,
 	ipi_base = get_ipi_base_from_id(ipi_id);
 	csi_write(csi, CSI_IPIn_VCID(ipi_base), vc_cfg->vc_id);
 
+	/* FIXME v4l2 csi_set_lanes may clear, emb should be setted in csi_ipi_init */
 	data_type.value = csi_read(csi, CSI_IPIn_DATA_TYPE(ipi_base));
 	data_type.embedded_data = !!vc_cfg->vc_ebd_en;
 	csi_write(csi, CSI_IPIn_DATA_TYPE(ipi_base), data_type.value);
