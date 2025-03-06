@@ -610,7 +610,7 @@ static int config_csi(struct csi_v4l_instance *csi)
 	struct csi_device *csi_dev;
 	struct v4l2_subdev *sd;
 	struct csi_vc_cfg vc_cfg;
-	u32 lane_rate, num_lanes;
+	u32 lane_rate, num_lanes, stop_check = 0;
 	struct device *dev;
 	struct fwnode_handle *csi_fwnode, *endpoint;
 	int rc = 0;
@@ -657,6 +657,13 @@ static int config_csi(struct csi_v4l_instance *csi)
 		goto _exit;
 	}
 
+	rc = fwnode_property_read_u32(endpoint, "stop_check_instart", &stop_check);
+	if (rc) {
+		dev_dbg(dev, "Invalid number of stop_check_instart %d, set default 0\n", stop_check);
+		rc = 0;
+		stop_check = 0;
+	}
+
 	rc = csi_ipi_set_vc_cfg(csi_dev, csi->id, &vc_cfg);
 	if (rc) {
 		dev_err(dev, "csi_ipi_set_vc_cfg failed: %d\n", rc);
@@ -672,6 +679,12 @@ static int config_csi(struct csi_v4l_instance *csi)
 	rc = csi_set_lane_num(csi_dev, num_lanes);
 	if (rc) {
 		dev_err(dev, "csi_set_lane_num failed: %d\n", rc);
+		goto _exit;
+	}
+
+	rc = csi_set_stop_check(csi_dev, stop_check);
+	if (rc) {
+		dev_err(dev, "csi_set_stop_check failed: %d\n", rc);
 		goto _exit;
 	}
 

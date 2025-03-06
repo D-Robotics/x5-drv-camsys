@@ -82,6 +82,7 @@ struct csi_device {
 	u32 pkt2pkt_time;
 	u32 lane_rate;
 	u32 lanes;
+	u32 stop_check_instart;
 	void (*subirq_func)(struct csi_device *csi, u32 subirq, const struct csi_irq_reg *err_reg, u32 reset_flag);
 	void (*irq_done_func)(struct csi_device *csi, u32 irq_main_st);
 };
@@ -122,6 +123,7 @@ void csi_set_lanes(struct csi_device *csi, u32 vcext);
 
 int csi_set_lane_num(struct csi_device *csi, u32 lanes);
 int csi_set_lane_rate(struct csi_device *csi, u32 rate);
+int csi_set_stop_check(struct csi_device *csi, u32 stop_check);
 int csi_wait_stop_state(struct csi_device *csi, u32 nowait, u32 wait_ms, u32 lanes, u32 *errstate);
 
 int csi_ipi_init(struct csi_device *csi, struct csi_ipi_base_cfg *ipi_cfg, struct cam_format *fmt);
