@@ -109,6 +109,44 @@ s32 vnode_mgr_add_member(struct vio_node_mgr *vnode_mgr, struct vio_node *vnode)
 	return ret;
 }
 
+/**
+ * @NO{S09E05C01}
+ * @ASIL{B}
+ * @brief Delete vnode instance from vnode manager;
+ * @param[in] *vnode_mgr: point to struct vio_node_mgr instance;
+ * @param[in] *vnode: point to struct vio_node instance;
+ * @retval "= 0": success
+ * @retval "< 0": failure
+ * @param[out] None
+ * @data_read None
+ * @data_updated None
+ * @compatibility None
+ * @callgraph
+ * @callergraph
+ * @design
+ */
+s32 vnode_mgr_del_member(struct vio_node_mgr *vnode_mgr, struct vio_node *vnode)
+{
+	s32 ret = 0;
+	u32 i;
+	u64 flags;
+
+	vio_e_barrier_irqs(vnode_mgr, flags);
+	for (i = 0; i < MAX_VNODE_NUM; i++) {
+			if (vnode_mgr->vnode[i] == vnode) {
+					vnode_mgr->vnode[i] = NULL;
+					break;
+			}
+	}
+	vio_x_barrier_irqr(vnode_mgr, flags);
+
+	if (i == MAX_VNODE_NUM) {
+			vio_err("[%s][S%d] %s: vnode_mgr has no member\n", vnode->name, vnode_mgr->id, __func__);
+			ret = -EFAULT;
+	}
+
+	return ret;
+}
 
 struct vio_node *vnode_mgr_find_member(struct vio_node_mgr *vnode_mgr, u32 hw_id, u32 ctx_id)
 {

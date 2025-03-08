@@ -34,6 +34,7 @@ static struct vio_version_info g_vpf_version = {
 
 static s32 vpf_alloc_default_frames(struct vio_video_ctx *vctx);
 static s32 vpf_video_stop(struct vio_video_ctx *vctx);
+static s32 vpf_chain_del_vnode(struct vio_video_ctx *vctx, u32 flow_id);
 
 /**
  * @NO{S09E05C01}
@@ -492,8 +493,10 @@ static void vpf_free_ctx_id(struct vio_video_ctx *vctx)
 			}
 		}
 
-		if (i == MAXIMUM_CHN)
+		if (i == MAXIMUM_CHN) {
+			(void)vpf_chain_del_vnode(vctx, vnode->flow_id);
 			vnode->state = 0;
+		}
 	}
 	vio_dbg("[%s] %s: ctx_id = %d\n", vctx->name, __func__, ctx_id);
 }
@@ -1678,7 +1681,54 @@ static s32 vpf_chain_add_vnode(struct vio_video_ctx *vctx, u32 flow_id)
 	vnode->flow_id = flow_id;
 	vctx->flow_id = flow_id;
 
-	vio_info("[%s][S%d] %s: done\n", vctx->name, vctx->flow_id, __func__);
+	vio_info("[%s][S%d][C%d] %s: done\n", vctx->name, vctx->flow_id, vctx->ctx_id, __func__);
+	return ret;
+}
+
+/**
+ * @NO{S09E05C01}
+ * @ASIL{B}
+ * @brief Delete vio node from vio chain;
+ * @param[in] *vctx: point to struct vio_video_ctx instance;
+ * @param[in] flow_id: flow id;
+ * @retval "= 0": success
+ * @retval "< 0": failure
+ * @param[out] None
+ * @data_read None
+ * @data_updated None
+ * @compatibility None
+ * @callgraph
+ * @callergraph
+ * @design
+ */
+static s32 vpf_chain_del_vnode(struct vio_video_ctx *vctx, u32 flow_id)
+{
+	s32 ret = 0;
+	struct vio_chain *vchain;
+	struct vio_node *vnode;
+
+	if (vctx->vdev == NULL || vctx->vdev->vnode == NULL) {
+		vio_info("[%s][S%d][C%d] %s: null\n", vctx->name, flow_id, vctx->ctx_id, __func__);
+		return ret;
+	}
+
+	vnode = vctx->vdev->vnode;
+	vchain = vnode->vchain;
+	if (vchain == NULL || vnode == NULL) {
+		vio_info("[%s][S%d][C%d] %s: null\n", vctx->name, flow_id, vctx->ctx_id, __func__);
+		return ret;
+	}
+
+	ret = vnode_mgr_del_member(&vchain->vnode_mgr[vnode->id], vnode);
+	if (ret < 0) {
+			return ret;
+	}
+
+	vnode->vchain = NULL;
+	vnode->flow_id = INVALID_FLOW_ID;
+	vctx->flow_id = INVALID_FLOW_ID;
+
+	vio_info("[%s][S%d][C%d] %s: done\n", vctx->name, flow_id, vctx->ctx_id, __func__);
 	return ret;
 }
 
@@ -2498,8 +2548,8 @@ s32 vpf_device_close(struct vio_video_ctx *vctx)
 
 	vctx->state = BIT((s32)VIO_VIDEO_CLOSE);
 	vpf_vdev_free_resource(vctx->vdev);
-	vpf_vctx_unbind_vdev(vctx);
 	vpf_free_ctx_id(vctx);
+	vpf_vctx_unbind_vdev(vctx);
 	vio_info("[%s] %s: done\n", vctx->name, __func__);
 
     return ret;

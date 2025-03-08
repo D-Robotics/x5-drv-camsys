@@ -80,6 +80,7 @@ struct vio_core {
 s32 vio_chain_init(struct vio_chain *vchain, u32 id);
 char *vchain_get_module_name(u32 vnode_id);
 s32 vnode_mgr_add_member(struct vio_node_mgr *vnode_mgr, struct vio_node *vnode);
+s32 vnode_mgr_del_member(struct vio_node_mgr *vnode_mgr, struct vio_node *vnode);
 struct vio_node *vnode_mgr_find_member(struct vio_node_mgr *vnode_mgr, u32 vnode_id, u32 ctx_id);
 void vio_chain_path_show(struct vio_chain *vchain);
 
