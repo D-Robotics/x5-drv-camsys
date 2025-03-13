@@ -35,6 +35,7 @@
 #define ISP_SW_FRAME_DONE (ISP_MP_FRAME_END | ISP_RDMA_END | ISP_MIS_FRAME_END)
 
 #define ISP_CTRL_WAIT_TIME_MS (5000)
+#define ISP_AE_STA_SIZE (4096)
 
 union u32_byte_map {
 	u32 v;
@@ -108,6 +109,13 @@ struct isp_wdr5_data {
 	u8 sat_shift_w_data_changed;
 };
 
+struct isp_ae_sta {
+	__u32 expStat[ISP_AE_STA_SIZE];
+	__u32 datatype;
+	__u32 frame_id;
+	__u64 timestamps;
+};
+
 struct isp_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct isp_irq_ctx ctx;
@@ -135,6 +143,11 @@ struct isp_instance {
 	struct isp_wdr5_data wdr5_data;
 	u32 af_mode;
 	void *prev;
+	u64 ae_sta_addr;
+	u8 oriexpStat[ISP_AE_STA_SIZE*4];
+	struct isp_ae_sta exp_sta;
+	void *ae_mem;
+	spinlock_t ae_sta_lock;
 };
 
 struct ibuf {
@@ -270,5 +283,6 @@ irqreturn_t isp_irq_handler(int irq, void *arg);
 irqreturn_t mi_irq_handler(int irq, void *arg);
 irqreturn_t fe_irq_handler(int irq, void *arg);
 void isp_update_none_shd_regs(unsigned long data);
+int isp_get_ae_static(struct isp_device *isp, u32 inst, void *arg);
 
 #endif /* _ISP_H_ */

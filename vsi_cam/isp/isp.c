@@ -361,6 +361,39 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 	return 0;
 }
 
+int isp_get_ae_static(struct isp_device *isp, u32 inst, void *arg)
+{
+	struct isp_instance *ins;
+	struct isp_frame_info frame_info = {0};
+	unsigned long flags;
+	u32 i;
+	int ret;
+
+	if (inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[inst];
+	spin_lock_irqsave(&ins->ae_sta_lock, flags);
+	for (int i = 0; i < ISP_AE_STA_SIZE; i++) {
+		ins->exp_sta.expStat[i] = ins->oriexpStat[2 * i] + ins->oriexpStat[2 * i + 1] * 256;
+	}
+	spin_unlock_irqrestore(&ins->ae_sta_lock, flags);
+	if (has_offline(ins->ctx.src_online_stat)) {
+		i = get_offline(ins->ctx.src_online_stat);
+		isp_update_frame_info(&frame_info, ins->ctx.src_ctx[i]);
+	}
+	ins->exp_sta.frame_id = frame_info.frame_id;
+	ins->exp_sta.timestamps = frame_info.time_stamp;
+	ins->exp_sta.datatype = 1;
+	ret = copy_to_user(arg, &ins->exp_sta, sizeof(ins->exp_sta));
+	if (ret) {
+		pr_err("%s: ae sta data copy_to_user failed!\n", __func__);
+		return ret;
+	}
+
+	return 0;
+}
+
 int isp_set_iformat(struct isp_device *isp, u32 inst, struct cam_format *fmt, struct cam_rect *crop,
 		    bool hdr_en)
 {
@@ -1840,6 +1873,11 @@ int isp_close(struct isp_device *isp, u32 inst, enum group_type type)
 		return -EINVAL;
 
 	ins = &isp->insts[inst];
+	if (ins->ae_mem) {
+		memunmap(ins->ae_mem);
+		ins->ae_mem = NULL;
+	}
+	ins->ae_sta_addr = 0;
 	memset(&ins->fmt, 0, sizeof(ins->fmt));
 	memset(&ins->in, 0, sizeof(ins->in));
 	INIT_LIST_HEAD(&ins->src_buf_list1);
@@ -2005,6 +2043,7 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 
 	for (i = 0; i < isp_dt.num_insts; i++) {
 		spin_lock_init(&isp->insts[i].lock);
+		spin_lock_init(&isp->insts[i].ae_sta_lock);
 		INIT_LIST_HEAD(&isp->insts[i].src_buf_list1);
 		INIT_LIST_HEAD(&isp->insts[i].src_buf_list2);
 		INIT_LIST_HEAD(&isp->insts[i].src_buf_list3);

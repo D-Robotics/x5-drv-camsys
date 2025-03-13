@@ -9,6 +9,7 @@
 #include "isc.h"
 #include "isp8000_regs.h"
 #include "isp_uapi.h"
+#include <linux/dma-mapping.h>
 
 #include "isp.h"
 
@@ -542,6 +543,27 @@ static s32 handle_iommu_unmap(struct isp_device *isp, struct isp_msg *msg)
 			       msg->map_buf.size);
 }
 
+static s32 handle_set_ae_sta_addr(struct isp_device *isp, struct isp_msg *msg)
+{
+	struct isp_instance *ins;
+
+	if (msg->inst >= isp->num_insts)
+		return -EINVAL;
+
+	ins = &isp->insts[msg->inst];
+	ins->ae_sta_addr = msg->ae_sta_addr;
+
+	phys_addr_t phys_addr = (phys_addr_t)ins->ae_sta_addr;
+
+	ins->ae_mem = memremap(phys_addr, ISP_AE_STA_SIZE*4, MEMREMAP_WB);
+	if (!ins->ae_mem)
+		return -ENOMEM;
+
+	pr_debug("%s line%d inst%d pa 0x%llx\n", __func__, __LINE__, msg->inst, ins->ae_sta_addr);
+
+	return 0;
+}
+
 s32 isp_msg_handler(void *msg, u32 len, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
@@ -651,10 +673,28 @@ s32 isp_msg_handler(void *msg, u32 len, void *arg)
 	case CAM_MSG_IOMMU_UNMAP:
 		rc = handle_iommu_unmap(isp, m);
 		break;
+	case CAM_MSG_SET_AE_STA_ADDR:
+		rc = handle_set_ae_sta_addr(isp, m);
+		break;
 	default:
 		return -EINVAL;
 	}
 	return rc;
+}
+
+static int update_ae_sta(struct isp_instance *inst, u32 id)
+{
+	unsigned long flags;
+	struct device dev = {0};
+	if (!inst->ae_mem)
+		return 0;
+
+	dma_sync_single_for_cpu(&dev, inst->ae_sta_addr, ISP_AE_STA_SIZE*4, DMA_FROM_DEVICE);
+	spin_lock_irqsave(&inst->ae_sta_lock, flags);
+	memcpy(inst->oriexpStat, inst->ae_mem, ISP_AE_STA_SIZE*4);
+	spin_unlock_irqrestore(&inst->ae_sta_lock, flags);
+
+	return 0;
 }
 
 void frame_done(struct isp_device *isp, u32 inst, bool timeout)
@@ -911,17 +951,35 @@ static inline void irq_notify(struct isp_device *isp, struct mi_mis_group *mi_mi
 	}
 }
 
+static int get_cur_inst(struct isp_device *isp, u64 jdp_addr)
+{
+	for (int i = 0; i < isp->num_insts; i++){
+		if (isp->insts[i].ae_sta_addr == jdp_addr)
+			return i;
+	}
+	return -1;
+}
+
 irqreturn_t mi_irq_handler(int irq, void *arg)
 {
 	struct isp_device *isp = (struct isp_device *)arg;
 	struct isp_mcm_sch sch = {0};
 	struct mi_mis_group mi_mis;
 	u32 isp_mis = 0, value;
+	u32 jdp_addr;
+	int inst;
 
 	pr_debug("+\n");
 	mi_mis.miv2_mis = isp_read(isp, MIV2_MIS);
-	if (mi_mis.miv2_mis)
+	if (mi_mis.miv2_mis) {
+		if(mi_mis.miv2_mis & MIV2_MIS_JPD_FRAME_END_MASK) {
+			jdp_addr = isp_read(isp, MI_MP_JDP_BASE_AD);
+			inst = get_cur_inst(isp, jdp_addr);
+			if (inst >= 0)
+				update_ae_sta(&isp->insts[inst], inst);
+		}
 		isp_write(isp, MIV2_ICR, mi_mis.miv2_mis);
+	}
 	mi_mis.miv2_mis1 = isp_read(isp, MIV2_MIS1);
 	if (mi_mis.miv2_mis1)
 		isp_write(isp, MIV2_ICR1, mi_mis.miv2_mis1);

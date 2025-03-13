@@ -363,7 +363,8 @@ static s32 isp_video_g_ctrl(struct vio_video_ctx *vctx, u32 cmd, unsigned long a
 			size = sizeof(hbn_isp_af_zone_weight_attr_t);
 			break;
 		case ctrl_id_ae_statistics:
-			size = sizeof(hbn_isp_ae_statistics_t);
+			// size = sizeof(hbn_isp_ae_statistics_t);
+			return isp_get_ae_static(&inst->dev->isp_dev, vctx->ctx_id, (void *)arg);
 			break;
 		case ctrl_id_awb_statistics:
 			size = sizeof(hbn_isp_awb_statistics_t);

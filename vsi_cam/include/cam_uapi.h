@@ -187,6 +187,7 @@ struct iommu_map_buf {
 #define CAM_MSG_CTRL_CHANGED        (0x4 << 24)
 #define CAM_MSG_CTRL_EXT_CHANGED    (0x5 << 24)
 #define CAM_MSG_LOG_STATE_CHANGED   (0x6 << 24)
+#define CAM_MSG_SET_AE_STA_ADDR     (0x7 << 24)
 
 /* Four-character-code (FOURCC) */
 #define cam_fourcc(a, b, c, d) \

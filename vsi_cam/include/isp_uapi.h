@@ -177,6 +177,7 @@ struct isp_msg {
 		struct isp_gamma_febe_ctrl febe_ctrl;
 		struct sen_ctrl sen_ctrl;
 		struct iommu_map_buf map_buf;
+		__u64 ae_sta_addr;
 	};
 };
 
