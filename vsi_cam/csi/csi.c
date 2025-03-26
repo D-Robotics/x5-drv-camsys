@@ -506,6 +506,14 @@ int csi_set_lane_num(struct csi_device *csi, u32 lanes)
 	return 0;
 }
 
+int csi_set_stop_check(struct csi_device *csi, u32 stop_check)
+{
+	dev_dbg(csi->dev, "phy%d stop_check %d\n", csi->id, stop_check);
+
+	csi->stop_check_instart = stop_check;
+	return 0;
+}
+
 void csi_set_lanes(struct csi_device *csi, u32 vcext)
 {
 	int rc;
@@ -863,8 +871,12 @@ int csi_idi_set_data_type(struct csi_device *csi, u32 idi_id,
 
 static int csi_dphy_wait_pwr_up(struct csi_device *csi, u32 lanes)
 {
-	u32 timeout = 3000;
+	u32 timeout = 300;
 	u32 stopstate, expect_sta;
+
+	/* some sensor maybe need return, no stopstate(LP11) after init */
+	if (csi->stop_check_instart == 1)
+		return 0;
 
 	expect_sta = (1 << lanes) - 1;
 	while (--timeout) {
