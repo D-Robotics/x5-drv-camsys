@@ -215,6 +215,7 @@ struct _setting_param_t {
 	bayer_pattern_e bayer_pattern;	// CFA pattern type (RGGB/RCCC/RIrGB/RGIrB).
 	uint8_t exposure_max_bit_width;
 	uint8_t exposure_time_step;
+	uint32_t delta_time;
 };
 
 struct sensor_priv_old {

@@ -525,10 +525,11 @@ void camera_sys_printk_disturing(sensor_tuning_data_t *turing_param)
 
 	sensor_data = &turing_param->sensor_data;
 
-	sen_debug(NULL, "exposure_time_max= %d, exposure_time_min = %d, exposure_time_long_max = %d\n",/*PRQA S 0685,1294*/
+	sen_debug(NULL, "exposure_time_max= %d, exposure_time_min = %d, exposure_time_long_max = %d, delta_time = %d\n",/*PRQA S 0685,1294*/
 			sensor_data->exposure_time_max,
 			sensor_data->exposure_time_min,
-			sensor_data->exposure_time_long_max);
+			sensor_data->exposure_time_long_max,
+			sensor_data->delta_time);
 
 }
 int32_t camera_sys_read(uint32_t port, uint32_t reg_addr,

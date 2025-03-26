@@ -94,6 +94,7 @@ typedef struct sensor_data {
 	uint32_t  exposure_time_min;
 	uint32_t  exposure_time_long_max;
 	uint32_t  exposure_time_init;
+	uint32_t  delta_time;
 	uint32_t  active_width;
 	uint32_t  active_height;
 	uint32_t  data_width;		// Bits per pixel.
