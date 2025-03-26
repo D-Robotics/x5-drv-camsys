@@ -400,7 +400,8 @@ static int csi_g_sensor_ctrl(struct v4l2_subdev *sd, void *arg)
 				struct v4l2_subdev_frame_interval fi = {0};
 
 				v4l2_subdev_call(rsd, video, g_frame_interval, &fi);
-				memcpy(ctrl->ctrl_data, &fi.interval.denominator, sizeof(fi.interval.denominator));
+				uint32_t fps = (uint32_t)fi.interval.denominator / (uint32_t)fi.interval.numerator;
+				memcpy(ctrl->ctrl_data, &fps, sizeof(fps));
 				break;
 			case V4L2_CID_EXP_RANGE:
 				vctrl = v4l2_ctrl_find(rsd->ctrl_handler, V4L2_CID_EXPOSURE);
