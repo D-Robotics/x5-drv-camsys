@@ -371,7 +371,6 @@ static struct entity_link *links[] = {
 	links20,
 	links21,
 	links22,
-	links23,
 };
 
 static u32 links_size[] = {
@@ -398,7 +397,6 @@ static u32 links_size[] = {
 	ARRAY_SIZE(links20),
 	ARRAY_SIZE(links21),
 	ARRAY_SIZE(links22),
-	ARRAY_SIZE(links23),
 };
 
 #endif /* _VIDEO_LINK_H_ */
