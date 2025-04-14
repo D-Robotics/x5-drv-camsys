@@ -531,7 +531,7 @@ static s32 vse_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	rc = copy_from_user(&attr, (void *)arg, sizeof(attr));
 	if (rc < 0)
 		return rc;
-	attr.fps.src = inst->attr.fps.src; //TODO: rm it if json changed
+	attr.fps.src = (attr.fps.src == 0) ? inst->attr.fps.src : attr.fps.src;
 	ochn_id = vctx->id - VNODE_ID_CAP;
 	if (ochn_id > VSE_OUT_CHNL_MAX) {
 		vio_err("%s: Invalid output channel id\n", __func__);

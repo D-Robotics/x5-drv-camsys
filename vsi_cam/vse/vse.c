@@ -154,6 +154,9 @@ int vse_set_fps_rate(struct vse_device *vse, u32 inst, u32 chnl,
 
 	ins->fps[chnl].src = fps->src;
 	ins->fps[chnl].dst = fps->dst;
+
+	pr_info("vse-%d chn-%d, fps.src %d, fps.dst %d\n",
+			inst, chnl, fps->src, fps->dst);
 	return 0;
 }
 
