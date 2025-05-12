@@ -1008,7 +1008,11 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			isp_mis = 0x8002;
 			pr_info("mp bus timed-out!\n");
 		}
-		if (mi_mis.miv2_mis & 0x3) {
+		if (mi_mis.miv2_mis & 0x1)
+			isp->mi_frame_done_stat |= 0x1;
+		if (mi_mis.miv2_mis & 0x2)
+			isp->mi_frame_done_stat |= 0x2;
+		if (isp->mi_frame_done_stat == isp->mi_frame_done_mask) {
 			value = isp_read(isp, MI_MP_BUS_TIMEO);
 			value |= 0x1;
 			isp_write(isp, MI_MP_BUS_TIMEO, value);
@@ -1500,6 +1504,16 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 		if (isp_mis & BIT(6)) {
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FS);
 			isp_mis &= ~BIT(6);
+			isp->mi_frame_done_stat = 0;
+			isp->mi_frame_done_mask = 0;
+			for (i = 0; i < ISP_OUT_CHNL_MAX; i++) {
+				if (ins->ctx.src_ctx[i]) {
+					isp->mi_frame_done_mask |= 0x1;
+					break;
+				}
+			}
+			if (ins->ctx.src_raw_ctx)
+				isp->mi_frame_done_mask |= 0x2;
 		}
 		if (isp_mis & BIT(1))
 			cam_set_stat_info(ins->ctx.stat_ctx, CAM_STAT_FE);

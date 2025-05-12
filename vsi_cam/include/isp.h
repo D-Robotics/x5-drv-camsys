@@ -224,6 +224,7 @@ struct isp_device {
 	u64 ctrl_msg_wait_cond;
 	bool ctrl_exit;
 	struct mutex ctrl_lock; /* lock for isp ctrl */
+	u32 mi_frame_done_stat, mi_frame_done_mask;
 };
 
 bool isp_get_hdr_sram_enabled(struct isp_device *isp, u32 inst);
