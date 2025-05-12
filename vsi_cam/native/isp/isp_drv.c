@@ -707,6 +707,7 @@ static s32 isp_video_streamon(struct vio_video_ctx *vctx)
 			ctx.src_ctx[1] = (struct cam_ctx *)vctx->vdev;
 			set_offline(ctx.src_online_stat, 1);
 		}
+		ctx.info_ctx = (struct cam_ctx *)vctx->vdev;
 		inst->out_count++;
 		if ((inst->ochn_raw_attr.fmt == FRM_FMT_NULL) ||
 		    (inst->ochn_raw_attr.fmt != FRM_FMT_NULL && inst->out_count == 2))

@@ -99,7 +99,6 @@ static s32 handle_get_vi_info(struct isp_device *isp, struct isp_msg *msg)
 static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 {
 	struct isp_instance *ins;
-	u32 i;
 
 	if (msg->inst >= isp->num_insts)
 		return -EINVAL;
@@ -108,10 +107,7 @@ static s32 handle_get_frame_info(struct isp_device *isp, struct isp_msg *msg)
 
 	memset(&msg->frame_info, 0, sizeof(msg->frame_info));
 
-	if (has_offline(ins->ctx.src_online_stat)) {
-		i = get_offline(ins->ctx.src_online_stat);
-		isp_update_frame_info(&msg->frame_info, ins->ctx.src_ctx[i]);
-	}
+	isp_update_frame_info(&msg->frame_info, ins->ctx.info_ctx);
 	return 0;
 }
 
@@ -684,6 +680,13 @@ void frame_done(struct isp_device *isp, u32 inst, bool timeout)
 		}
 	}
 
+	if (ctx->sink_online_en) {
+		if (isp->mode == ISP_STRM_MODE)
+			sif_get_frame_des(ctx->info_ctx);
+		else
+			cam_update_frame_info(ctx->info_ctx, info);
+	}
+
 	if (ctx->sink_buf) {
 		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
 		ctx->sink_buf = NULL;
@@ -699,12 +702,6 @@ void frame_done(struct isp_device *isp, u32 inst, bool timeout)
 		if (cam_get_frame_status(src_ctx) || timeout) {
 			cam_drop_irq(src_ctx, node->data);
 		} else {
-			if (ctx->sink_online_en) {
-				if (isp->mode == ISP_STRM_MODE)
-					sif_get_frame_des(src_ctx);
-				else
-					cam_update_frame_info(src_ctx, info);
-			}
 			if (isp->mode == ISP_STRM_MODE && ctx->src_buf &&
 			    ctx->src_buf == ctx->next_src_buf)
 				pr_debug("isp inst: %d, src_buf is the same with next_src_buf! skip "
@@ -729,12 +726,6 @@ void frame_done(struct isp_device *isp, u32 inst, bool timeout)
 		if (cam_get_frame_status(src_ctx) || timeout) {
 			cam_drop_irq(src_ctx, node->data);
 		} else {
-			if (ctx->sink_online_en) {
-				if (isp->mode == ISP_STRM_MODE)
-					sif_get_frame_des(src_ctx);
-				else
-					cam_update_frame_info(src_ctx, info);
-			}
 			if (isp->mode == ISP_STRM_MODE && ctx->src_raw_buf &&
 			    ctx->src_raw_buf == ctx->next_src_raw_buf)
 				pr_debug("isp inst: %d, src_raw_buf is the same with next_src_raw_buf! skip "

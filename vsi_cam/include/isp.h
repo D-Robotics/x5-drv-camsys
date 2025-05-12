@@ -57,7 +57,7 @@ struct isp_irq_ctx {
 	struct cam_buf *sink_buf, *src_buf, *next_src_buf, *pd_buf;
 	struct cam_buf *src_raw_buf, *next_src_raw_buf;
 	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *src_raw_ctx;
-	struct cam_ctx *stat_ctx, *pd_ctx;
+	struct cam_ctx *stat_ctx, *pd_ctx, *info_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
 	struct list_head *src_raw_buf_list1, *src_raw_buf_list2, *src_raw_buf_list3;
 };
