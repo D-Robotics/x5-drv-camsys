@@ -6,7 +6,8 @@
 #include <linux/videodev2.h>
 
 enum cam_state {
-	CAM_STATE_INITED = 0,
+	CAM_STATE_NULL = 0,
+	CAM_STATE_INITED,
 	CAM_STATE_STOPPED,
 	CAM_STATE_STARTED,
 	CAM_STATE_CLOSED,

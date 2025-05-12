@@ -46,6 +46,7 @@
 struct isp_format {
 	struct cam_format ifmt;
 	struct cam_format ofmt;
+	struct cam_format ofmt_raw;
 	struct cam_rect icrop;
 };
 
@@ -124,6 +125,7 @@ struct isp_mcm_sch {
 	__u32 online_mcm;
 	struct isp_buf rdma_buf;
 	struct isp_buf mp_buf;
+	struct isp_buf mp_raw_buf;
 };
 
 struct isp_vi_info {

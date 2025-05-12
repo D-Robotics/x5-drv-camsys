@@ -42,6 +42,9 @@
 #define MI_MP_CR_ADDR   (0x0000134c)
 #define MI_MP_CR_SIZE   (0x00001350)
 #define MI_MP_CR_OFFS   (0x00001354)
+#define MI_MP_RAW_ADDR  (0x00001394)
+#define MI_MP_RAW_SIZE  (0x00001398)
+#define MI_MP_RAW_OFFS  (0x0000139c)
 
 #define ISP_GAMMA_FE_Y_ADDR   (0x00005f24)
 #define ISP_GAMMA_BE_Y_ADDR   (0x00006024)

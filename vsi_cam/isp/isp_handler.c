@@ -722,6 +722,36 @@ void frame_done(struct isp_device *isp, u32 inst, bool timeout)
 		}
 	}
 
+	node = list_first_entry_or_null(ctx->src_raw_buf_list3, struct cam_list_node, entry);
+	if (node) {
+		src_ctx = ctx->src_raw_ctx;
+
+		if (cam_get_frame_status(src_ctx) || timeout) {
+			cam_drop_irq(src_ctx, node->data);
+		} else {
+			if (ctx->sink_online_en) {
+				if (isp->mode == ISP_STRM_MODE)
+					sif_get_frame_des(src_ctx);
+				else
+					cam_update_frame_info(src_ctx, info);
+			}
+			if (isp->mode == ISP_STRM_MODE && ctx->src_raw_buf &&
+			    ctx->src_raw_buf == ctx->next_src_raw_buf)
+				pr_debug("isp inst: %d, src_raw_buf is the same with next_src_raw_buf! skip "
+					 "dequeueing mp buf!\n", inst);
+			else
+				cam_qbuf_irq(src_ctx, node->data, true);
+		}
+		cam_set_frame_status(src_ctx, NO_ERR);
+		list_del(&node->entry);
+		list_add_tail(&node->entry, ctx->src_raw_buf_list1);
+
+		if (isp->mode == ISP_STRM_MODE) {
+			ctx->src_raw_buf = ctx->next_src_raw_buf;
+			ctx->next_src_raw_buf = NULL;
+		}
+	}
+
 	if (ins->last_frame_done)
 		ins->frame_interval += ktime_to_ms(ktime_sub(now_time, ins->last_frame_done));
 
@@ -797,6 +827,22 @@ int new_frame(struct isp_irq_ctx *ctx)
 		list_del(&node->entry);
 		list_add_tail(&node->entry, ctx->src_buf_list2);
 		pr_debug("isp list_add_tail src_buf_list2\n");
+	}
+
+	if (ctx->src_raw_ctx) {
+		struct cam_list_node *node;
+
+		src_buf = cam_dqbuf_irq(ctx->src_raw_ctx, true);
+		if (!src_buf)
+			return -ENOMEM;
+		node = list_first_entry_or_null(ctx->src_raw_buf_list1,
+						struct cam_list_node, entry);
+		if (WARN_ON(!node))
+			return -ENOMEM;
+		node->data = src_buf;
+		list_del(&node->entry);
+		list_add_tail(&node->entry, ctx->src_raw_buf_list2);
+		pr_debug("isp list_add_tail src_raw_buf_list2\n");
 	}
 
 	if (sink_buf)
@@ -913,7 +959,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			isp_mis = 0x8002;
 			pr_info("mp bus timed-out!\n");
 		}
-		if (mi_mis.miv2_mis & 0x1) {
+		if (mi_mis.miv2_mis & 0x3) {
 			value = isp_read(isp, MI_MP_BUS_TIMEO);
 			value |= 0x1;
 			isp_write(isp, MI_MP_BUS_TIMEO, value);
@@ -926,6 +972,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 
 	irq_notify(isp, &mi_mis, isp_mis);
 	if (!isp->unit_test) {
+		memset(&sch, 0, sizeof(sch));
 		if (isp->mode == ISP_STRM_MODE) {
 			if (isp->sch.mi_idle)
 				isp_set_schedule(isp, &sch, 0, 0, true);
@@ -1418,6 +1465,7 @@ irqreturn_t isp_irq_handler(int irq, void *arg)
 			msg.irq.stat.isp_mis = isp_mis;
 			isp_post(isp, &msg, false);
 			if (isp_mis & BIT(1)) {
+				memset(&sch, 0, sizeof(sch));
 				if (isp->mode != ISP_STRM_MODE)
 					isp_set_schedule(isp, &sch, 0, isp_mis, true);
 				else

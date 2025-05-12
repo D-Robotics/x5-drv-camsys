@@ -55,8 +55,11 @@ struct isp_irq_ctx {
 	bool sink_online_en;
 	union u32_byte_map src_online_stat;
 	struct cam_buf *sink_buf, *src_buf, *next_src_buf, *pd_buf;
-	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *stat_ctx, *pd_ctx;
+	struct cam_buf *src_raw_buf, *next_src_raw_buf;
+	struct cam_ctx *sink_ctx, *src_ctx[ISP_OUT_CHNL_MAX], *src_raw_ctx;
+	struct cam_ctx *stat_ctx, *pd_ctx;
 	struct list_head *src_buf_list1, *src_buf_list2, *src_buf_list3;
+	struct list_head *src_raw_buf_list1, *src_raw_buf_list2, *src_raw_buf_list3;
 };
 
 struct cam_list_node {
@@ -109,7 +112,9 @@ struct isp_instance {
 	spinlock_t lock; /* lock for handling ctx */
 	struct isp_irq_ctx ctx;
 	struct list_head src_buf_list1, src_buf_list2, src_buf_list3;
+	struct list_head src_raw_buf_list1, src_raw_buf_list2, src_raw_buf_list3;
 	struct cam_list_node src_bufs[SRC_BUF_NUM];
+	struct cam_list_node src_raw_bufs[SRC_BUF_NUM];
 	struct ibuf *mcm_ib, *mcm_ib1, *prev_mcm_ib;
 	struct isp_format fmt;
 	struct cam_format sub_ifmt;
@@ -187,7 +192,6 @@ struct isp_device {
 	u32 hdr_sram[2];
 	bool hdr_sram_rsvd;
 	u32 cur_mi_irq_ctx, next_mi_irq_ctx;
-	refcount_t set_state_refcnt;
 	enum cam_error error;
 	bool unit_test;
 	enum isp_work_mode mode;
@@ -211,7 +215,6 @@ struct isp_device {
 
 bool isp_get_hdr_sram_enabled(struct isp_device *isp, u32 inst);
 void isp_set_mcm_buffer(struct isp_device *isp, u32 path, phys_addr_t phys_addr);
-void isp_set_mp_buffer(struct isp_device *isp, phys_addr_t phys_addr, struct cam_format *fmt);
 int isp_post(struct isp_device *isp, struct isp_msg *msg, bool sync);
 int isp_post_ex(struct isp_device *isp, struct isp_msg *msg,
 		struct mem_buf *extra, bool sync, int *result);
@@ -223,6 +226,7 @@ int isp_get_subctrl(struct isp_device *isp, u32 inst, u32 cmd, void *data, u32 s
 int isp_set_iformat(struct isp_device *isp, u32 inst, struct cam_format *fmt, struct cam_rect *crop,
 		    bool hdr_en);
 int isp_set_oformat(struct isp_device *isp, u32 inst, struct cam_format *fmt);
+int isp_set_oformat_raw(struct isp_device *isp, u32 inst, struct cam_format *fmt);
 int isp_set_format(struct isp_device *isp, u32 inst, struct isp_format *fmt);
 int isp_set_state(struct isp_device *isp, u32 inst, int state, enum group_type type);
 int isp_get_ctx(struct isp_device *isp, u32 inst, struct isp_irq_ctx *ctx);
