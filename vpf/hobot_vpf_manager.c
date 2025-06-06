@@ -569,10 +569,11 @@ static s32 hobot_vpf_device_node_init(struct hobot_vpf_dev *vpf_dev)
 	memcpy(vpf_device->name, name, sizeof(vpf_device->name));
 
 	dev_set_drvdata(vpf_dev->dev, vpf_device);
+#ifdef CONFIG_DEBUG_FS
 	ret = vio_debug_create(dev);
 	if (ret < 0)
 		vio_err("%s: create debugfs failed (%d)\n", __func__, ret);
-
+#endif  /* CONFIG_DEBUG_FS */
 	return ret;
 }
 
@@ -591,17 +592,19 @@ s32 hobot_vpf_manager_probe(void)
 		osal_kfree(vpf_dev);
 		return ret;
 	}
-
+#ifdef CONFIG_DEBUG_FS
 	ret = vpf_create_debug_file(vpf_dev);
 	if (ret < 0) {
 		osal_kfree(vpf_dev);
 		vio_ion_destroy();
 		return ret;
 	}
-
+#endif  /* CONFIG_DEBUG_FS */
 	ret = hobot_vpf_device_node_init(vpf_dev);
 	if (ret < 0) {
+#ifdef CONFIG_DEBUG_FS
 		vpf_destroy_debug_file(vpf_dev);
+#endif  /* CONFIG_DEBUG_FS */
 		osal_kfree(vpf_dev);
 		vio_ion_destroy();
 		return ret;
@@ -624,8 +627,10 @@ void hobot_vpf_manager_remove(void)
 	struct hobot_vpf_dev *vpf_dev;
 
 	vpf_dev = vpf_get_drvdata();
+#ifdef CONFIG_DEBUG_FS
 	vpf_destroy_debug_file(vpf_dev);
 	vio_debug_destroy(vpf_dev->dev);
+#endif  /* CONFIG_DEBUG_FS */
 	device_destroy(vpf_dev->class, vpf_dev->devno);
 	class_destroy(vpf_dev->class);
 	cdev_del(&vpf_dev->cdev);
