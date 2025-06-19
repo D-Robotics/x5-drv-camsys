@@ -267,6 +267,10 @@ static void vse_get_plane(u32 format, struct vbuf_group_info *group_attr)
 	if (format == HW_FORMAT_YUV422_8BIT) {
 		group_attr->info[0].buf_attr.planecount = 2;
 		group_attr->info[0].buf_attr.format = MEM_PIX_FMT_NV12;
+	}
+	else if (format == HW_FORMAT_RAW8) {
+		group_attr->info[0].buf_attr.planecount = 1;
+		group_attr->info[0].buf_attr.format = MEM_PIX_FMT_YUV400;
 	} else {
 		pr_err("error format %d\n", format);
 	}
@@ -286,6 +290,8 @@ static s32 vse_video_reqbufs(struct vio_video_ctx *vctx,
 		group_attr->is_contig = 1;
 		if (inst->ichn_attr.fmt == FRM_FMT_NV12)
 			format = HW_FORMAT_YUV422_8BIT;
+		else if (inst->ichn_attr.fmt == FRM_FMT_YUV400)
+			format = HW_FORMAT_RAW8;
 		else
 			return -EINVAL;
 		group_attr->info[0].buf_attr.width = inst->ichn_attr.width;
@@ -302,6 +308,8 @@ static s32 vse_video_reqbufs(struct vio_video_ctx *vctx,
 		}
 		if (inst->ochn_attr.fmt == FRM_FMT_NV12)
 			format = HW_FORMAT_YUV422_8BIT;
+		else if (inst->ochn_attr.fmt == FRM_FMT_YUV400)
+			format = HW_FORMAT_RAW8;
 		else
 			return -EINVAL;
 		group_attr->bit_map |= 1;
@@ -389,7 +397,7 @@ static s32 vse_ichn_attr_check(vse_ichn_attr_t *ichn_attr)
 	vpf_param_range_check(ichn_attr->tpg_en, 0, CAM_TRUE);
 	vpf_param_range_check(ichn_attr->width, 0, 5432);
 	vpf_param_range_check(ichn_attr->height, 0, 3076);
-	vpf_param_range_check(ichn_attr->fmt, FRM_FMT_NV12, FRM_FMT_NV12);
+	// vpf_param_range_check(ichn_attr->fmt, FRM_FMT_NV12, FRM_FMT_NV12);
 	vpf_param_range_check(ichn_attr->bit_width, 8, 8);
 
 	return 0;
@@ -414,8 +422,13 @@ static s32 vse_video_set_ichn_attr(struct vio_video_ctx *vctx, unsigned long arg
 
 	if (attr.fmt == FRM_FMT_NV12)
 		fmt.format = CAM_FMT_NV12;
-	else
+	else if (attr.fmt == FRM_FMT_YUV400) {
+		fmt.format = CAM_FMT_YUV400;
+	}
+	else {
+		pr_err("unsupported format %d\n", attr.fmt);
 		return -EINVAL;
+	}
 	fmt.width = attr.width;
 	fmt.stride = attr.width;
 	fmt.height = attr.height;
@@ -472,7 +485,7 @@ static s32 vse_ochn_attr_check(u32 ochn_id, vse_ichn_attr_t *vse_ichn_attr, vse_
 	}
 	attr->target_w = ALIGN(attr->target_w, 16);
 
-	vpf_param_range_check(attr->fmt, FRM_FMT_NV12, FRM_FMT_NV12);
+	// vpf_param_range_check(attr->fmt, FRM_FMT_NV12, FRM_FMT_NV12);
 	vpf_param_range_check(attr->bit_width, 8, 8);
 	vpf_param_range_check(attr->roi.w, 0, 4096);
 	vpf_param_range_check(attr->roi.h, 0, 3076);
@@ -562,8 +575,12 @@ static s32 vse_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 
 	if (attr.fmt == FRM_FMT_NV12)
 		fmt.format = CAM_FMT_NV12;
-	else
+	else if (attr.fmt == FRM_FMT_YUV400)
+		fmt.format = CAM_FMT_YUV400;
+	else {
+		pr_err("unsupported format %d\n", attr.fmt);
 		return -EINVAL;
+	}
 	fmt.width = attr.target_w;
 	fmt.stride = attr.target_w;
 	fmt.height = attr.target_h;

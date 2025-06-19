@@ -30,6 +30,7 @@ enum cam_format_type {
 	CAM_FMT_NV12,
 	CAM_FMT_NV16,
 	CAM_FMT_RGB888X,
+	CAM_FMT_YUV400,
 };
 
 enum aligned_mode {

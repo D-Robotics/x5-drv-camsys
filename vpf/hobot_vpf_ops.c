@@ -1208,6 +1208,7 @@ static s32 vpf_fill_frame_info(struct vio_frame *frame, struct vbuf_group_info *
 			case MEM_PIX_FMT_RGB24:
 			case MEM_PIX_FMT_RGB565:
 			case MEM_PIX_FMT_YUYV422:
+			case MEM_PIX_FMT_YUV400:
 				if (group_attr->info[0].buf_attr.planecount == 2) {
 					group_info->info[i].planeSize[0] = buf_attr->wstride * buf_attr->vstride;
 					group_info->info[i].planeSize[1] = buf_attr->wstride * buf_attr->vstride;
