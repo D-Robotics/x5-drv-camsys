@@ -1481,8 +1481,8 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 			if (node_raw) {
 				sch->mp_raw_buf.mem.addr = get_phys_addr(isp->dev, node->data, 0);
 				pr_debug("%s: isp list_add_tail src_raw_buf_list3\n", __func__);
-				list_del(&node->entry);
-				list_add_tail(&node->entry, ctx->src_raw_buf_list3);
+				list_del(&node_raw->entry);
+				list_add_tail(&node_raw->entry, ctx->src_raw_buf_list3);
 			} else {
 				pr_err("%s: invalid node!\n", __func__);
 				return -1;
