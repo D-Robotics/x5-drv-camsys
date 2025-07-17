@@ -39,7 +39,7 @@ struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 		vio_x_barrier_irqr(framemgr, flags);
 
 		if (frame == NULL) {
-			vio_err("[%s][S%d] %s: REQUEST and COMPLETE queue have no member\n",
+			pr_info("[WARN] [%s][S%d] %s: REQUEST and COMPLETE queue have no member\n",
 				subdev->name, subdev->vnode->flow_id, __func__);
 			framemgr_print_queues(framemgr);
 			return NULL;
