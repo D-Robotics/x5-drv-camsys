@@ -1479,7 +1479,7 @@ static int isp_set_schedule_offline_mcm(struct isp_device *isp, struct isp_mcm_s
 		}
 		if (ctx->src_raw_ctx) {
 			if (node_raw) {
-				sch->mp_raw_buf.mem.addr = get_phys_addr(isp->dev, node->data, 0);
+				sch->mp_raw_buf.mem.addr = get_phys_addr(isp->dev, node_raw->data, 0);
 				pr_debug("%s: isp list_add_tail src_raw_buf_list3\n", __func__);
 				list_del(&node_raw->entry);
 				list_add_tail(&node_raw->entry, ctx->src_raw_buf_list3);
