@@ -1305,6 +1305,7 @@ static int isp_nat_probe(struct platform_device *pdev)
 		nat_dev->cap_instance[i].vdev.vnode = &nat_dev->vnode[i];
 		nat_dev->cap_instance[i].vdev_raw.vnode = &nat_dev->vnode[i];
 		nat_dev->cap_instance[i].vdev.pingpong_ring = 1;
+		nat_dev->cap_instance[i].vdev_raw.pingpong_ring = 1;
 		nat_dev->cap_instance[i].dev = nat_dev;
 		nat_dev->cap_instance[i].id = i;
 	}

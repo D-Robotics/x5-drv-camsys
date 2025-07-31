@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <linux/err.h>
 
-#include "vio_framemgr.h"
 #include "vio_node_api.h"
 
 #include "cam_buf.h"
@@ -33,17 +32,7 @@ struct cam_buf *cam_dqbuf_irq(struct cam_ctx *ctx, bool remote)
 		framemgr = subdev->cur_fmgr;
 		vio_e_barrier_irqs(framemgr, flags);
 		frame = peek_frame(framemgr, FS_REQUEST);
-		if (frame == NULL) {
-			frame = peek_frame(framemgr, FS_COMPLETE);
-		}
 		vio_x_barrier_irqr(framemgr, flags);
-
-		if (frame == NULL) {
-			pr_info("[WARN] [%s][S%d] %s: REQUEST and COMPLETE queue have no member\n",
-				subdev->name, subdev->vnode->flow_id, __func__);
-			framemgr_print_queues(framemgr);
-			return NULL;
-		}
 
 		if (frame) {
 			vio_e_barrier_irqs(framemgr, flags);
