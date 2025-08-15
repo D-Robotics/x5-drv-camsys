@@ -116,6 +116,7 @@ static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 
 	if (is_main_in_vdev(vdev)) {
 		inst->prev = remote_vdev;
+		inst->online_mode = online_mode;
 	} else if (is_main_out_vdev(vdev)) {
 		vdev->chn_attr.format = MEM_PIX_FMT_NV12;
 		vdev->chn_attr.height = inst->attr.crop.h;
@@ -125,13 +126,13 @@ static s32 isp_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vde
 			cam_set_mode((struct cam_ctx *)remote_vdev, CAM_SIMPLEX_MODE);
 		else
 			cam_set_mode((struct cam_ctx *)remote_vdev, CAM_MULTIPLEX_MODE);
+		inst->online_mode = online_mode;
 	}
 
 	if (online_mode)
 		bind_type = CHN_BIND_OTF;
 	else
 		bind_type = CHN_BIND_M2M;
-	inst->online_mode = online_mode;
 
 	pr_info("%s online_mode=%d,bind_type=%d\n", __func__, online_mode, bind_type);
 
