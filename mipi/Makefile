@@ -31,21 +31,12 @@ hobot_mipidbg-objs += hobot_mipi_debug.o
 hobot_mipidbg-objs += hobot_mipi_debug_hdev.o
 hobot_mipidbg-objs += hobot_mipi_debug_pdev.o
 
-ifeq ($(OUTPUT_BUILD_DIR),)
-#J5
-INC_DIR := $(srctree)/drivers/media/platform/hobot
-OUT_DIR := ${OUT_BUILD_KERNEL_DIR}
-ccflags-y += -I$(INC_DIR)/osal/linux/inc
-else
-#j6
 INC_DIR := $(srctree)/drivers/media/platform/horizon/camsys
-OUT_DIR := ${OUTPUT_BUILD_DIR}/kernel
 ccflags-y += -I$(INC_DIR)/../osal/linux/inc
 
 # ccflags-y += -DMIPI_DEV_IDE_ENABLE
 ccflags-y += -I$(INC_DIR)/../ide/mipi-csi-tx
 ccflags-y += -I$(INC_DIR)/../ide/mipi-tx-dphy
-endif
 
 ccflags-y += -I$(INC_DIR)/vpf
 ccflags-y += -I$(INC_DIR)/vin_node
@@ -58,12 +49,3 @@ GCOV_PROFILE := y
 endif
 
 ccflags-y += -D X5_CHIP
-
-all: FORCE
-	make -C ${OUT_DIR} M=$(PWD) modules -j${N}
-
-clean: FORCE
-	make -C ${OUT_DIR} M=$(PWD) clean -j${N}
-
-FORCE:
-
