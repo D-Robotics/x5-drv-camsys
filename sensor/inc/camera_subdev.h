@@ -97,6 +97,7 @@ typedef struct sensor_data {
 	uint32_t  delta_time;
 	uint32_t  active_width;
 	uint32_t  active_height;
+	pd_info_t pd_info;
 	uint32_t  data_width;		// Bits per pixel.
 	uint32_t  bayer_start;		// RGGB pattern start (R/Gr/Gb/B).
 	uint32_t  bayer_pattern;	// CFA pattern type (RGGB/RCCC/RIrGB/RGIrB).
