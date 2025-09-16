@@ -194,6 +194,20 @@ typedef enum enum_bayer_pattern_e {
 	BAYER_PATTERN_BUTT
 } bayer_pattern_e;
 
+typedef struct pd_info_s {
+	uint8_t   bit_width;
+	uint32_t  sensor_type;
+	uint32_t  ocl2x1Shield;
+	uint32_t  image_width;
+	uint32_t  image_height;
+	uint16_t  pd_area[4];
+	uint16_t  pd_num_per_area[2];
+	uint8_t   pd_focal_heigh;
+	uint8_t   pd_focal_width;
+	uint8_t   pd_distance;
+	uint32_t  pdfocal[48];
+}pd_info_t;
+
 /**
  * @struct _setting_param_t
  * sensor params struct which transfer to isp by callback
@@ -216,6 +230,7 @@ struct _setting_param_t {
 	uint8_t exposure_max_bit_width;
 	uint8_t exposure_time_step;
 	uint32_t delta_time;
+	pd_info_t pd_info;
 };
 
 struct sensor_priv_old {
@@ -360,4 +375,3 @@ struct sensor_isp_ops_s {
 };
 
 #endif // COMMON_CAMERA_SUBDEV_H
-

@@ -545,15 +545,38 @@ int32_t common_get_param(uint32_t chn, struct _setting_param_t *user_para)
 	user_para->exposure_max_bit_width = (uint8_t)sensor_param[chn].exposure_max_bit_width;
 	user_para->exposure_time_step = (uint8_t)sensor_param[chn].exposure_time_step;
 	user_para->delta_time = (uint8_t)sensor_param[chn].delta_time;
+	user_para->pd_info.bit_width = (uint8_t)sensor_param[chn].pd_info.bit_width;
+	user_para->pd_info.sensor_type = (uint8_t)sensor_param[chn].pd_info.sensor_type;
+	user_para->pd_info.ocl2x1Shield = (uint8_t)sensor_param[chn].pd_info.ocl2x1Shield;
+	user_para->pd_info.image_width = (uint32_t)sensor_param[chn].pd_info.image_width;
+	user_para->pd_info.image_height = (uint32_t)sensor_param[chn].pd_info.image_height;
+    memcpy(user_para->pd_info.pd_area,sensor_param[chn].pd_info.pd_area,sizeof(sensor_param[chn].pd_info.pd_area));
+    memcpy(user_para->pd_info.pd_num_per_area,sensor_param[chn].pd_info.pd_num_per_area,sizeof(sensor_param[chn].pd_info.pd_num_per_area));
+    user_para->pd_info.pd_focal_heigh = sensor_param[chn].pd_info.pd_focal_heigh;
+    user_para->pd_info.pd_focal_width = sensor_param[chn].pd_info.pd_focal_width;
+    user_para->pd_info.pd_distance    = sensor_param[chn].pd_info.pd_distance;
+    memcpy(user_para->pd_info.pdfocal,sensor_param[chn].pd_info.pdfocal,sizeof(sensor_param[chn].pd_info.pdfocal));
 
-	sen_debug(dev, "param [%d] l:%d g:%d/%d e:%d/%d %dx%d %dfps b:%d o:%d p:%d m:%d s:%d d:%d\n",/*PRQA S 0685,1294*/
+	sen_debug(dev, "param [%d] l:%d g:%d/%d e:%d/%d %dx%d %dfps b:%d o:%d p:%d m:%d s:%d d:%d pd[ bit: %d w:%d t:%d s:%d h:%d area:%d,%d,%d,%d num:%d,%d focal:%d,%d dist:%d]\n",/*PRQA S 0685,1294*/
+
 		chn, user_para->lines_per_second,
 		user_para->analog_gain_max, user_para->digital_gain_max,
 		user_para->exposure_time_max, user_para->exposure_time_min,
 		user_para->active_width, user_para->active_height, user_para->fps,
 		user_para->data_width, user_para->bayer_start.rggb, user_para->bayer_pattern,
 		user_para->exposure_max_bit_width, user_para->exposure_time_step,
-		user_para->delta_time);
+		user_para->delta_time,
+		user_para->pd_info.bit_width,
+		user_para->pd_info.sensor_type,
+		user_para->pd_info.ocl2x1Shield,
+		user_para->pd_info.image_width,
+		user_para->pd_info.image_height,
+		user_para->pd_info.pd_area[0], user_para->pd_info.pd_area[1],
+		user_para->pd_info.pd_area[2], user_para->pd_info.pd_area[3],
+		user_para->pd_info.pd_num_per_area[0],
+		user_para->pd_info.pd_num_per_area[1],
+		user_para->pd_info.pd_focal_heigh, user_para->pd_info.pd_focal_width,
+		user_para->pd_info.pd_distance);
 	return 0;
 }
 
