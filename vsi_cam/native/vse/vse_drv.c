@@ -551,7 +551,7 @@ static s32 vse_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 		return rc;
 	if (attr.fps.src <= 0)
 		attr.fps.src = inst->attr.fps.src ? inst->attr.fps.src : DEFAULT_SRC_FPS;
-	if (attr.fps.dst < 0)
+	if (attr.fps.dst <= 0)
 		attr.fps.dst = attr.fps.src;
 	ochn_id = vctx->id - VNODE_ID_CAP;
 	if (ochn_id > VSE_OUT_CHNL_MAX) {
