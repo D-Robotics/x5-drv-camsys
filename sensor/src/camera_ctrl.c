@@ -104,14 +104,15 @@ int sensor_ctrl_completion_wait(struct sensor_device_s *sen)
 
 	td = osal_wait_event_interruptible_timeout(sensor_update,
 		osal_test_bit((int32_t)CTRL_FS_FLAG, &update_flag[chn]), ctrl_timeout_ms);/*PRQA S 2996,4434,4460*/
-	osal_clear_bit((int32_t)CTRL_FS_FLAG, &update_flag[chn]);
-	osal_clear_bit((int32_t)CTRL_DATA_FLAG, &update_flag[chn]);
 	if (td == 0) {
 		sen_debug(dev, "ctrl wait trigger %dms timeout\n", ctrl_timeout_ms);
 		ret = -1;
 	} else if (td < 0) {
 		sen_err(dev, "ctrl wait trigger error %d\n", td);
 		ret = td;
+	} else {
+		osal_clear_bit((int32_t)CTRL_FS_FLAG, &update_flag[chn]);
+		osal_clear_bit((int32_t)CTRL_DATA_FLAG, &update_flag[chn]);
 	}
 
 	return ret;
@@ -482,4 +483,3 @@ int camera_ctrldev_init(void)
 MODULE_AUTHOR("Horizon Inc.");
 MODULE_DESCRIPTION("camera_ctrl dev of J5");
 MODULE_LICENSE("GPL");
-

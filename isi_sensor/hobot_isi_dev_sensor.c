@@ -271,12 +271,6 @@ static void isi_set_sensor_line_param(struct isi_sensor_line_param_s *sensor_lin
 			return;
                 }
 
-		// SIF -> SENSOR FS EVENT will effect
-		ret = ((struct sensor_isi_ops_s *)(g_isi_sen->isi_sensor_cops->cops))->sensor_update(sensor_line_param->chn, 0);
-		if (ret < 0) {
-			pr_err("isi callback sensor_update error \n");
-			return;
-		}
         } else {
                 pr_err("isi_sensor_cops is NULL \n");
         }

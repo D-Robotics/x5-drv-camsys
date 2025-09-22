@@ -12,6 +12,7 @@
 #define CAP_INDEX_1ST 1
 #define CAP_INDEX_END 6
 #define VSE_NODE_MAX_DEVICE  (VSE_OUT_CHNL_MAX + 1)
+#define DEFAULT_SRC_FPS 30
 
 enum vse_chn_type {
 	VSE_MAIN_FRAME,
