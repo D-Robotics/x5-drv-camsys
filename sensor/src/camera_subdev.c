@@ -556,6 +556,11 @@ int32_t common_get_param(uint32_t chn, struct _setting_param_t *user_para)
     user_para->pd_info.pd_focal_width = sensor_param[chn].pd_info.pd_focal_width;
     user_para->pd_info.pd_distance    = sensor_param[chn].pd_info.pd_distance;
     memcpy(user_para->pd_info.pdfocal,sensor_param[chn].pd_info.pdfocal,sizeof(sensor_param[chn].pd_info.pdfocal));
+	user_para->ae_again_mode = (uint32_t)sensor_param[chn].ae_again_mode;
+	user_para->gain_delay_frame = (uint32_t)sensor_param[chn].gain_delay_frame;
+	user_para->line_delay_frame = (uint32_t)sensor_param[chn].line_delay_frame;
+	user_para->again_dB_step = (uint32_t)sensor_param[chn].again_dB_step;
+	user_para->user_define_delay = (uint32_t)sensor_param[chn].user_define_delay;
 
 	sen_debug(dev, "param [%d] l:%d g:%d/%d e:%d/%d %dx%d %dfps b:%d o:%d p:%d m:%d s:%d d:%d pd[ bit: %d w:%d t:%d s:%d h:%d area:%d,%d,%d,%d num:%d,%d focal:%d,%d dist:%d]\n",/*PRQA S 0685,1294*/
 
