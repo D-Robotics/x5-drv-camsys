@@ -231,6 +231,11 @@ struct _setting_param_t {
 	uint8_t exposure_time_step;
 	uint32_t delta_time;
 	pd_info_t pd_info;
+	uint32_t user_define_delay;
+	uint32_t gain_delay_frame;
+	uint32_t line_delay_frame;
+	uint32_t ae_again_mode;
+	uint32_t again_dB_step;
 };
 
 struct sensor_priv_old {
