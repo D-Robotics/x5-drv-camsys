@@ -30,6 +30,9 @@
 #define ISP_FE_ICR  (0x00003d78)
 #define ISP_FE_CTL  (0x00003d60)
 
+#define VI_DPCL         (0x00000018)
+#define ISP_ACQ_H_SIZE  (0x00000410)
+
 /* MI MP buffer related */
 #define MI_MP_CTRL      (0x00001310)
 #define MI_MP_BUS_TIMEO (0x00001320)

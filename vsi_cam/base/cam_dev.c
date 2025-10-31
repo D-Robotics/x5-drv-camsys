@@ -4,6 +4,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
+#include <linux/cpumask.h>
 
 #include "cam_uapi.h"
 
@@ -33,6 +34,7 @@ static int parse_mem_res(struct platform_device *pdev, struct mem_res *mems)
 static int parse_irq_res(struct platform_device *pdev, struct irq_res *irqs)
 {
 	int rc, i = 0;
+	cpumask_t mask;
 
 	if (!irqs)
 		return 0;
@@ -52,6 +54,12 @@ static int parse_irq_res(struct platform_device *pdev, struct irq_res *irqs)
 			dev_err(&pdev->dev, "cannot request %s irq\n",
 				irqs[i].name);
 			return rc;
+		}
+		/* fe_irq_handler  */
+		if (strcmp(irqs[i].name, "isp_fe") == 0) {
+			cpumask_clear(&mask);
+			cpumask_set_cpu(3, &mask);
+			irq_set_affinity(irqs[i].no, &mask);
 		}
 		i++;
 	}

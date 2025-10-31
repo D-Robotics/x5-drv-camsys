@@ -10,8 +10,11 @@
 #include "isp8000_regs.h"
 #include "isp_uapi.h"
 #include <linux/dma-mapping.h>
+#include <linux/delay.h>
 
 #include "isp.h"
+
+#define ISP_VGA_WIDTH 640
 
 static s32 handle_get_format(struct isp_device *isp, struct isp_msg *msg)
 {
@@ -1550,10 +1553,18 @@ irqreturn_t fe_irq_handler(int irq, void *arg)
 	struct isp_msg msg = { .id = ISP_MSG_IRQ_MIS };
 	u32 isp_fe_mis;
 	u32 miv2_ctrl;
+	u32 hsize;
 
 	isp_fe_mis = isp_read(isp, ISP_FE_MIS);
 	pr_debug("+fe_mis:0x%x\n", isp_fe_mis);
 	if (isp_fe_mis) {
+		hsize = isp_read(isp, ISP_ACQ_H_SIZE);
+		/* VGA resolution wait 1ms for wdr statistic write done, to prevent isp hang */
+		if (hsize <= ISP_VGA_WIDTH) {
+			mdelay(1);
+			pr_debug("+fe_mis:0x%08x id 0x%08x delay 1ms\n", hsize, isp_read(isp, VI_DPCL));
+		}
+
 		isp_write(isp, ISP_FE_ICR, isp_fe_mis);
 		miv2_ctrl = isp_read(isp, MIV2_CTRL);
 		miv2_ctrl |= MIV2_CTRL_MCM_RAW_RDMA_START_MASK;
