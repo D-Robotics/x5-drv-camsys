@@ -1963,8 +1963,8 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 	};
 	struct irq_res isp_irqs[] = {
 		{ "isp", -1, isp_irq_handler, isp },
-		{ "mi", -1, mi_irq_handler, isp },
-		{ "fe", -1, fe_irq_handler, isp },
+		{ "isp_mi", -1, mi_irq_handler, isp },
+		{ "isp_fe", -1, fe_irq_handler, isp },
 		{},
 	};
 	struct clk_res isp_clks[] = {
