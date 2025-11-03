@@ -1020,6 +1020,7 @@ irqreturn_t mi_irq_handler(int irq, void *arg)
 			value &= ~0x1;
 			isp_write(isp, MIV2_IMSC1, value);
 			isp_get_schedule(isp, &mi_mis);
+			isp->mi_frame_done_stat = 0;
 		}
 	}
 
