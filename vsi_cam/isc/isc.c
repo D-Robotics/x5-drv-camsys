@@ -1004,12 +1004,27 @@ static int isc_mmap(struct file *file, struct vm_area_struct *vma)
 				   size, vma->vm_page_prot);
 }
 
+static int isc_release(struct inode *inode, struct file *file)
+{
+	struct isc_handle *isc = file->private_data;
+	if (isc) {
+		if (isc->ib){
+			isc_unbind(isc);
+		}
+		isc_put(isc);
+		file->private_data = NULL;
+	}
+
+	return 0;
+}
+
 static const struct file_operations isc_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = isc_ioctl,
 	.poll = isc_poll,
 	.open = isc_open,
 	.mmap = isc_mmap,
+	.release = isc_release,
 };
 
 static int __init isc_init(void)
