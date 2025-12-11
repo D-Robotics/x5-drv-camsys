@@ -576,6 +576,14 @@ static s32 isp_video_reqbufs(struct vio_video_ctx *vctx,
 			format = HW_FORMAT_RAW12;
 			group_attr->info[0].buf_attr.wstride = inst->attr.crop.w * 2;
 			break;
+		case 14:
+			format = HW_FORMAT_RAW14;
+			group_attr->info[0].buf_attr.wstride = inst->attr.crop.w * 2;
+			break;
+		case 16:
+			format = HW_FORMAT_RAW16;
+			group_attr->info[0].buf_attr.wstride = inst->attr.crop.w * 2;
+			break;
 		default:
 			return -EINVAL;
 		}
@@ -897,7 +905,7 @@ static s32 isp_ichn_attr_check(struct vio_video_ctx *vctx)
 	vpf_param_range_check(isp_ichn_attr->width, 0, 5472);
 	vpf_param_range_check(isp_ichn_attr->height, 0, 3496);
 	vpf_param_range_check(isp_ichn_attr->fmt, FRM_FMT_NULL, FRM_FMT_UYVY);
-	vpf_param_range_check(isp_ichn_attr->bit_width, 8, 12);
+	vpf_param_range_check(isp_ichn_attr->bit_width, 8, 16);
 
 	return 0;
 }
@@ -933,6 +941,14 @@ static s32 isp_video_set_ichn_attr(struct vio_video_ctx *vctx, unsigned long arg
 		break;
 	case 12:
 		fmt.format = CAM_FMT_RAW12;
+		fmt.stride = inst->ichn_attr.width * 2;
+		break;
+	case 14:
+		fmt.format = CAM_FMT_RAW14;
+		fmt.stride = inst->ichn_attr.width * 2;
+		break;
+	case 16:
+		fmt.format = CAM_FMT_RAW16;
 		fmt.stride = inst->ichn_attr.width * 2;
 		break;
 	default:
