@@ -171,6 +171,9 @@ static void vinattr_to_camfmt(const vin_basic_attr_t *vin_basic_attr,
 	case DATA_TYPE_RAW12:
 		cam_fmt->format = CAM_FMT_RAW12;
 		break;
+	case DATA_TYPE_RAW14:
+		cam_fmt->format = CAM_FMT_RAW14;
+		break;
 	case DATA_TYPE_YUV420_SHIFT:
 		if (yuv_conv)
 			cam_fmt->format = CAM_FMT_NV16;

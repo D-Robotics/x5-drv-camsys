@@ -292,6 +292,11 @@ static const int __maybe_unused SIF_FMT_RAW12_IPI[] = { SIF_FMT_RAW12_IPI_0,
 							SIF_FMT_RAW12_IPI_2,
 							SIF_FMT_RAW12_IPI_3 };
 
+static const int __maybe_unused SIF_FMT_RAW14_IPI[] = { SIF_FMT_RAW14_IPI_0,
+							SIF_FMT_RAW14_IPI_1,
+							SIF_FMT_RAW14_IPI_2,
+							SIF_FMT_RAW14_IPI_3 };
+
 static const int __maybe_unused SIF_FMT_RGB888_IPI[] = { SIF_FMT_RGB888_IPI_0,
 							 SIF_FMT_RGB888_IPI_1,
 							 SIF_FMT_RGB888_IPI_2,

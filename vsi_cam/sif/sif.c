@@ -183,6 +183,10 @@ static int sif_set_ipi_fmt(struct sif_device *sif, u32 inst, struct cam_format *
 		val |= SIF_FMT_RAW12_IPI[inst];
 		fmt->stride = fmt->width * 2;
 		break;
+	case CAM_FMT_RAW14:
+		val |= SIF_FMT_RAW14_IPI[inst];
+		fmt->stride = fmt->width * 2;
+		break;
 	case CAM_FMT_YUYV:
 		val |= SIF_FMT_YUYV_IPI[inst];
 		fmt->stride = fmt->width * 2;
