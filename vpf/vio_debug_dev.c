@@ -121,7 +121,7 @@ static ssize_t vpf_fps_store(struct device *dev,
 	vpf_dev = (struct hobot_vpf_dev *)vpf_device->ip_dev;
 	vpf_dev->flowid_mask = (u32)simple_strtoul(buf, NULL, 0);
 	if (vpf_dev->flowid_mask == 0)
-		vpf_dev->flowid_mask = (1 << VIO_MAX_STREAM) - 1u;
+		vpf_dev->flowid_mask = (uint32_t)((1ULL << VIO_MAX_STREAM) - 1ULL);
 
 	return (ssize_t)len;
 }

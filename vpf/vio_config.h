@@ -33,7 +33,7 @@
 
 #define CONFIG_QEMU_TEST 0
 
-#define VIO_MAX_STREAM	24u
+#define VIO_MAX_STREAM	32u
 #define PROCESS_TIMEOUT		(3000) /* ms */
 
 #define HW_FORMAT_YUV420_8BIT	0x18u
