@@ -18,7 +18,7 @@
 #define ISC_DEV_NAME        "isc"
 #define ISC_MAX_NUM         (1)
 #define ISC_REFCNT_INIT_VAL (1)
-#define ISC_SYNC_WAIT_Q_SZ  (16)
+#define ISC_SYNC_WAIT_Q_SZ  (64) // max instance * 2
 
 struct isc_imsg {
 	struct list_head entry;

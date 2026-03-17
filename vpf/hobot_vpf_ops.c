@@ -131,8 +131,23 @@ static void vpf_safety_close(const struct vio_node *vnode)
 	struct vio_node *tmp_vnode;
 
 	vchain = vnode->vchain;
-	if (vchain == NULL)
+	if (vchain == NULL) {
+		/* feedback mode may no vchain */
+		tmp_vnode = (struct vio_node *)vnode;
+		if ((tmp_vnode != NULL) && (osal_atomic_read(&tmp_vnode->start_cnt) > 0)) {
+			for (k = 0; k < MAXIMUM_CHN; k++) {
+				if ((tmp_vnode->active_ich & (1 << k)) != 0)
+					vdev_sudden_close(tmp_vnode->ich_subdev[k]);
+			}
+
+			for (k = 0; k < MAXIMUM_CHN; k++) {
+				if ((tmp_vnode->active_och & (1 << k)) != 0)
+					vdev_sudden_close(tmp_vnode->och_subdev[k]);
+			}
+			vio_warn("[S%d][%s] %s: sudden close\n", tmp_vnode->flow_id, tmp_vnode->name, __func__);
+		}
 		return;
+	}
 
 	for (i = 0; i < MODULE_NUM; i++) {
 		vnode_mgr = &vchain->vnode_mgr[i];
