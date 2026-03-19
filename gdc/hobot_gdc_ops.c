@@ -16,6 +16,13 @@
 #include "hobot_gdc_ops.h"
 
 static void gdc_subdev_process(struct vio_subdev *vdev);
+
+struct gdc_bin_iommu_map_entry {
+	struct list_head list;
+	u32 ion_id;
+	u32 iommu_paddr;
+	struct vio_frame frame;
+};
 /**
  * Purpose: gdc default color bar
  * Value: bit0~7: v, bit 8~15 u, bit 16~23 y.
@@ -140,7 +147,7 @@ s32 gdc_subdev_close(struct vio_video_ctx *vctx, u32 rst_en)
 	vdev = vctx->vdev;
 	vnode = vdev->vnode;
 	subdev = container_of(vdev, struct gdc_subdev, vdev);/*PRQA S 2810,0497*/
-	gdc_iommu_ummap(subdev);
+	gdc_iommu_ummap_all(subdev);
 	osal_mutex_lock(&gdc->mlock);
 	gdc_device_close(vctx, rst_en);
 	osal_mutex_unlock(&gdc->mlock);
@@ -303,50 +310,113 @@ static void gdc_config_binary(struct gdc_subdev *subdev)
 		subdev->gdc_setting.gdc_config.config_size);
 }
 
-s32 gdc_iommu_map(struct gdc_subdev *subdev)
+s32 gdc_iommu_map(struct gdc_subdev *subdev, u32 ion_id, u32 *iommu_paddr)
 {
 	s32 ret = 0;
-	gdc_settings_t *gdc_setting;
 	struct vio_subdev *vdev;
 	struct vio_frame *frame;
 	struct vio_node *vnode;
+	struct hobot_gdc_dev *gdc;
+	struct gdc_bin_iommu_map_entry *entry;
+	uint64_t flags = 0;
 
+	gdc = subdev->gdc;
 	vdev = &subdev->vdev;
 	vnode = vdev->vnode;
 	frame = &subdev->bin_frame;
-	gdc_setting = &subdev->gdc_setting;
 
-	if (frame->frameinfo.ion_id[0] != gdc_setting->binary_ion_id)
-		frame->buf_shared = 0;
-	frame->frameinfo.ion_id[0] = gdc_setting->binary_ion_id;
-	frame->frameinfo.is_contig = 1;
-	frame->vbuf.group_info.bit_map = 1;
+	if (iommu_paddr == NULL)
+		return -EINVAL;
+	*iommu_paddr = 0u;
 
-	if (frame->buf_shared == 0 && gdc_setting->binary_ion_id != 0) {
-		vio_frame_iommu_unmap(vdev->iommu_dev, frame);
-		ret = vio_frame_iommu_map(vdev->iommu_dev, frame);
-		if (ret < 0) {
-			vio_err("[S%d]%s: bin_frame vio_frame_iommu_map failed\n",
-				vnode->flow_id, __func__);
-			return ret;
+	if (ion_id == 0u)
+		return 0;
+
+	osal_spin_lock_irqsave(&gdc->shared_slock, &flags);
+	list_for_each_entry(entry, &subdev->bin_iommu_map_list, list) {
+		if (entry->ion_id == ion_id) {
+			/* hit: reuse mapped result */
+			frame->frameinfo.ion_id[0] = ion_id;
+			frame->frameinfo.is_contig = 1;
+			frame->vbuf.group_info.bit_map = 1;
+			frame->vbuf.iommu_paddr[0][0] = entry->iommu_paddr;
+			frame->vbuf.iommu_map = 0;
+			frame->buf_shared = 1;
+			*iommu_paddr = entry->iommu_paddr;
+			osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
+			return 0;
 		}
-		subdev->map_addr.bin_iommu_addr = frame->vbuf.iommu_paddr[0][0] +
-			gdc_setting->binary_offset;
+	}
+	osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
+
+	/* miss: do map once and store it */
+	entry = (struct gdc_bin_iommu_map_entry *)kzalloc(sizeof(*entry), GFP_KERNEL);
+	if (entry == NULL) {
+		vio_err("[S%d]%s: kzalloc cache entry failed\n", vnode->flow_id, __func__);
+		return -ENOMEM;
+	}
+	/*
+	 * Do NOT map on subdev->bin_frame, otherwise switching ion_id will trigger
+	 * "double iommu map". Each ion_id keeps its own mapped vio_frame in cache.
+	 */
+	entry->ion_id = ion_id;
+	(void)memcpy(&entry->frame, frame, sizeof(*frame));
+	entry->frame.buf_shared = 0;
+	entry->frame.frameinfo.ion_id[0] = ion_id;
+	entry->frame.frameinfo.is_contig = 1;
+	entry->frame.vbuf.group_info.bit_map = 1;
+	entry->frame.vbuf.iommu_map = 0;
+
+	ret = vio_frame_iommu_map(vdev->iommu_dev, &entry->frame);
+	if (ret < 0) {
+		vio_err("[S%d]%s: bin_frame vio_frame_iommu_map failed\n",
+			vnode->flow_id, __func__);
+		kfree(entry);
+		return ret;
 	}
 
-	return ret;
+	entry->iommu_paddr = entry->frame.vbuf.iommu_paddr[0][0];
+
+	osal_spin_lock_irqsave(&gdc->shared_slock, &flags);
+	list_add_tail(&entry->list, &subdev->bin_iommu_map_list);
+	osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
+
+	frame->frameinfo.ion_id[0] = ion_id;
+	frame->frameinfo.is_contig = 1;
+	frame->vbuf.group_info.bit_map = 1;
+	frame->vbuf.iommu_paddr[0][0] = entry->iommu_paddr;
+	frame->vbuf.iommu_map = 0;
+	frame->buf_shared = 1;
+	*iommu_paddr = entry->iommu_paddr;
+	return 0;
 }
 
 /* code review E1: internal logic function, no need error return */
-void gdc_iommu_ummap(struct gdc_subdev *subdev)
+void gdc_iommu_ummap_all(struct gdc_subdev *subdev)
 {
 	struct vio_subdev *vdev;
-	struct vio_frame *frame;
+	struct hobot_gdc_dev *gdc;
+	struct gdc_bin_iommu_map_entry *entry, *tmp;
+	uint64_t flags = 0;
 
+	gdc = subdev->gdc;
 	vdev = &subdev->vdev;
-	frame = &subdev->bin_frame;
-	vio_frame_iommu_unmap(vdev->iommu_dev, frame);
-	frame->buf_shared = 0;
+
+	osal_spin_lock_irqsave(&gdc->shared_slock, &flags);
+	list_for_each_entry_safe(entry, tmp, &subdev->bin_iommu_map_list, list) {
+		list_del(&entry->list);
+		osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
+
+		vio_frame_iommu_unmap(vdev->iommu_dev, &entry->frame);
+		kfree(entry);
+
+		osal_spin_lock_irqsave(&gdc->shared_slock, &flags);
+	}
+	osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
+
+	subdev->bin_frame.buf_shared = 0;
+	subdev->bin_frame.vbuf.iommu_map = 0;
+	subdev->map_addr.bin_iommu_addr = 0u;
 }
 
 void gdc_attr_trans_to_settings(gdc_attr_t *gdc_attr, gdc_ichn_attr_t *ichn_attr,
@@ -527,6 +597,10 @@ static void gdc_config_output(struct gdc_subdev *subdev)
 */
 static void gdc_hw_config(struct gdc_subdev *subdev)
 {
+	struct hobot_gdc_dev *gdc = subdev->gdc;
+	uint64_t flags = 0;
+	osal_spin_lock_irqsave(&gdc->shared_slock, &flags);
+
 	//reset gdc hw
 	gdc_init(subdev);
 
@@ -538,6 +612,8 @@ static void gdc_hw_config(struct gdc_subdev *subdev)
 
 	//config outputs
 	gdc_config_output(subdev);
+
+	osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
 }
 
 static s32 gdc_check_ichn_bind_param(struct vio_subdev *vdev, struct chn_attr *chn_attr)
@@ -826,4 +902,3 @@ void gdc_handle_interrupt(struct hobot_gdc_dev *gdc, u32 status)
 	vio_loading_calculate(&gdc->loading, STAT_FE);
 	vio_set_hw_free(vnode);
 }
-

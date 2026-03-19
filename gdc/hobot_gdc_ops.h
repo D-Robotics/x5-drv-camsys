@@ -38,8 +38,8 @@ void gdc_handle_interrupt(struct hobot_gdc_dev *gdc, u32 gdc_status);
 void gdc_frame_work(struct vio_node *vnode);
 s32 gdc_allow_bind(struct vio_subdev *vdev, struct vio_subdev *remote_vdev, u8 online_mode);
 s32 gdc_setting_check(gdc_settings_t *gdc_cfg);
-s32 gdc_iommu_map(struct gdc_subdev *subdev);
-void gdc_iommu_ummap(struct gdc_subdev *subdev);
+s32 gdc_iommu_map(struct gdc_subdev *subdev, u32 ion_id, u32 *iommu_paddr);
+void gdc_iommu_ummap_all(struct gdc_subdev *subdev);
 void gdc_attr_trans_to_settings(gdc_attr_t *gdc_attr, gdc_ichn_attr_t *ichn_attr,
                     gdc_ochn_attr_t *ochn_attr, gdc_settings_t *gdc_setting);
 void gdc_settings_trans_to_attr(gdc_attr_t *gdc_attr, gdc_ichn_attr_t *ichn_attr,

@@ -107,26 +107,34 @@ static s32 gdc_video_set_attr(struct vio_video_ctx *vctx, unsigned long arg)
 	s32 ret = 0;
 	u64 copy_ret;
 	struct gdc_subdev *subdev;
+	struct hobot_gdc_dev *gdc;
 	struct vio_subdev *vdev;
 	gdc_attr_t gdc_attr;
+	uint64_t flags = 0;
+	u32 iommu_paddr = 0;
 
 	vdev = vctx->vdev;
 	subdev = container_of(vdev, struct gdc_subdev, vdev);/*PRQA S 2810,0497*/
+	gdc = subdev->gdc;
 	copy_ret = osal_copy_from_app((void *)&gdc_attr, (void __user *) arg, sizeof(gdc_attr_t));
 	if (copy_ret != 0u) {
 		vio_err("%s: failed to copy from user, ret = %lld\n", __func__, copy_ret);
 		return -EFAULT;
 	}
 
-	gdc_attr_trans_to_settings(&gdc_attr, NULL, NULL, &subdev->gdc_setting);
-
 	if (vdev->id == VNODE_ID_SRC) {
-		ret = gdc_iommu_map(subdev);
+		ret = gdc_iommu_map(subdev, gdc_attr.binary_ion_id, &iommu_paddr);
 		if (ret < 0)
 			return ret;
 
 		vdev->leader = 1;
 	}
+
+	osal_spin_lock_irqsave(&gdc->shared_slock, &flags);
+	gdc_attr_trans_to_settings(&gdc_attr, NULL, NULL, &subdev->gdc_setting);
+	if (vdev->id == VNODE_ID_SRC)
+		subdev->map_addr.bin_iommu_addr = iommu_paddr + subdev->gdc_setting.binary_offset;
+	osal_spin_unlock_irqrestore(&gdc->shared_slock, &flags);
 
 	osal_set_bit((s32)VIO_SUBDEV_DMA_OUTPUT, &vdev->state);
 
@@ -507,9 +515,11 @@ static s32 hobot_gdc_device_node_init(struct hobot_gdc_dev *gdc)
 		vnode[i].active_och = 1;
 		gdc->subdev[i][0].vdev.vnode = &vnode[i];
 		gdc->subdev[i][0].gdc = gdc;
+		INIT_LIST_HEAD(&gdc->subdev[i][0].bin_iommu_map_list);
 		gdc->subdev[i][1].vdev.vnode = &vnode[i];
 		gdc->subdev[i][1].vdev.pingpong_ring = 1;
 		gdc->subdev[i][1].gdc = gdc;
+		INIT_LIST_HEAD(&gdc->subdev[i][1].bin_iommu_map_list);
 		vnode[i].gtask = &gdc->gtask;
 		vnode[i].allow_bind = gdc_allow_bind;
 		vnode[i].frame_work = gdc_frame_work;
