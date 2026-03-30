@@ -211,6 +211,7 @@ struct isp_device {
 	struct mutex open_lock; /* lock for open_cnt */
 	struct mutex set_input_lock; /* lock for set_input */
 	struct mutex set_state_lock; /* lock for set_state */
+	struct mutex ctx_format_lock; /* lock for v4l2 set ormat */
 	refcount_t open_cnt;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dir;
