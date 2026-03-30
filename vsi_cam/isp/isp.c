@@ -2010,6 +2010,7 @@ int isp_probe(struct platform_device *pdev, struct isp_device *isp)
 	mutex_init(&isp->open_lock);
 	mutex_init(&isp->set_input_lock);
 	mutex_init(&isp->set_state_lock);
+	mutex_init(&isp->ctx_format_lock);
 	refcount_set(&isp->open_cnt, REFCNT_INIT_VAL);
 	mutex_init(&isp->ctrl_lock);
 	init_waitqueue_head(&isp->ctrl_ack_waitq);
@@ -2112,6 +2113,7 @@ int isp_remove(struct platform_device *pdev, struct isp_device *isp)
 	mutex_destroy(&isp->open_lock);
 	mutex_destroy(&isp->set_input_lock);
 	mutex_destroy(&isp->set_state_lock);
+	mutex_destroy(&isp->ctx_format_lock);
 	mutex_destroy(&isp->in_buf_list.lock);
 	mutex_destroy(&isp->hdr_buf_list.lock);
 	mutex_destroy(&isp->ctrl_lock);
