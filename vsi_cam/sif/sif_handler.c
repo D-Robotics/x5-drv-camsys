@@ -256,6 +256,19 @@ static inline void sif_handle_frame_start(struct sif_device *sif, u32 inst, bool
 	spin_unlock_irqrestore(&sif->cfg_reg_lock, flags);
 }
 
+static inline bool sif_should_keep_frame(struct sif_instance *ins)
+{
+	if (ins->fps_ratio_in == 0 || ins->fps_ratio_out == 0 ||
+	    ins->fps_ratio_out >= ins->fps_ratio_in)
+		return true;
+	ins->fps_ratio_acc += ins->fps_ratio_out;
+	if (ins->fps_ratio_acc >= ins->fps_ratio_in) {
+		ins->fps_ratio_acc -= ins->fps_ratio_in;
+		return true;
+	}
+	return false;
+}
+
 static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst, bool pd_path)
 {
 	unsigned long flags;
@@ -301,6 +314,8 @@ static inline void sif_handle_frame_done(struct sif_device *sif, u32 inst, bool 
 			if (frame_status) {
 				cam_drop_irq(buf_ctx, *buf);
 				cam_dec_frame_status(buf_ctx);
+			} else if (!sif_should_keep_frame(ins)) {
+				cam_drop_irq(buf_ctx, *buf);
 			} else {
 				cam_qbuf_irq(buf_ctx, *buf, true);
 			}

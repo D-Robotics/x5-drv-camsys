@@ -141,16 +141,42 @@ s32 cim_subdev_init_ex(struct vio_video_ctx *vctx, vin_attr_ex_t *vin_attr_ex)
 	cim_priv_attr = cim_get_priv_by_subdev(subdev);
 	ipi_channel = cim_priv_attr->ipi_index;
 
-	for (i = 0; i < cim->sif.ipi_channel_num; i++) {
-		ins = &cim->sif.insts[ipi_channel + i];
-		vinattr_ex_to_sifsetting(vin_attr_ex, &ins->sif_cfg);
-		ret = sif_set_format(&cim->sif, ipi_channel + i, &ins->fmt, false, EX_FEAT_CHANNEL);
-		if (ret < 0) {
-			vio_err("[S%d][ipi%d]%s failed to call sif_set_format for extended feature\n",
-				vctx->ctx_id, ipi_channel, __func__);
-			return ret;
+	if (vin_attr_ex->ex_attr_type == VIN_STATIC_CIM_ATTR) {
+		for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+			ins = &cim->sif.insts[ipi_channel + i];
+			vinattr_ex_to_sifsetting(vin_attr_ex, &ins->sif_cfg);
+			ret = sif_set_format(&cim->sif, ipi_channel + i,
+					     &ins->fmt, false, EX_FEAT_CHANNEL);
+			if (ret < 0) {
+				vio_err("[S%d][ipi%d]%s failed to call sif_set_format for extended feature\n",
+					vctx->ctx_id, ipi_channel, __func__);
+				return ret;
+			}
 		}
 	}
+
+	if (vin_attr_ex->ex_attr_type == VIN_DYNAMIC_FPS_CTRL) {
+		dynamic_fps_t *fps = &vin_attr_ex->fps_ctrl;
+
+		for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+			ins = &cim->sif.insts[ipi_channel + i];
+			if (fps->skip_mode == CIM_IN_RATIO_SKIP &&
+			    fps->in_fps > 0 && fps->out_fps > 0 &&
+			    fps->out_fps < fps->in_fps) {
+				ins->fps_ratio_in = fps->in_fps;
+				ins->fps_ratio_out = fps->out_fps;
+			} else {
+				ins->fps_ratio_in = 0;
+				ins->fps_ratio_out = 0;
+			}
+			ins->fps_ratio_acc = 0;
+		}
+		vio_info("[S%d][ipi%d]%s ratio skip: in=%u out=%u\n",
+			 vctx->ctx_id, ipi_channel, __func__,
+			 cim->sif.insts[ipi_channel].fps_ratio_in,
+			 cim->sif.insts[ipi_channel].fps_ratio_out);
+	}
+
 	return ret;
 }
 
@@ -605,6 +631,25 @@ s32 cim_subdev_init(struct vio_video_ctx *vctx, cim_attr_t *cim_attr)
 	}
 	osal_atomic_set(&cim_priv_attr->fps_ctrl.lost_this_frame, 0);
 	osal_atomic_set(&cim_priv_attr->fps_ctrl.lost_next_frame, 0);
+
+	{
+		int i;
+		struct sif_instance *ins;
+
+		for (i = 0; i < cim->sif.ipi_channel_num; i++) {
+			ins = &cim->sif.insts[vc_index + i];
+			if (func->skip_frame == CIM_IN_RATIO_SKIP &&
+			    func->input_fps > 0 && func->output_fps > 0 &&
+			    func->output_fps < func->input_fps) {
+				ins->fps_ratio_in = func->input_fps;
+				ins->fps_ratio_out = func->output_fps;
+			} else {
+				ins->fps_ratio_in = 0;
+				ins->fps_ratio_out = 0;
+			}
+			ins->fps_ratio_acc = 0;
+		}
+	}
 
 	vdev->leader = 1;
 	vnode->leader = 1;
