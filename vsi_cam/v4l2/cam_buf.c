@@ -553,6 +553,11 @@ int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf)
 	return 0;
 }
 
+int cam_sink_commit_used(struct cam_ctx *ctx)
+{
+	return 0;
+}
+
 int cam_ready(struct cam_ctx *ctx, int on)
 {
 	struct video_device *vdev;
