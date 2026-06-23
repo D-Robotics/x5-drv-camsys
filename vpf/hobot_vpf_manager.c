@@ -617,7 +617,7 @@ s32 hobot_vpf_manager_probe(void)
 	vio_get_callback_ops(&g_cim_cops, VIN_MODULE, COPS_0);
 	vio_get_callback_ops(&g_dbg_cops, DPU_MODULE, COPS_0);	//vtrace tmp using ipu module id
 	vio_get_callback_ops(&g_camsys_cops, VIN_MODULE, COPS_7);
-	vpf_dev->flowid_mask = (1 << VIO_MAX_STREAM) - 1u;
+	vpf_dev->flowid_mask = (uint32_t)((1ULL << VIO_MAX_STREAM) - 1ULL);
 
 	return ret;
 }

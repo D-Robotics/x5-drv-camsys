@@ -105,6 +105,9 @@ struct sif_instance {
 	int prev_irq_stat;
 	bool wait_fe;
 	wait_queue_head_t fe_wq;
+	u32 fps_ratio_in;
+	u32 fps_ratio_out;
+	u32 fps_ratio_acc;
 };
 
 struct sif_device {

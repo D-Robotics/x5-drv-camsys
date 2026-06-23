@@ -14,6 +14,7 @@
 #else
 #include <linux/cdev.h>
 #include <linux/delay.h>
+#include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
@@ -82,6 +83,9 @@ struct gdc_subdev {
 
      struct vio_frame bin_frame;
      struct gdc_iommu_addr map_addr;
+
+	/* cache iommu mapping per vnode/ctx for binary_ion_id */
+	struct list_head bin_iommu_map_list;
 };
 
 /* same as struct cam_ctrl_device MUST */

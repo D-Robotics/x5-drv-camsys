@@ -104,3 +104,36 @@ int cam_drop(struct cam_ctx *ctx, struct cam_buf *buf)
 void cam_iommu_unmap(struct cam_buf *buf)
 {
 }
+
+int cam_sink_commit_used(struct cam_ctx *ctx)
+{
+	struct vio_subdev *subdev = (struct vio_subdev *)ctx;
+	struct vio_framemgr *framemgr;
+	struct vio_frame *frame;
+	u64 flags = 0;
+
+	if (!subdev) {
+		pr_err("%s: sink ctx is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	if (osal_test_bit((s32)VIO_SUBDEV_BIND_DONE, &subdev->state))
+		return 0;
+
+	framemgr = subdev->cur_fmgr;
+	if (!framemgr) {
+		pr_err("%s: %s cur_fmgr is NULL\n", __func__,
+		       subdev->name ? (char *)subdev->name : "sink");
+		return -EINVAL;
+	}
+
+	vio_e_barrier_irqs(framemgr, flags);
+	if (framemgr->queued_count[FS_COMPLETE] > 1u) {
+		frame = peek_frame(framemgr, FS_COMPLETE);
+		if (frame)
+			trans_frame(framemgr, frame, FS_USED);
+	}
+	vio_x_barrier_irqr(framemgr, flags);
+
+	return 0;
+}

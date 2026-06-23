@@ -15,6 +15,8 @@ typedef enum enum_frame_format_e {
 	FRM_FMT_NV12,
 	FRM_FMT_UYVY,
 	FRM_FMT_YUV400,
+	FRM_FMT_NV16,
+	FRM_FMT_YUYV,
 } frame_format_e;
 
 typedef struct image_size_s {

@@ -264,16 +264,22 @@ static s32 vse_video_get_cfg_ex(struct vio_video_ctx *vctx, unsigned long arg)
 
 static void vse_get_plane(u32 format, struct vbuf_group_info *group_attr)
 {
-	if (format == HW_FORMAT_YUV422_8BIT) {
+	if (format == FRM_FMT_NV12) {
 		group_attr->info[0].buf_attr.planecount = 2;
 		group_attr->info[0].buf_attr.format = MEM_PIX_FMT_NV12;
-	}
-	else if (format == HW_FORMAT_RAW8) {
+	} else if (format == FRM_FMT_YUV400) {
 		group_attr->info[0].buf_attr.planecount = 1;
 		group_attr->info[0].buf_attr.format = MEM_PIX_FMT_YUV400;
+	} else if (format == FRM_FMT_NV16) {
+		group_attr->info[0].buf_attr.planecount = 2;
+		group_attr->info[0].buf_attr.format = MEM_PIX_FMT_NV16;
+	} else if (format == FRM_FMT_YUYV) {
+		group_attr->info[0].buf_attr.planecount = 1;
+		group_attr->info[0].buf_attr.format = MEM_PIX_FMT_YUYV422;
 	} else {
 		pr_err("error format %d\n", format);
 	}
+
 }
 
 static s32 vse_video_reqbufs(struct vio_video_ctx *vctx,
@@ -282,23 +288,15 @@ static s32 vse_video_reqbufs(struct vio_video_ctx *vctx,
 	struct vse_nat_instance *inst;
 	int ochn_id;
 	s32 ret = 0;
-	u32 format;
-
 	inst = container_of(vctx->vdev, struct vse_nat_instance, vdev);
 	if (vctx->id == VNODE_ID_SRC) {
 		group_attr->bit_map = 1;
 		group_attr->is_contig = 1;
-		if (inst->ichn_attr.fmt == FRM_FMT_NV12)
-			format = HW_FORMAT_YUV422_8BIT;
-		else if (inst->ichn_attr.fmt == FRM_FMT_YUV400)
-			format = HW_FORMAT_RAW8;
-		else
-			return -EINVAL;
 		group_attr->info[0].buf_attr.width = inst->ichn_attr.width;
 		group_attr->info[0].buf_attr.height = inst->ichn_attr.height;
 		group_attr->info[0].buf_attr.wstride = inst->ichn_attr.width;
 		group_attr->info[0].buf_attr.vstride = inst->ichn_attr.height;
-		vse_get_plane(format, group_attr);
+		vse_get_plane(inst->ichn_attr.fmt, group_attr);
 		group_attr->is_alloc = 0;
 	} else if (vctx->id >= VNODE_ID_CAP) {
 		ochn_id = vctx->id - VNODE_ID_CAP;
@@ -306,19 +304,13 @@ static s32 vse_video_reqbufs(struct vio_video_ctx *vctx,
 			vio_err("%s: invalid ochn id\n", __func__);
 			return -EFAULT;
 		}
-		if (inst->ochn_attr.fmt == FRM_FMT_NV12)
-			format = HW_FORMAT_YUV422_8BIT;
-		else if (inst->ochn_attr.fmt == FRM_FMT_YUV400)
-			format = HW_FORMAT_RAW8;
-		else
-			return -EINVAL;
 		group_attr->bit_map |= 1;
 		group_attr->is_contig = 1;
 		group_attr->info[0].buf_attr.width = inst->ochn_attr.target_w;
 		group_attr->info[0].buf_attr.height = inst->ochn_attr.target_h;
 		group_attr->info[0].buf_attr.wstride = inst->ochn_attr.target_w;
 		group_attr->info[0].buf_attr.vstride = inst->ochn_attr.target_h;
-		vse_get_plane(format, group_attr);
+		vse_get_plane(inst->ochn_attr.fmt, group_attr);
 		group_attr->is_alloc = 0;
 	}
 
@@ -359,7 +351,35 @@ static s32 vse_video_streamon(struct vio_video_ctx *vctx)
 			if (inst->dev->cap_instance[i][vctx->ctx_id].ochn_attr.chn_en)
 				ctx.src_ctx[i] = (struct cam_ctx *)(vnode->och_subdev[i]);
 		}
-
+		//for vse format check
+		//case1: online mode limit
+		if (ctx.sink_online_en) {
+			if (inst->ichn_attr.fmt == FRM_FMT_YUYV) {
+				pr_err("%s online mode not support YUV422I as input format!\n", __func__);
+				return -EINVAL;
+			}
+		}
+		//case2: scale channel limit
+		if (inst->ichn_attr.fmt == FRM_FMT_NV16) {
+			vse_ochn_attr_t *up_scale_4k_attr = &inst->dev->cap_instance[VSE_UP_SCALE_4K][vctx->ctx_id].ochn_attr;
+			if ((up_scale_4k_attr->chn_en) && (up_scale_4k_attr->fmt == FRM_FMT_NV12)) {
+				pr_err("%s When the input is YUV420SP, the scale channel does not support NV12!\n", __func__);
+				return -EINVAL;
+			}
+		}
+		//case3: output channel limit when input is yuv420
+		if (inst->ichn_attr.fmt == FRM_FMT_NV12) {
+			for (i = 0; i < VSE_OUT_CHNL_MAX; i++) {
+				if (inst->dev->cap_instance[i][vctx->ctx_id].ochn_attr.chn_en) {
+					frame_format_e format_out_tmp = inst->dev->cap_instance[i][vctx->ctx_id].ochn_attr.fmt;
+					if (format_out_tmp != FRM_FMT_NV12) {
+						pr_err("%s When the input is NV12, the output channel only support NV12! [%d:%d]\n", 
+								__func__, i, format_out_tmp);
+						return -EINVAL;
+					}
+				}
+			}
+		}
 		rc = vse_set_ctx(&inst->dev->vse_dev, vctx->ctx_id, &ctx);
 		if (rc < 0) {
 			pr_err("%s failed to call vse_set_ctx (rc=%d)!\n", __func__, rc);
@@ -420,13 +440,16 @@ static s32 vse_video_set_ichn_attr(struct vio_video_ctx *vctx, unsigned long arg
 	if (rc)
 		return rc;
 
-	if (attr.fmt == FRM_FMT_NV12)
+	if (attr.fmt == FRM_FMT_NV12) {
 		fmt.format = CAM_FMT_NV12;
-	else if (attr.fmt == FRM_FMT_YUV400) {
+	} else if (attr.fmt == FRM_FMT_YUV400) {
 		fmt.format = CAM_FMT_YUV400;
-	}
-	else {
-		pr_err("unsupported format %d\n", attr.fmt);
+	} else if (attr.fmt == FRM_FMT_NV16) {
+		fmt.format = CAM_FMT_NV16;
+	} else if (attr.fmt == FRM_FMT_YUYV) {
+		fmt.format = CAM_FMT_YUYV;
+	} else {
+		pr_err("input unsupported format %d\n", attr.fmt);
 		return -EINVAL;
 	}
 	fmt.width = attr.width;
@@ -576,11 +599,15 @@ static s32 vse_video_set_ochn_attr(struct vio_video_ctx *vctx, unsigned long arg
 		return rc;
 	}
 
-	if (attr.fmt == FRM_FMT_NV12)
+	if (attr.fmt == FRM_FMT_NV12) {
 		fmt.format = CAM_FMT_NV12;
-	else if (attr.fmt == FRM_FMT_YUV400)
+	} else if (attr.fmt == FRM_FMT_YUV400) {
 		fmt.format = CAM_FMT_YUV400;
-	else {
+	} else if (attr.fmt == FRM_FMT_NV16) {
+		fmt.format = CAM_FMT_NV16;
+	} else if (attr.fmt == FRM_FMT_YUYV) {
+		fmt.format = CAM_FMT_YUYV;
+	} else {
 		pr_err("unsupported format %d\n", attr.fmt);
 		return -EINVAL;
 	}

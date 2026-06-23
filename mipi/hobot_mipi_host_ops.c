@@ -18,6 +18,7 @@
  */
 
 #include <linux/pinctrl/consumer.h>
+#include <linux/refcount.h>
 
 #include "hobot_mipi_host_ops.h"
 #include "hobot_mipi_host_regs.h"
@@ -1686,6 +1687,10 @@ static const struct mipi_host_port_hw_mode_s g_mh_hw_modes[] = {
 /* global var */
 static struct mipi_hdev_s *g_hdev[MIPI_HOST_MAX_NUM];
 
+#ifdef X5_CHIP
+/* refcount for csi0_pclk */
+static refcount_t csi0_pclk_ref = REFCOUNT_INIT(0);
+#endif
 /* mipi host reg r/w */
 static uint32_t mhost_getreg(const struct mipi_host_s *host, uint32_t offs)
 {
@@ -6262,6 +6267,21 @@ int32_t hobot_mipi_host_probe_do(struct mipi_hdev_s *hdev)
 	/* done & hw init */
 	(void)mipi_host_configure_clk(hdev, hdev->host.socclk.cfgclk, MIPI_HOST_CFGCLK_MHZ, 1);
 	(void)vio_clk_enable(hdev->host.socclk.pclk);/*pclk maybe adjust by clk_owner, we only need enable it.*/
+
+#ifdef X5_CHIP
+	/*
+	 * X5 HW requirement csi0's pclk is main clk of CSI glue logic; keep it on when
+	 * any host with port>0 is used and host0 is disabled. Use refcount so enable/disable pair.
+	 */
+	if (hdev->port > 0 && g_hdev[0] == NULL && (int32_t)MIPI_HOST_PCLK_NUM > 0) {
+		if (refcount_read(&csi0_pclk_ref) == 0) {
+			(void)vio_clk_enable(g_mh_pclk_name[0]);
+			refcount_set(&csi0_pclk_ref, 1);
+		} else {
+			refcount_inc(&csi0_pclk_ref);
+		}
+	}
+#endif
 #if MIPI_HOST_INT_DBG
 	hobot_mipi_host_ierrs_init(host);
 #endif
@@ -6311,6 +6331,13 @@ void hobot_mipi_host_remove_do(struct mipi_hdev_s *hdev)
 	(void)mipi_host_configure_clk(hdev, hdev->host.socclk.cfgclk, 0, 0);
 	(void)mipi_host_configure_clk(hdev, hdev->host.socclk.pclk, 0, 0);
 
+#ifdef X5_CHIP
+	/* Release csi0_pclk ref ;disable when last port>0 host is removed. */
+	if (hdev->port > 0 && (int32_t)MIPI_HOST_PCLK_NUM > 0) {
+		if (refcount_read(&csi0_pclk_ref) > 0 && refcount_dec_and_test(&csi0_pclk_ref))
+			(void)vio_clk_disable(g_mh_pclk_name[0]);
+	}
+#endif
 	g_hdev[hdev->port] = NULL;
 
 	return;
@@ -6432,5 +6459,3 @@ int32_t hobot_mipi_host_stl_setup_do(int32_t port,
 	return 0;
 }
 #endif
-
-

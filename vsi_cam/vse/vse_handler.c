@@ -147,6 +147,10 @@ static inline void frame_done(struct vse_device *vse, struct vse_instance *inst,
 
 	if (ctx->sink_buf) {
 		cam_qbuf_irq(ctx->sink_ctx, ctx->sink_buf, false);
+
+		if (!ctx->sink_online_en && ctx->sink_ctx)
+			cam_sink_commit_used(ctx->sink_ctx);
+
 		ctx->sink_buf = NULL;
 	}
 

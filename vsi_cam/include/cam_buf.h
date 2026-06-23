@@ -54,4 +54,7 @@ __weak
 int cam_ready(struct cam_ctx *ctx, int on);
 
 void cam_iommu_unmap(struct cam_buf *buf);
+
+int cam_sink_commit_used(struct cam_ctx *ctx);
+
 #endif /* _CAM_BUF_H_ */
